@@ -30,10 +30,15 @@ async def overpass(query: str) -> dict:
                 await asyncio.sleep(10 * (attempt + 1))
                 continue
             r.raise_for_status()
+            try:
+                data = r.json()
+            except json.JSONDecodeError:  # empty/truncated body, try the next mirror
+                r = None
+                await asyncio.sleep(5)
+                continue
             break
         if r is None:
-            raise httpx.ConnectError("all Overpass mirrors unreachable")
-        data = r.json()
+            raise httpx.ConnectError("all Overpass mirrors unreachable or returned empty responses")
     path.write_text(json.dumps(data), encoding="utf-8")
     return data
 
