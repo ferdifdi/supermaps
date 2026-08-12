@@ -6,7 +6,7 @@ import json
 
 import httpx
 
-from .config import CACHE_DIR, JABODETABEK_BBOX, OVERPASS_URL
+from .config import CACHE_DIR, JABODETABEK_BBOX, OVERPASS_URLS
 
 BASIC_NEEDS = ["restaurant", "fast_food", "cafe", "food_court", "marketplace", "pharmacy", "clinic"]
 BASIC_SHOPS = ["convenience", "supermarket", "greengrocer", "bakery"]
@@ -18,13 +18,21 @@ async def overpass(query: str) -> dict:
     if path.exists():
         return json.loads(path.read_text(encoding="utf-8"))
     async with httpx.AsyncClient(timeout=180, headers={"User-Agent": "SuperMaps/1.0"}) as client:
+        r = None
         for attempt in range(5):
-            r = await client.post(OVERPASS_URL, data={"data": query})
-            if r.status_code in (429, 504):  # Overpass rate limit / load shedding
+            url = OVERPASS_URLS[attempt % len(OVERPASS_URLS)]
+            try:
+                r = await client.post(url, data={"data": query})
+            except httpx.TransportError:  # host unreachable, try the next mirror
+                await asyncio.sleep(5)
+                continue
+            if r.status_code in (429, 504):  # rate limit / load shedding
                 await asyncio.sleep(10 * (attempt + 1))
                 continue
             r.raise_for_status()
             break
+        if r is None:
+            raise httpx.ConnectError("all Overpass mirrors unreachable")
         data = r.json()
     path.write_text(json.dumps(data), encoding="utf-8")
     return data
