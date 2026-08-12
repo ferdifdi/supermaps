@@ -18,7 +18,7 @@ async def overpass(query: str) -> dict:
     if path.exists():
         return json.loads(path.read_text(encoding="utf-8"))
     # Short per-attempt timeout so a hanging mirror fails fast instead of eating the whole budget.
-    timeout = httpx.Timeout(connect=10, read=30, write=10, pool=10)
+    timeout = httpx.Timeout(connect=5, read=12, write=5, pool=5)
     async with httpx.AsyncClient(timeout=timeout, headers={"User-Agent": "SuperMaps/1.0"}) as client:
         r = None
         for attempt in range(len(OVERPASS_URLS)):
@@ -52,7 +52,7 @@ def _bbox(area_bbox=None) -> str:
 async def stations() -> list[dict]:
     """Rail stations (KRL/MRT/LRT) and major bus stations in Jabodetabek."""
     q = f"""
-    [out:json][timeout:25];
+    [out:json][timeout:10];
     (
       node["railway"="station"]({_bbox()});
       node["railway"="halt"]({_bbox()});
@@ -82,7 +82,7 @@ async def stations() -> list[dict]:
 async def roads(lon: float, lat: float, radius: int) -> list[dict]:
     """Walkable road centerlines around a point: [{"coords": [[lon,lat],...], "highway": str}]"""
     q = f"""
-    [out:json][timeout:25];
+    [out:json][timeout:10];
     way["highway"]["highway"!~"motorway|motorway_link|trunk|trunk_link"](around:{radius},{lat},{lon});
     out geom;
     """
@@ -96,7 +96,7 @@ async def roads(lon: float, lat: float, radius: int) -> list[dict]:
 async def pois(lon: float, lat: float, radius: int) -> list[dict]:
     """Amenities, shops, offices and buildings around a point."""
     q = f"""
-    [out:json][timeout:25];
+    [out:json][timeout:10];
     (
       nwr["amenity"](around:{radius},{lat},{lon});
       nwr["shop"](around:{radius},{lat},{lon});

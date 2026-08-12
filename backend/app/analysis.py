@@ -4,6 +4,8 @@ Weights follow the proposal (Siburian et al., 2020).
 Proxies used where a free national dataset is not available are marked PROXY.
 """
 
+import asyncio
+
 import numpy as np
 from scipy.spatial import Voronoi
 from shapely.geometry import LineString, Point, Polygon
@@ -26,8 +28,10 @@ TOD_WEIGHTS = {
 
 async def _context(station: dict, radius: int):
     """Road graph, POIs and the station buffer, all in metric CRS."""
-    roads = await osm.roads(station["lon"], station["lat"], radius)
-    pois = await osm.pois(station["lon"], station["lat"], radius)
+    roads, pois = await asyncio.gather(
+        osm.roads(station["lon"], station["lat"], radius),
+        osm.pois(station["lon"], station["lat"], radius),
+    )
     graph = network.build(roads)
     origin = to_m(Point(station["lon"], station["lat"]))
     buffer_m = origin.buffer(radius)
