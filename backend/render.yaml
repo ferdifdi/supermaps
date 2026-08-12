@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: supermaps-backend
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: MAPID_BASEMAP_KEY
+        sync: false
+      - key: MAPID_DATA_KEY
+        sync: false
+      - key: MAPID_CATALOGUE_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama-3.1-8b-instant
+      - key: PUBLIC_BASE_URL
+        value: https://supermaps-backend.onrender.com
+      - key: MAPID_LAYER_URLS
+        sync: false
