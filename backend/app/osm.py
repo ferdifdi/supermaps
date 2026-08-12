@@ -17,28 +17,29 @@ async def overpass(query: str) -> dict:
     path = CACHE_DIR / f"osm_{key}.json"
     if path.exists():
         return json.loads(path.read_text(encoding="utf-8"))
-    async with httpx.AsyncClient(timeout=180, headers={"User-Agent": "SuperMaps/1.0"}) as client:
+    # Short per-attempt timeout so a hanging mirror fails fast instead of eating the whole budget.
+    timeout = httpx.Timeout(connect=10, read=30, write=10, pool=10)
+    async with httpx.AsyncClient(timeout=timeout, headers={"User-Agent": "SuperMaps/1.0"}) as client:
         r = None
-        for attempt in range(5):
-            url = OVERPASS_URLS[attempt % len(OVERPASS_URLS)]
+        for attempt in range(len(OVERPASS_URLS)):
+            url = OVERPASS_URLS[attempt]
             try:
                 r = await client.post(url, data={"data": query})
-            except httpx.TransportError:  # host unreachable, try the next mirror
-                await asyncio.sleep(5)
+            except httpx.TransportError:  # host unreachable or timed out, try the next mirror
+                r = None
                 continue
             if r.status_code in (429, 504):  # rate limit / load shedding
-                await asyncio.sleep(10 * (attempt + 1))
+                r = None
                 continue
             r.raise_for_status()
             try:
                 data = r.json()
             except json.JSONDecodeError:  # empty/truncated body, try the next mirror
                 r = None
-                await asyncio.sleep(5)
                 continue
             break
         if r is None:
-            raise httpx.ConnectError("all Overpass mirrors unreachable or returned empty responses")
+            raise httpx.ConnectError("all Overpass mirrors unreachable, rate-limited, or returned empty responses")
     path.write_text(json.dumps(data), encoding="utf-8")
     return data
 
@@ -51,7 +52,7 @@ def _bbox(area_bbox=None) -> str:
 async def stations() -> list[dict]:
     """Rail stations (KRL/MRT/LRT) and major bus stations in Jabodetabek."""
     q = f"""
-    [out:json][timeout:180];
+    [out:json][timeout:25];
     (
       node["railway"="station"]({_bbox()});
       node["railway"="halt"]({_bbox()});
@@ -81,7 +82,7 @@ async def stations() -> list[dict]:
 async def roads(lon: float, lat: float, radius: int) -> list[dict]:
     """Walkable road centerlines around a point: [{"coords": [[lon,lat],...], "highway": str}]"""
     q = f"""
-    [out:json][timeout:180];
+    [out:json][timeout:25];
     way["highway"]["highway"!~"motorway|motorway_link|trunk|trunk_link"](around:{radius},{lat},{lon});
     out geom;
     """
@@ -95,7 +96,7 @@ async def roads(lon: float, lat: float, radius: int) -> list[dict]:
 async def pois(lon: float, lat: float, radius: int) -> list[dict]:
     """Amenities, shops, offices and buildings around a point."""
     q = f"""
-    [out:json][timeout:180];
+    [out:json][timeout:25];
     (
       nwr["amenity"](around:{radius},{lat},{lon});
       nwr["shop"](around:{radius},{lat},{lon});
