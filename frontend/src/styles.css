@@ -1,0 +1,115 @@
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+  font-size: 13px;
+  color: #1f2937;
+}
+
+.app { display: flex; height: 100vh; }
+
+.sidebar {
+  width: 340px;
+  flex: none;
+  background: #fff;
+  border-right: 1px solid #e5e7eb;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.brand h1 { margin: 0; font-size: 20px; color: #0f766e; }
+.brand p { margin: 2px 0 16px; color: #6b7280; }
+
+.tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+
+.tab {
+  flex: 1;
+  padding: 7px 4px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.tab.active { background: #0f766e; color: #fff; border-color: #0f766e; }
+
+.section { margin-bottom: 20px; display: flex; flex-direction: column; gap: 8px; }
+
+label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #6b7280; }
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  padding: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.card.active { border-color: #0f766e; background: #f0fdfa; }
+.card span { color: #6b7280; }
+
+select {
+  padding: 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 13px;
+}
+
+button.primary, button.secondary {
+  padding: 9px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+button.primary { background: #0f766e; color: #fff; }
+button.secondary { background: #f3f4f6; color: #111827; border: 1px solid #e5e7eb; }
+
+.note { margin: 0; color: #6b7280; }
+
+.summary {
+  margin: 0;
+  padding: 10px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 11px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.insight {
+  margin: 0;
+  padding: 10px;
+  background: #f0fdfa;
+  border: 1px solid #99f6e4;
+  border-radius: 6px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.main { position: relative; flex: 1; }
+.map { position: absolute; inset: 0; }
+
+.legend {
+  position: absolute;
+  left: 16px;
+  bottom: 24px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 11px;
+}
+
+.legend-row { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+
+.swatch { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
