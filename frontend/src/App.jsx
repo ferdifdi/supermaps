@@ -14,6 +14,7 @@ export default function App() {
   const [result, setResult] = useState(null)
   const [insight, setInsight] = useState("")
   const [status, setStatus] = useState("")
+  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768)
 
   useEffect(() => {
     api.styles().then((s) => { setStyles(s); setStyleUrl(s[0].url) })
@@ -58,7 +59,14 @@ export default function App() {
 
   return (
     <div className="app">
-      <aside className="sidebar">
+      <button
+        className={sidebarOpen ? "sidebar-toggle open" : "sidebar-toggle"}
+        onClick={() => setSidebarOpen((v) => !v)}
+      >
+        {sidebarOpen ? "‹" : "›"}
+      </button>
+
+      <aside className={sidebarOpen ? "sidebar open" : "sidebar"}>
         <header className="brand">
           <h1>SuperMaps</h1>
           <p>Transit Intelligence Jabodetabek</p>
