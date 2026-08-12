@@ -4,6 +4,7 @@ import numpy as np
 from pyproj import Transformer
 from shapely.geometry import Point, box, mapping, shape
 from shapely.ops import transform, unary_union
+from shapely.strtree import STRtree
 
 _to_m = Transformer.from_crs("EPSG:4326", "EPSG:32748", always_xy=True).transform
 _to_deg = Transformer.from_crs("EPSG:32748", "EPSG:4326", always_xy=True).transform
@@ -57,14 +58,18 @@ def points_m(coords) -> list:
 
 
 def intersections(lines_m) -> list:
-    """Approximate street intersections: pairwise crossings of road lines."""
+    """Approximate street intersections: crossings of road lines, found via spatial index."""
     merged = unary_union(lines_m)
     if merged.is_empty:
         return []
-    nodes = {}
     geoms = list(merged.geoms) if merged.geom_type == "MultiLineString" else [merged]
+    tree = STRtree(geoms)
+    nodes = {}
     for i, a in enumerate(geoms):
-        for b in geoms[i + 1:]:
+        for j in tree.query(a):
+            if j <= i:
+                continue
+            b = geoms[j]
             if not a.intersects(b):
                 continue
             inter = a.intersection(b)

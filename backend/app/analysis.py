@@ -10,6 +10,7 @@ import numpy as np
 from scipy.spatial import Voronoi
 from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import unary_union
+from shapely.strtree import STRtree
 
 from . import network, osm
 from .geo import fc, feature, grid, intersections, normalize, to_deg, to_m
@@ -43,13 +44,31 @@ def _poi_points(pois: list[dict], predicate) -> list[Point]:
     return [to_m(Point(p["lon"], p["lat"])) for p in pois if predicate(p)]
 
 
+def _ped_shed_ratio(cell, tree, lines, radius=100.0, grid_n=5):
+    """Fraction of a sampled grid inside the cell that's within `radius` of any road.
+
+    Avoids buffering the whole road network (expensive for many disjoint segments);
+    point-to-nearest-line distance via the spatial index is much cheaper.
+    """
+    minx, miny, maxx, maxy = cell.bounds
+    step_x, step_y = (maxx - minx) / grid_n, (maxy - miny) / grid_n
+    hits = 0
+    for i in range(grid_n):
+        for j in range(grid_n):
+            pt = Point(minx + (i + 0.5) * step_x, miny + (j + 0.5) * step_y)
+            candidates = tree.query(pt.buffer(radius))
+            if any(lines[k].distance(pt) <= radius for k in candidates):
+                hits += 1
+    return hits / (grid_n * grid_n)
+
+
 def _walk_score_grid(cells, lines, nodes, residential, commercial):
     road_union = unary_union(lines)
-    ped_shed = road_union.buffer(100)
+    tree = STRtree(lines)
     road_len, shed, cross, mix = [], [], [], []
     for c in cells:
         road_len.append(road_union.intersection(c).length)
-        shed.append(ped_shed.intersection(c).area / c.area)
+        shed.append(_ped_shed_ratio(c, tree, lines))
         cross.append(sum(1 for n in nodes if c.contains(n)))
         res = sum(1 for p in residential if c.contains(p))
         com = sum(1 for p in commercial if c.contains(p))
