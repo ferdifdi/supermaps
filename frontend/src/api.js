@@ -37,8 +37,6 @@ export const api = {
   todMetadata: () => get("/api/analysis/tod-metadata"),
   todWhatIf: (stationId, overrides) => post("/api/analysis/tod-whatif", { station_id: stationId, overrides }),
   chat: (messages) => post("/api/ai/chat", { messages }),
-  equityDashboard: (modes, radius) => get(`/api/analysis/equity-dashboard?modes=${modes}&radius=${radius}`),
-  equityChat: (messages) => post("/api/ai/equity-chat", { messages }),
   insight: async (useCase, audience, summary) =>
     (await post("/api/ai/insight", { use_case: useCase, audience, summary })).text,
 }

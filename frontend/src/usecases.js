@@ -34,28 +34,26 @@ export const USE_CASES = [
     id: "M-UC2",
     persona: "komuter",
     title: "Basic Needs untuk Komuter",
-    description: "Ketersediaan pangan, minimarket, dan kesehatan di sekitar tiap stasiun, dari MAPID Data Catalogue.",
-    // Scores every station at once (fast - MAPID lookups only, no OSM call), so App
-    // drives it through the dashboard instead of `run`.
-    dashboard: true,
-    dashboardType: "equity",
+    description: "Ketersediaan pangan, minimarket, dan kesehatan dalam jangkauan jalan kaki dari stasiun (MAPID Data Catalogue).",
+    extras: "equity",
+    options: { radius: [100, 200, 300, 400, 500] },
+    run: (station, opts) => api.amenityEquity(station.id, opts.radius || 500),
     layers: [
-      {
-        source: "stations", type: "circle",
-        paint: {
-          "circle-radius": ["interpolate", ["linear"], ["get", "basic_need_poi"], 0, 6, 250, 18],
-          "circle-color": ["step", ["get", "missing_count"],
-            "#0f766e", 1, "#f59e0b", 2, "#fb923c", 3, "#ef4444"],
-          "circle-opacity": ["case", ["get", "dimmed"], 0.15, 0.85],
-          "circle-stroke-width": ["case", ["get", "selected"], 3, 1],
-          "circle-stroke-color": ["case", ["get", "selected"], "#111827", "#fff"],
-          "circle-stroke-opacity": ["case", ["get", "dimmed"], 0.2, 1],
-        },
-      },
-      // Selected station's real walk-network isochrone + POI, only present once Detail
-      // has fetched it (see App.jsx's equityDetail state).
       { source: "isochrone", type: "fill", paint: { "fill-color": "#0f766e", "fill-opacity": 0.12 } },
       { source: "isochrone", type: "line", paint: { "line-color": "#0f766e", "line-width": 2 } },
+      {
+        source: "poi", type: "heatmap",
+        paint: {
+          "heatmap-weight": 1,
+          "heatmap-intensity": 1,
+          "heatmap-radius": 22,
+          "heatmap-opacity": 0.55,
+          "heatmap-color": [
+            "interpolate", ["linear"], ["heatmap-density"],
+            0, "rgba(0,0,0,0)", 0.2, "#c6dbef", 0.4, "#6baed6", 0.6, "#2171b5", 1, "#08306b",
+          ],
+        },
+      },
       {
         source: "poi", type: "circle",
         paint: {
@@ -69,10 +67,10 @@ export const USE_CASES = [
       },
     ],
     legend: {
-      title: "Kategori kosong dalam jangkauan jalan kaki",
-      stops: [["0 kosong", "#0f766e"], ["1 kosong", "#f59e0b"], ["2 kosong", "#fb923c"], ["3 kosong", "#ef4444"]],
+      title: "Kategori POI (redup = di luar jangkauan jalan kaki)",
+      stops: [["Pangan & kuliner", CATEGORY_COLORS.pangan], ["Minimarket & toko", CATEGORY_COLORS.minimarket], ["Kesehatan", CATEGORY_COLORS.kesehatan]],
     },
-    popup: ["name", "basic_need_poi", "missing_categories", "category", "reachable"],
+    popup: ["name", "category", "reachable"],
   },
   {
     id: "U-UC1",
@@ -96,7 +94,6 @@ export const USE_CASES = [
     description: "Station Composite Index, ranking stasiun, dan tipologi rekomendasi pengembangan.",
     // Scores every station at once, so App drives it through the dashboard instead of `run`.
     dashboard: true,
-    dashboardType: "tod",
     options: { modes: ["rail", "rail,bus"] },
     layers: [
       {

@@ -4,25 +4,6 @@ import "maplibre-gl/dist/maplibre-gl.css"
 
 const JAKARTA = [106.8271129, -6.1754398]
 
-function polygonCentroid(coords) {
-  // coords: outer ring of a GeoJSON Polygon, [[lon,lat],...]. Plain average is fine
-  // for the near-rectangular grid cells this is used on.
-  const [lon, lat] = coords.reduce(([sx, sy], [x, y]) => [sx + x, sy + y], [0, 0])
-  return [lon / coords.length, lat / coords.length]
-}
-
-function circlePolygon(lon, lat, radiusMeters, steps = 64) {
-  const latRad = (lat * Math.PI) / 180
-  const dLat = radiusMeters / 111320
-  const dLon = radiusMeters / (111320 * Math.cos(latRad))
-  const ring = []
-  for (let i = 0; i <= steps; i++) {
-    const t = (i / steps) * 2 * Math.PI
-    ring.push([lon + dLon * Math.cos(t), lat + dLat * Math.sin(t)])
-  }
-  return { type: "Feature", geometry: { type: "Polygon", coordinates: [ring] }, properties: {} }
-}
-
 export default function MapView({ styleUrl, stations, activeStation, focusPoint, result, useCase, onPickStation }) {
   const container = useRef(null)
   const map = useRef(null)
@@ -83,49 +64,29 @@ export default function MapView({ styleUrl, stations, activeStation, focusPoint,
       if (!m.getSource(sourceId)) m.addSource(sourceId, { type: "geojson", data })
       else m.getSource(sourceId).setData(data)
       m.addLayer({ id: layerId, type: layer.type, source: sourceId, paint: layer.paint }, "stations")
-      m.on("click", layerId, (e) => {
-        const feat = e.features[0]
-        const props = feat.properties
-        if (props.station_id) onPickStation(props.station_id)
-        const html = useCase.popup
-          .filter((k) => props[k] !== undefined)
-          .map((k) => `<div><b>${k}</b>: ${props[k]}</div>`)
-          .join("")
-        new maplibregl.Popup().setLngLat(e.lngLat).setHTML(html).addTo(m)
-
-        if (layer.reachRadius && feat.geometry.type === "Polygon") {
-          const [lon, lat] = polygonCentroid(feat.geometry.coordinates[0])
-          m.getSource("reach-circle").setData({
-            type: "FeatureCollection",
-            features: [circlePolygon(lon, lat, layer.reachRadius)],
-          })
-        } else if (m.getSource("reach-circle")) {
-          m.getSource("reach-circle").setData({ type: "FeatureCollection", features: [] })
-        }
-      })
+      if (layer.type !== "heatmap") {
+        m.on("click", layerId, (e) => {
+          const props = e.features[0].properties
+          const html = useCase.popup
+            .filter((k) => props[k] !== undefined)
+            .map((k) => `<div><b>${k}</b>: ${props[k]}</div>`)
+            .join("")
+          new maplibregl.Popup().setLngLat(e.lngLat).setHTML(html).addTo(m)
+        })
+      }
     })
-
-    if (!m.getSource("reach-circle")) {
-      m.addSource("reach-circle", { type: "geojson", data: { type: "FeatureCollection", features: [] } })
-      m.addLayer({
-        id: "reach-circle-line", type: "line", source: "reach-circle",
-        paint: { "line-color": "#111827", "line-width": 1.5, "line-dasharray": [2, 2] },
-      })
-    } else {
-      m.getSource("reach-circle").setData({ type: "FeatureCollection", features: [] })
-    }
 
     // The dashboard draws its own station symbols, so the plain point layer would just clutter them.
     if (m.getLayer("stations")) {
       m.setLayoutProperty("stations", "visibility", useCase.dashboard ? "none" : "visible")
     }
     return () => {
-      ids.forEach(({ sourceId, layerId }) => {
-        if (m.getLayer(layerId)) m.removeLayer(layerId)
+      // Remove every layer first - a source can't be removed while a layer still uses it,
+      // and several layer defs (e.g. heatmap + circle) can share the same source.
+      ids.forEach(({ layerId }) => { if (m.getLayer(layerId)) m.removeLayer(layerId) })
+      new Set(ids.map((x) => x.sourceId)).forEach((sourceId) => {
         if (m.getSource(sourceId)) m.removeSource(sourceId)
       })
-      if (m.getLayer("reach-circle-line")) m.removeLayer("reach-circle-line")
-      if (m.getSource("reach-circle")) m.removeSource("reach-circle")
     }
   }, [result, useCase, onPickStation])
 
