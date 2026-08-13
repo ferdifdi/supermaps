@@ -193,35 +193,102 @@ async def comfortable_route(station: dict, dest_lon: float, dest_lat: float, pre
 
 # --- M-UC2: food & amenity equity -------------------------------------------
 
-async def amenity_equity(station: dict):
-    # No Overpass call here at all: the grid only needs the buffer geometry (no roads
-    # needed), and basic-need POIs now come entirely from MAPID.
-    buffer_m = to_m(Point(station["lon"], station["lat"])).buffer(WALK_BUFFER)
-    cells = grid(buffer_m, CELL)
-    # MAPID's food/health categories are far better mapped in Indonesia than OSM's.
-    raw_pois = mapid_data.basic_needs(station["lon"], station["lat"], WALK_BUFFER)
-    basic = [to_m(Point(p["lon"], p["lat"])) for p in raw_pois]
-    features, deserts = [], 0
-    for c in cells:
-        # 500m walkshed from the cell's centroid, not literal containment - the
-        # indicator means "can someone here walk to a basic need", not "is there
-        # one in this exact 250m box". Cells overlap their neighbours' catchments
-        # on purpose.
-        reach = c.centroid.buffer(WALK_BUFFER)
-        count = sum(1 for p in basic if reach.contains(p))
-        desert = count == 0
-        deserts += desert
-        features.append(feature(c, {"basic_need_count": count, "is_desert": desert}))
+EQUITY_CATEGORIES = ("pangan", "minimarket", "kesehatan")
+EQUITY_CATEGORY_LABELS = {
+    "pangan": "Pangan & kuliner", "minimarket": "Minimarket & toko", "kesehatan": "Kesehatan",
+}
+
+
+async def amenity_equity(station: dict, radius: int = WALK_BUFFER):
+    """Real walk-network reach (isochrone), not a straight-line buffer - a river or a
+    highway between the station and a POI means it isn't actually reachable on foot,
+    even if it's geometrically within `radius`.
+    """
+    roads = await osm.roads(station["lon"], station["lat"], radius)
+    graph = network.build(roads)
+    origin = to_m(Point(station["lon"], station["lat"]))
+    minutes = radius / network.WALK_SPEED / 60
+    reach = network.isochrone(graph, origin, minutes, "length")
+
+    # MAPID's food/health categories are far better mapped in Indonesia than OSM's, so
+    # basic-need POIs come entirely from MAPID - the only Overpass call above is for roads.
+    raw_pois = mapid_data.basic_needs(station["lon"], station["lat"], radius)
+    all_basic = [to_m(Point(p["lon"], p["lat"])) for p in raw_pois]
+    inside = [reach.contains(p) for p in all_basic]
+
+    category_summary = {}
+    for cat in EQUITY_CATEGORIES:
+        cat_inside = sum(1 for r, ins in zip(raw_pois, inside) if r["category"] == cat and ins)
+        cat_total = sum(1 for r in raw_pois if r["category"] == cat)
+        category_summary[cat] = {
+            "poi_total": cat_total, "poi_reachable": cat_inside, "is_desert": cat_inside == 0,
+        }
+
     return {
-        "grid": fc(features),
-        "poi": fc([feature(p, {"name": r["name"]}) for p, r in zip(basic, raw_pois)]),
+        "isochrone": fc([feature(reach, {"minutes": round(minutes, 1)})]),
+        "poi": fc([
+            feature(p, {"name": r["name"], "category": r["category"], "reachable": ins})
+            for p, r, ins in zip(all_basic, raw_pois, inside)
+        ]),
         "summary": {
             "station": station["name"],
-            "basic_need_poi": len(basic),
-            "cells": len(cells),
-            "desert_cells": deserts,
-            "desert_ratio": round(deserts / len(cells), 3) if cells else 0,
+            "basic_need_poi_total": len(all_basic),
+            "basic_need_poi_reachable": sum(inside),
+            "categories": category_summary,
+            "isochrone_area_ha": round(reach.area / 10000, 1),
         },
+    }
+
+
+def _equity_station_summary(station: dict, radius: int) -> dict:
+    """One station's basic-need counts within `radius` (straight-line - the dashboard
+
+    scores every station at once, so a per-station network isochrone is too slow here;
+    the Detail view's isochrone is the accurate version of this same count).
+
+    MAPID lookups only, no Overpass - safe and fast to run for every station at once,
+    unlike K-UC1's dashboard which needs a per-station OSM call.
+    """
+    raw_pois = mapid_data.basic_needs(station["lon"], station["lat"], radius)
+    counts = {cat: sum(1 for p in raw_pois if p["category"] == cat) for cat in EQUITY_CATEGORIES}
+    missing = [cat for cat in EQUITY_CATEGORIES if counts[cat] == 0]
+    return {
+        "station": station["name"], "station_id": station["id"], "mode_label": station["mode_label"],
+        "lon": station["lon"], "lat": station["lat"],
+        "basic_need_poi": len(raw_pois),
+        "categories": counts,
+        "missing_categories": missing,
+    }
+
+
+def equity_dashboard(stations: list[dict], radius: int = WALK_BUFFER) -> list[dict]:
+    """All stations, sorted worst-served first (fewest total basic-need POI within `radius`)."""
+    rows = [_equity_station_summary(s, radius) for s in stations]
+    rows.sort(key=lambda r: r["basic_need_poi"])
+    for i, r in enumerate(rows, 1):
+        r["rank"] = i
+    return rows
+
+
+def equity_metadata(radius: int = WALK_BUFFER) -> dict:
+    return {
+        "method": f"Isochrone jaringan jalan kaki {radius} m dari stasiun (bukan garis lurus) "
+                  "dari MAPID Data Catalogue (APOTEK/KLINIK/PUSKESMAS/RUMAH SAKIT, MAKANAN DAN "
+                  "MINUMAN/RESTORAN, MINIMARKET/SUPERMARKET/TOKO KELONTONG). Dashboard kota "
+                  "memakai radius garis lurus (lebih cepat, kurang presisi); panel Detail per "
+                  "stasiun memakai isochrone jaringan jalan yang akurat.",
+        "buffer_m": radius,
+        "categories": EQUITY_CATEGORY_LABELS,
+        "sources": {
+            "MAPID": "MAPID Data Catalogue, diunduh manual sebagai GeoJSON. Update tahunan.",
+        },
+        "no_data": [
+            {"indicator": "population", "label": "Populasi per grid",
+             "reason": "Data demografi BPS per grid tidak tersedia gratis. Proksi OSM (bangunan "
+                       "hunian) dicoba tapi datanya terlalu jarang di Jabodetabek untuk dipercaya "
+                       "(contoh: 500 m di Bendungan Hilir cuma kebaca 5 bangunan), jadi tidak "
+                       "dipakai. Angka yang ditampilkan cuma jumlah POI, bukan penduduk terlayani."},
+        ],
     }
 
 
