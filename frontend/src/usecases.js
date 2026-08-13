@@ -48,7 +48,7 @@ export const USE_CASES = [
     ],
     // Thresholds tuned for MAPID's much denser POI counts (was 0/10/30/60 under OSM).
     legend: { title: "Jumlah POI kebutuhan dasar dalam 500 m", stops: [[0, "#ef4444"], [50, "#fc9272"], [120, "#de2d26"], [250, "#67000d"]] },
-    popup: ["basic_need_count", "is_desert"],
+    popup: ["basic_need_count", "is_desert", "name"],
   },
   {
     id: "U-UC1",

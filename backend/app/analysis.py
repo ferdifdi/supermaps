@@ -199,12 +199,14 @@ async def amenity_equity(station: dict):
     buffer_m = to_m(Point(station["lon"], station["lat"])).buffer(WALK_BUFFER)
     cells = grid(buffer_m, CELL)
     # MAPID's food/health categories are far better mapped in Indonesia than OSM's.
-    basic = [
-        to_m(Point(p["lon"], p["lat"]))
-        for p in mapid_data.basic_needs(station["lon"], station["lat"], WALK_BUFFER)
-    ]
+    raw_pois = mapid_data.basic_needs(station["lon"], station["lat"], WALK_BUFFER)
+    basic = [to_m(Point(p["lon"], p["lat"])) for p in raw_pois]
     features, deserts = [], 0
     for c in cells:
+        # 500m walkshed from the cell's centroid, not literal containment - the
+        # indicator means "can someone here walk to a basic need", not "is there
+        # one in this exact 250m box". Cells overlap their neighbours' catchments
+        # on purpose.
         reach = c.centroid.buffer(WALK_BUFFER)
         count = sum(1 for p in basic if reach.contains(p))
         desert = count == 0
@@ -212,7 +214,7 @@ async def amenity_equity(station: dict):
         features.append(feature(c, {"basic_need_count": count, "is_desert": desert}))
     return {
         "grid": fc(features),
-        "poi": fc([feature(p, {}) for p in basic]),
+        "poi": fc([feature(p, {"name": r["name"]}) for p, r in zip(basic, raw_pois)]),
         "summary": {
             "station": station["name"],
             "basic_need_poi": len(basic),
