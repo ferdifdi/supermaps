@@ -1,5 +1,6 @@
 import { api } from "./api"
 import { CLASS_COLORS } from "./tod"
+import { CATEGORY_COLORS } from "./equity"
 
 const ramp = (field, stops) => [
   "interpolate", ["linear"], ["get", field],
@@ -7,7 +8,6 @@ const ramp = (field, stops) => [
 ]
 
 const SCORE_STOPS = [[0, "#f7f7f7"], [0.25, "#c6dbef"], [0.5, "#6baed6"], [0.75, "#2171b5"], [1, "#08306b"]]
-const WALK_BUFFER = 500 // meters - must match backend/app/analysis.py's WALK_BUFFER
 
 export const PERSONAS = [
   { id: "komuter", label: "Masyarakat" },
@@ -33,26 +33,46 @@ export const USE_CASES = [
   {
     id: "M-UC2",
     persona: "komuter",
-    title: "Food & Amenity Equity",
-    description: "Kepadatan layanan dasar per grid dan penandaan food/amenity desert.",
-    run: (station) => api.amenityEquity(station.id),
+    title: "Basic Needs untuk Komuter",
+    description: "Ketersediaan pangan, minimarket, dan kesehatan di sekitar tiap stasiun, dari MAPID Data Catalogue.",
+    // Scores every station at once (fast - MAPID lookups only, no OSM call), so App
+    // drives it through the dashboard instead of `run`.
+    dashboard: true,
+    dashboardType: "equity",
     layers: [
       {
-        source: "grid", type: "fill",
-        // Count is a 500m walk radius from this cell's own centroid, not what's
-        // literally inside the cell - draw that radius on click so it's not a mystery.
-        reachRadius: WALK_BUFFER,
+        source: "stations", type: "circle",
         paint: {
-          "fill-color": ["case", ["get", "is_desert"], "#ef4444",
-            ramp("basic_need_count", [[0, "#fee5d9"], [50, "#fc9272"], [120, "#de2d26"], [250, "#67000d"]])],
-          "fill-opacity": 0.65,
+          "circle-radius": ["interpolate", ["linear"], ["get", "basic_need_poi"], 0, 6, 250, 18],
+          "circle-color": ["step", ["get", "missing_count"],
+            "#0f766e", 1, "#f59e0b", 2, "#fb923c", 3, "#ef4444"],
+          "circle-opacity": ["case", ["get", "dimmed"], 0.15, 0.85],
+          "circle-stroke-width": ["case", ["get", "selected"], 3, 1],
+          "circle-stroke-color": ["case", ["get", "selected"], "#111827", "#fff"],
+          "circle-stroke-opacity": ["case", ["get", "dimmed"], 0.2, 1],
         },
       },
-      { source: "poi", type: "circle", paint: { "circle-radius": 3, "circle-color": "#111827" } },
+      // Selected station's real walk-network isochrone + POI, only present once Detail
+      // has fetched it (see App.jsx's equityDetail state).
+      { source: "isochrone", type: "fill", paint: { "fill-color": "#0f766e", "fill-opacity": 0.12 } },
+      { source: "isochrone", type: "line", paint: { "line-color": "#0f766e", "line-width": 2 } },
+      {
+        source: "poi", type: "circle",
+        paint: {
+          "circle-radius": 5,
+          "circle-color": ["match", ["get", "category"],
+            "pangan", CATEGORY_COLORS.pangan, "minimarket", CATEGORY_COLORS.minimarket,
+            CATEGORY_COLORS.kesehatan],
+          "circle-opacity": ["case", ["get", "reachable"], 1, 0.35],
+          "circle-stroke-width": 1, "circle-stroke-color": "#fff",
+        },
+      },
     ],
-    // Thresholds tuned for MAPID's much denser POI counts (was 0/10/30/60 under OSM).
-    legend: { title: "Jumlah POI kebutuhan dasar dalam 500 m", stops: [[0, "#ef4444"], [50, "#fc9272"], [120, "#de2d26"], [250, "#67000d"]] },
-    popup: ["basic_need_count", "is_desert", "name"],
+    legend: {
+      title: "Kategori kosong dalam jangkauan jalan kaki",
+      stops: [["0 kosong", "#0f766e"], ["1 kosong", "#f59e0b"], ["2 kosong", "#fb923c"], ["3 kosong", "#ef4444"]],
+    },
+    popup: ["name", "basic_need_poi", "missing_categories", "category", "reachable"],
   },
   {
     id: "U-UC1",
@@ -76,6 +96,7 @@ export const USE_CASES = [
     description: "Station Composite Index, ranking stasiun, dan tipologi rekomendasi pengembangan.",
     // Scores every station at once, so App drives it through the dashboard instead of `run`.
     dashboard: true,
+    dashboardType: "tod",
     options: { modes: ["rail", "rail,bus"] },
     layers: [
       {

@@ -23,7 +23,7 @@ function circlePolygon(lon, lat, radiusMeters, steps = 64) {
   return { type: "Feature", geometry: { type: "Polygon", coordinates: [ring] }, properties: {} }
 }
 
-export default function MapView({ styleUrl, stations, activeStation, result, useCase, onPickStation }) {
+export default function MapView({ styleUrl, stations, activeStation, focusPoint, result, useCase, onPickStation }) {
   const container = useRef(null)
   const map = useRef(null)
   const loaded = useRef(false)
@@ -133,6 +133,11 @@ export default function MapView({ styleUrl, stations, activeStation, result, use
   useEffect(() => {
     if (map.current && activeStation) map.current.flyTo({ center: [activeStation.lon, activeStation.lat], zoom: 14.5 })
   }, [activeStation])
+
+  // fly to a searched point (e.g. a POI), without changing the selected station
+  useEffect(() => {
+    if (map.current && focusPoint) map.current.flyTo({ center: [focusPoint.lon, focusPoint.lat], zoom: 17 })
+  }, [focusPoint])
 
   return <div ref={container} className="map" />
 }

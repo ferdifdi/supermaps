@@ -1,11 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import MapView from "./MapView"
 import Chatbot from "./components/Chatbot"
+import EquityDock from "./components/EquityDock"
 import FilterBar from "./components/FilterBar"
 import RightDock from "./components/RightDock"
 import { api } from "./api"
-import { EMPTY_FILTERS, MODES, applyFilters } from "./tod"
+import * as equity from "./equity"
+import * as tod from "./tod"
 import { PERSONAS, USE_CASES } from "./usecases"
+
+const TOD_GROUPS = [
+  { key: "modes", label: "Moda", options: tod.MODES },
+  { key: "classifications", label: "Klasifikasi", options: tod.CLASSIFICATIONS },
+  { key: "typologies", label: "Tipologi", options: tod.TYPOLOGIES },
+]
+const EQUITY_GROUPS = [
+  { key: "modes", label: "Moda", options: tod.MODES },
+  { key: "missing_categories", label: "Kategori kosong", options: equity.CATEGORIES },
+]
 
 export default function App() {
   const [styles, setStyles] = useState([])
@@ -19,16 +31,28 @@ export default function App() {
   const [insight, setInsight] = useState("")
   const [status, setStatus] = useState("")
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768)
+  const [dockOpen, setDockOpen] = useState(false)
+  const [dockTab, setDockTab] = useState("ringkasan")
 
-  // TOD dashboard
+  // TOD dashboard (K-UC1)
   const [scopeModes, setScopeModes] = useState(["KRL", "MRT", "LRT"])
   const [todRows, setTodRows] = useState([])
   const [todMeta, setTodMeta] = useState(null)
-  const [filters, setFilters] = useState(EMPTY_FILTERS)
+  const [filters, setFilters] = useState(tod.EMPTY_FILTERS)
   const [filtersFromChat, setFiltersFromChat] = useState(false)
-  const [dockOpen, setDockOpen] = useState(false)
-  const [dockTab, setDockTab] = useState("ringkasan")
   const [whatIf, setWhatIf] = useState(null)
+
+  // Basic needs dashboard (M-UC2)
+  const [equityScopeModes, setEquityScopeModes] = useState(tod.MODES)
+  const [equityRadius, setEquityRadius] = useState(equity.DEFAULT_RADIUS)
+  const [equityRows, setEquityRows] = useState([])
+  const [equityMeta, setEquityMeta] = useState(null)
+  const [equityFilters, setEquityFilters] = useState(equity.EMPTY_FILTERS)
+  const [equityFiltersFromChat, setEquityFiltersFromChat] = useState(false)
+  const [equityDetail, setEquityDetail] = useState(null)
+  const [equityDetailStatus, setEquityDetailStatus] = useState("")
+  const [poiCategoryFilter, setPoiCategoryFilter] = useState([])
+  const [focusPoint, setFocusPoint] = useState(null)
 
   useEffect(() => {
     api.styles().then((s) => { setStyles(s); setStyleUrl(s[0].url) })
@@ -37,41 +61,76 @@ export default function App() {
 
   const useCase = USE_CASES.find((u) => u.id === useCaseId)
   const isDashboard = Boolean(useCase.dashboard)
+  const dashboardType = useCase.dashboardType
   const station = stations.find((s) => s.id === stationId)
   const personaUseCases = USE_CASES.filter((u) => u.persona === persona)
 
-  const visibleRows = useMemo(() => applyFilters(todRows, filters), [todRows, filters])
+  const visibleTodRows = useMemo(() => tod.applyFilters(todRows, filters), [todRows, filters])
+  const visibleEquityRows = useMemo(() => equity.applyFilters(equityRows, equityFilters), [equityRows, equityFilters])
 
-  // On the dashboard the map is fed from the scored rows, not from a per-station analysis run.
+  // Fetch the selected station's real walk-network isochrone whenever it (or the
+  // radius) changes - the dashboard table itself is straight-line only (fast, no OSM).
+  useEffect(() => {
+    if (dashboardType !== "equity" || !stationId) { setEquityDetail(null); setEquityDetailStatus(""); return }
+    setEquityDetail(null)
+    setEquityDetailStatus("Menghitung isochrone jaringan jalan…")
+    api.amenityEquity(stationId, equityRadius)
+      .then((d) => { setEquityDetail(d); setEquityDetailStatus("") })
+      .catch((e) => setEquityDetailStatus(`Gagal: ${e.message}`))
+  }, [dashboardType, stationId, equityRadius])
+
+  // On a dashboard use case the map is fed from the scored rows, not from a per-station run.
   const dashboardResult = useMemo(() => {
-    if (!useCase.dashboard || !todRows.length) return null
-    const visible = new Set(visibleRows.map((r) => r.station_id))
-    return {
-      stations: {
-        type: "FeatureCollection",
-        features: todRows.map((r) => ({
-          type: "Feature",
-          geometry: { type: "Point", coordinates: [r.lon, r.lat] },
-          properties: {
-            station_id: r.station_id,
-            name: r.station,
-            sci: r.sci,
-            rank: r.rank,
-            classification: r.classification,
-            typology: r.typology,
-            dimmed: !visible.has(r.station_id),
-            selected: r.station_id === stationId,
-          },
-        })),
-      },
+    if (dashboardType === "tod") {
+      if (!todRows.length) return null
+      const visible = new Set(visibleTodRows.map((r) => r.station_id))
+      return {
+        stations: {
+          type: "FeatureCollection",
+          features: todRows.map((r) => ({
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [r.lon, r.lat] },
+            properties: {
+              station_id: r.station_id, name: r.station, sci: r.sci, rank: r.rank,
+              classification: r.classification, typology: r.typology,
+              dimmed: !visible.has(r.station_id), selected: r.station_id === stationId,
+            },
+          })),
+        },
+      }
     }
-  }, [useCase, todRows, visibleRows, stationId])
+    if (dashboardType === "equity") {
+      if (!equityRows.length) return null
+      const visible = new Set(visibleEquityRows.map((r) => r.station_id))
+      const filteredPoi = equityDetail && poiCategoryFilter.length
+        ? { ...equityDetail.poi, features: equityDetail.poi.features.filter((f) => poiCategoryFilter.includes(f.properties.category)) }
+        : equityDetail?.poi
+      return {
+        stations: {
+          type: "FeatureCollection",
+          features: equityRows.map((r) => ({
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [r.lon, r.lat] },
+            properties: {
+              station_id: r.station_id, name: r.station, basic_need_poi: r.basic_need_poi,
+              missing_categories: r.missing_categories.join(", ") || "-",
+              missing_count: r.missing_categories.length,
+              dimmed: !visible.has(r.station_id), selected: r.station_id === stationId,
+            },
+          })),
+        },
+        // Only present once the selected station's isochrone has loaded.
+        ...(equityDetail && { isochrone: equityDetail.isochrone, poi: filteredPoi }),
+      }
+    }
+    return null
+  }, [dashboardType, todRows, visibleTodRows, equityRows, visibleEquityRows, equityDetail, poiCategoryFilter, stationId])
 
   async function run() {
     setStatus("Menjalankan analisis…")
     setInsight("")
     try {
-      if (useCase.dashboard) {
+      if (dashboardType === "tod") {
         if (!scopeModes.length) return setStatus("Pilih minimal satu moda.")
         setTodRows([])
         const { rows, metadata } = await api.todDashboard(scopeModes.join(","))
@@ -79,6 +138,13 @@ export default function App() {
         setTodMeta(metadata)
         setDockOpen(true)
         setWhatIf(null)
+      } else if (dashboardType === "equity") {
+        if (!equityScopeModes.length) return setStatus("Pilih minimal satu moda.")
+        setEquityRows([])
+        const { rows, metadata } = await api.equityDashboard(equityScopeModes.join(","), equityRadius)
+        setEquityRows(rows)
+        setEquityMeta(metadata)
+        setDockOpen(true)
       } else {
         if (!station) return setStatus("Pilih stasiun dulu.")
         setResult(null)
@@ -102,6 +168,7 @@ export default function App() {
   // Stable identity: MapView rebuilds its result layers whenever this callback changes.
   const selectStation = useCallback((id) => {
     setStationId(id)
+    setFocusPoint(null)
     if (isDashboard) {
       setDockTab("detail")
       setDockOpen(true)
@@ -111,6 +178,11 @@ export default function App() {
   async function runWhatIf(id, overrides) {
     if (!Object.keys(overrides).length) return setWhatIf(null)
     setWhatIf(await api.todWhatIf(id, overrides))
+  }
+
+  function selectPoi(feature) {
+    const [lon, lat] = feature.geometry.coordinates
+    setFocusPoint({ lon, lat })
   }
 
   return (
@@ -155,20 +227,15 @@ export default function App() {
         </div>
 
         <div className="section">
-          {useCase.dashboard ? (
+          {dashboardType === "tod" && (
             <>
               <label>Cakupan moda</label>
               <div className="mode-toggles">
-                {MODES.map((m) => (
+                {tod.MODES.map((m) => (
                   <label key={m} className="filter-option">
                     <input
-                      type="checkbox"
-                      checked={scopeModes.includes(m)}
-                      onChange={() =>
-                        setScopeModes((prev) =>
-                          prev.includes(m) ? prev.filter((v) => v !== m) : [...prev, m],
-                        )
-                      }
+                      type="checkbox" checked={scopeModes.includes(m)}
+                      onChange={() => setScopeModes((prev) => prev.includes(m) ? prev.filter((v) => v !== m) : [...prev, m])}
                     />
                     {m}
                   </label>
@@ -182,7 +249,43 @@ export default function App() {
                 tabel yang sama.
               </p>
             </>
-          ) : (
+          )}
+
+          {dashboardType === "equity" && (
+            <>
+              <label>Cakupan moda</label>
+              <div className="mode-toggles">
+                {tod.MODES.map((m) => (
+                  <label key={m} className="filter-option">
+                    <input
+                      type="checkbox" checked={equityScopeModes.includes(m)}
+                      onChange={() => setEquityScopeModes((prev) => prev.includes(m) ? prev.filter((v) => v !== m) : [...prev, m])}
+                    />
+                    {m}
+                  </label>
+                ))}
+              </div>
+              <label>Radius jangkauan jalan kaki</label>
+              <div className="mode-toggles">
+                {equity.RADII.map((r) => (
+                  <button key={r} className={r === equityRadius ? "mini active" : "mini"} onClick={() => setEquityRadius(r)}>
+                    {r} m
+                  </button>
+                ))}
+              </div>
+              <input
+                type="number" min={equity.MIN_RADIUS} max={equity.MAX_RADIUS} step="50"
+                value={equityRadius} onChange={(e) => setEquityRadius(Number(e.target.value))}
+                className="search-input"
+              />
+              <p className="note">
+                Dashboard pakai radius garis lurus (cepat). Panel Detail per stasiun pakai isochrone
+                jaringan jalan sebenarnya di radius yang sama.
+              </p>
+            </>
+          )}
+
+          {!dashboardType && (
             <>
               <label>Stasiun</label>
               <select value={stationId} onChange={(e) => setStationId(e.target.value)}>
@@ -205,7 +308,7 @@ export default function App() {
           {status && <p className="note">{status}</p>}
         </div>
 
-        {useCase.dashboard && todRows.length > 0 && (
+        {dashboardType === "tod" && todRows.length > 0 && (
           <div className="section">
             <label>Ringkasan</label>
             <p className="note">{todRows.length} stasiun terhitung.</p>
@@ -213,7 +316,15 @@ export default function App() {
           </div>
         )}
 
-        {!useCase.dashboard && result?.summary && (
+        {dashboardType === "equity" && equityRows.length > 0 && (
+          <div className="section">
+            <label>Ringkasan</label>
+            <p className="note">{equityRows.length} stasiun terhitung.</p>
+            <button className="secondary" onClick={() => setDockOpen(true)}>Buka dashboard</button>
+          </div>
+        )}
+
+        {!dashboardType && result?.summary && (
           <div className="section">
             <label>Ringkasan</label>
             <pre className="summary">{JSON.stringify(result.summary, null, 2)}</pre>
@@ -236,23 +347,38 @@ export default function App() {
             styleUrl={styleUrl}
             stations={stations}
             activeStation={station}
-            result={useCase.dashboard ? dashboardResult : result}
+            focusPoint={focusPoint}
+            result={isDashboard ? dashboardResult : result}
             useCase={useCase}
             onPickStation={selectStation}
           />
         )}
 
-        {useCase.dashboard && todRows.length > 0 && (
+        {dashboardType === "tod" && todRows.length > 0 && (
           <FilterBar
+            groups={TOD_GROUPS}
+            emptyFilters={tod.EMPTY_FILTERS}
             filters={filters}
             onChange={(f) => { setFilters(f); setFiltersFromChat(false) }}
             fromChat={filtersFromChat}
-            matched={visibleRows.length}
+            matched={visibleTodRows.length}
             total={todRows.length}
           />
         )}
 
-        {(useCase.dashboard ? dashboardResult : result) && (
+        {dashboardType === "equity" && equityRows.length > 0 && (
+          <FilterBar
+            groups={EQUITY_GROUPS}
+            emptyFilters={equity.EMPTY_FILTERS}
+            filters={equityFilters}
+            onChange={(f) => { setEquityFilters(f); setEquityFiltersFromChat(false) }}
+            fromChat={equityFiltersFromChat}
+            matched={visibleEquityRows.length}
+            total={equityRows.length}
+          />
+        )}
+
+        {(isDashboard ? dashboardResult : result) && (
           <div className="legend">
             <b>{useCase.legend.title}</b>
             {useCase.legend.stops.map(([value, color]) => (
@@ -264,26 +390,68 @@ export default function App() {
           </div>
         )}
 
-        <Chatbot
-          ready={todRows.length > 0}
-          onFilters={(f) => { setFilters(f); setFiltersFromChat(true) }}
-          onFocus={selectStation}
-        />
+        {dashboardType === "tod" && (
+          <Chatbot
+            key="tod"
+            title="Tanya data TOD"
+            chatFn={api.chat}
+            suggestions={tod.SUGGESTIONS}
+            filterKeys={["modes", "classifications", "typologies"]}
+            notReadyLabel="Jalankan analisis Indeks TOD dulu agar tabel tersedia."
+            ready={todRows.length > 0}
+            onFilters={(f) => { setFilters(f); setFiltersFromChat(true) }}
+            onFocus={selectStation}
+          />
+        )}
+
+        {dashboardType === "equity" && (
+          <Chatbot
+            key="equity"
+            title="Tanya data Basic Needs"
+            chatFn={api.equityChat}
+            suggestions={equity.SUGGESTIONS}
+            filterKeys={["modes", "missing_categories"]}
+            notReadyLabel="Jalankan analisis Basic Needs dulu agar tabel tersedia."
+            ready={equityRows.length > 0}
+            onFilters={(f) => { setEquityFilters(f); setEquityFiltersFromChat(true) }}
+            onFocus={selectStation}
+          />
+        )}
       </main>
 
-      {useCase.dashboard && (
+      {dashboardType === "tod" && (
         <RightDock
           open={dockOpen}
           onToggle={() => setDockOpen((v) => !v)}
           tab={dockTab}
           onTab={setDockTab}
-          rows={visibleRows}
+          rows={visibleTodRows}
           allRows={todRows}
           metadata={todMeta}
           selected={stationId}
           onSelect={selectStation}
           whatIf={whatIf}
           onWhatIf={runWhatIf}
+        />
+      )}
+
+      {dashboardType === "equity" && (
+        <EquityDock
+          open={dockOpen}
+          onToggle={() => setDockOpen((v) => !v)}
+          tab={dockTab}
+          onTab={setDockTab}
+          rows={visibleEquityRows}
+          metadata={equityMeta}
+          selected={stationId}
+          onSelect={selectStation}
+          radius={equityRadius}
+          onRadius={setEquityRadius}
+          detail={equityDetail}
+          detailStatus={equityDetailStatus}
+          categoryFilter={poiCategoryFilter}
+          onCategoryFilter={setPoiCategoryFilter}
+          onSelectPoi={selectPoi}
         />
       )}
     </div>

@@ -203,6 +203,15 @@ button.secondary { background: #f3f4f6; color: #111827; border: 1px solid #e5e7e
 
 .mini.active { background: #0f766e; color: #fff; border-color: #0f766e; }
 
+.search-input {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 12px;
+  margin: 6px 0 4px;
+}
+
 .dock-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .dock-table th { text-align: left; color: #6b7280; font-weight: 500; padding: 6px 4px; border-bottom: 1px solid #e5e7eb; }
 .dock-table td { padding: 6px 4px; border-bottom: 1px solid #f3f4f6; }
