@@ -1,0 +1,70 @@
+# MAPID Data Catalogue - downloaded layers
+
+GeoJSON pulled by hand from `geo.mapid.io` (Import Data -> Premium Data -> Edit Layer ->
+OPEN API URL - MAPID has no bulk/list endpoint, see `docs/mapid-api.md`). Updated ~yearly,
+whenever MAPID refreshes a category: re-download, overwrite the files here, done - no code
+changes needed unless a *new* category is added (see below).
+
+File naming: `{CATEGORY} DI {KOTA/KABUPATEN} TAHUN {YEAR}.geojson`. All Point geometry.
+Properties include `NAMA`, `TIPE_1`/`TIPE_2`/`TIPE_3` (category hierarchy), `KABKOT`,
+`KECAMATAN`, `LONGITUDE`/`LATITUDE`.
+
+Loaded and spatially indexed by `backend/app/mapid_data.py`.
+
+## What's used for what
+
+| Category (file prefix) | Role | Used for |
+|---|---|---|
+| APOTEK | `basic_need` | M-UC2 amenity equity; K-UC1 `passengers_offpeak` proxy |
+| KLINIK | `basic_need` | same |
+| PUSKESMAS | `basic_need` | same |
+| RUMAH SAKIT | `basic_need` | same |
+| MAKANAN DAN MINUMAN | `basic_need` | same |
+| RESTORAN | `basic_need` | same |
+| PERDAGANGAN DAN RETAIL | `retail` (+ `basic_need` for MINIMARKET/SUPERMARKET/TOKO KELONTONG/PASAR only) | K-UC1 `commercial_density`, `land_use_diversity` |
+| KANTOR | `office` | K-UC1 `business_density`, `passengers_peak` proxy, `land_use_diversity` |
+| HALTE | `transit` | K-UC1 `alt_transport` |
+| STASIUN | `transit` | K-UC1 `alt_transport` |
+
+PERDAGANGAN DAN RETAIL is a mixed bag - most of it (Toko Pakaian, Elektronik, Mainan, ...)
+is discretionary shopping, not a daily need, so only MINIMARKET/SUPERMARKET/TOKO
+KELONTONG/PASAR also count toward `basic_need`. TOKO MAKANAN DAN MINUMAN inside this
+category is deliberately **not** counted as basic_need - it likely overlaps the same
+physical places already in MAKANAN DAN MINUMAN/RESTORAN, and double-counting would
+inflate the indicator.
+
+Which raw indicator each role feeds is in `backend/app/analysis.py` (`station_indicators`,
+`_land_use_diversity`, `amenity_equity`) - the mapping above is a summary, that file is
+the source of truth.
+
+## What still uses OSM
+
+MAPID doesn't cover these; OSM (Overpass, `backend/app/osm.py`) stays the only source:
+
+- Road network / intersections / pedestrian reach (`road_network`, `intersection`, `ped_shed`)
+- Residential buildings (`population_density`, `residential_diversity`'s denominator, and the
+  residential/green share of `land_use_diversity`)
+- Parking (`car_parking`, `motorcycle_parking` - no MAPID parking category downloaded)
+- Safety/information-display proxies (`lit`/`surveillance`/`police`/`crossing` tags,
+  `departures_board`/`information` tags - no MAPID equivalent)
+- Building footprint count (`accessible_buildings`)
+- Transit route branching (`branching` - counts route relations, no MAPID equivalent)
+
+## Adding a new category
+
+More has been pulled from MAPID than is wired in - the categories above are what's
+currently used, not the full download. To wire in a new one:
+
+1. Files are already here (or download them: `geo.mapid.io` -> Import Data -> Premium Data).
+2. Open `backend/app/mapid_data.py`, add one line to `ROLES`:
+   `"CATEGORY NAME": "existing_or_new_role"`.
+3. If it needs a role nothing currently uses (i.e. not `basic_need`/`retail`/`office`/
+   `transit`), add a query function (`retail()`/`offices()`/etc are the pattern) and wire
+   it into the relevant indicator in `analysis.py`.
+4. Update the table above.
+
+See the earlier conversation in this repo's history for the full ~50-layer shortlist
+that was scoped out from MAPID's catalogue (LST/UHI, flood/landslide/tsunami risk,
+Demografi/SES/People Spending, Kepolisian, Bank/ATM, Pusat Perbelanjaan, the rest of the
+retail competitor categories, Terminal/Bandara/Pelabuhan, education/entertainment anchors)
+- most of it isn't downloaded yet.
