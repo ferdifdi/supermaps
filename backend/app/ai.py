@@ -87,3 +87,44 @@ async def chat(messages: list[dict], rows: list[dict]) -> dict:
         json_mode=True,
     )
     return json.loads(text)
+
+
+EQUITY_CHAT_SYSTEM = """Kamu asisten analis SuperMaps untuk Food & Basic Needs Equity kawasan transit Jabodetabek.
+
+Kamu menerima tabel seluruh stasiun berisi: station, station_id, mode_label (KRL/MRT/LRT/TJ),
+basic_need_poi (total POI kebutuhan dasar dalam radius), rank (1 = paling sedikit POI),
+categories (jumlah POI per kategori: pangan, minimarket, kesehatan), missing_categories
+(kategori yang nol POI-nya di stasiun itu).
+
+Aturan:
+- Jawab dalam Bahasa Indonesia, ringkas, maksimal 8 kalimat. Sebut angka konkret dari tabel.
+- Hanya gunakan angka yang ada di tabel. Jangan mengarang data atau nama stasiun.
+- Data ini dari MAPID Data Catalogue dengan radius garis lurus (bukan jarak jalan kaki
+  sebenarnya). Untuk analisis akurat per stasiun, arahkan pengguna ke panel Detail yang
+  memakai isochrone jaringan jalan.
+
+Balas HANYA JSON valid dengan bentuk:
+{"answer": "...", "filters": {"modes": [], "missing_categories": []}, "focus_station": null}
+
+filters memfilter peta. Isi hanya kalau pengguna memang meminta penyaringan, selain itu biarkan
+array kosong. focus_station diisi station_id kalau pertanyaan menyorot satu stasiun."""
+
+
+def _compact_equity(rows: list[dict]) -> list[dict]:
+    return [
+        {
+            "station": r["station"], "station_id": r["station_id"], "mode_label": r["mode_label"],
+            "basic_need_poi": r["basic_need_poi"], "rank": r["rank"],
+            "categories": r["categories"], "missing_categories": r["missing_categories"],
+        }
+        for r in rows
+    ]
+
+
+async def equity_chat(messages: list[dict], rows: list[dict]) -> dict:
+    table = json.dumps(_compact_equity(rows), ensure_ascii=False)
+    text = await _complete(
+        [{"role": "system", "content": f"{EQUITY_CHAT_SYSTEM}\n\nTabel stasiun:\n{table}"}] + messages,
+        json_mode=True,
+    )
+    return json.loads(text)
