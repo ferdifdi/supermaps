@@ -194,9 +194,6 @@ async def comfortable_route(station: dict, dest_lon: float, dest_lat: float, pre
 # --- M-UC2: food & amenity equity -------------------------------------------
 
 EQUITY_CATEGORIES = ("pangan", "minimarket", "kesehatan")
-EQUITY_CATEGORY_LABELS = {
-    "pangan": "Pangan & kuliner", "minimarket": "Minimarket & toko", "kesehatan": "Kesehatan",
-}
 
 
 async def amenity_equity(station: dict, radius: int = WALK_BUFFER):
@@ -240,56 +237,6 @@ async def amenity_equity(station: dict, radius: int = WALK_BUFFER):
     }
 
 
-def _equity_station_summary(station: dict, radius: int) -> dict:
-    """One station's basic-need counts within `radius` (straight-line - the dashboard
-
-    scores every station at once, so a per-station network isochrone is too slow here;
-    the Detail view's isochrone is the accurate version of this same count).
-
-    MAPID lookups only, no Overpass - safe and fast to run for every station at once,
-    unlike K-UC1's dashboard which needs a per-station OSM call.
-    """
-    raw_pois = mapid_data.basic_needs(station["lon"], station["lat"], radius)
-    counts = {cat: sum(1 for p in raw_pois if p["category"] == cat) for cat in EQUITY_CATEGORIES}
-    missing = [cat for cat in EQUITY_CATEGORIES if counts[cat] == 0]
-    return {
-        "station": station["name"], "station_id": station["id"], "mode_label": station["mode_label"],
-        "lon": station["lon"], "lat": station["lat"],
-        "basic_need_poi": len(raw_pois),
-        "categories": counts,
-        "missing_categories": missing,
-    }
-
-
-def equity_dashboard(stations: list[dict], radius: int = WALK_BUFFER) -> list[dict]:
-    """All stations, sorted worst-served first (fewest total basic-need POI within `radius`)."""
-    rows = [_equity_station_summary(s, radius) for s in stations]
-    rows.sort(key=lambda r: r["basic_need_poi"])
-    for i, r in enumerate(rows, 1):
-        r["rank"] = i
-    return rows
-
-
-def equity_metadata(radius: int = WALK_BUFFER) -> dict:
-    return {
-        "method": f"Isochrone jaringan jalan kaki {radius} m dari stasiun (bukan garis lurus) "
-                  "dari MAPID Data Catalogue (APOTEK/KLINIK/PUSKESMAS/RUMAH SAKIT, MAKANAN DAN "
-                  "MINUMAN/RESTORAN, MINIMARKET/SUPERMARKET/TOKO KELONTONG). Dashboard kota "
-                  "memakai radius garis lurus (lebih cepat, kurang presisi); panel Detail per "
-                  "stasiun memakai isochrone jaringan jalan yang akurat.",
-        "buffer_m": radius,
-        "categories": EQUITY_CATEGORY_LABELS,
-        "sources": {
-            "MAPID": "MAPID Data Catalogue, diunduh manual sebagai GeoJSON. Update tahunan.",
-        },
-        "no_data": [
-            {"indicator": "population", "label": "Populasi per grid",
-             "reason": "Data demografi BPS per grid tidak tersedia gratis. Proksi OSM (bangunan "
-                       "hunian) dicoba tapi datanya terlalu jarang di Jabodetabek untuk dipercaya "
-                       "(contoh: 500 m di Bendungan Hilir cuma kebaca 5 bangunan), jadi tidak "
-                       "dipakai. Angka yang ditampilkan cuma jumlah POI, bukan penduduk terlayani."},
-        ],
-    }
 
 
 # --- U-UC1: site selection & market gap -------------------------------------
