@@ -4,8 +4,6 @@ Weights follow the proposal (Siburian et al., 2020).
 Proxies used where a free national dataset is not available are marked PROXY.
 """
 
-import asyncio
-
 import numpy as np
 from scipy.spatial import Voronoi
 from shapely.geometry import LineString, Point, Polygon
@@ -89,11 +87,13 @@ TOTAL_WEIGHT = sum(c["weight"] for c in CRITERIA.values())
 
 
 async def _context(station: dict, radius: int):
-    """Road graph, POIs and the station buffer, all in metric CRS."""
-    roads, pois = await asyncio.gather(
-        osm.roads(station["lon"], station["lat"], radius),
-        osm.pois(station["lon"], station["lat"], radius),
-    )
+    """Road graph, POIs and the station buffer, all in metric CRS.
+
+    Sequential, not gathered - public Overpass instances block IPs that fire too
+    many concurrent requests (this project has been blocklisted before).
+    """
+    roads = await osm.roads(station["lon"], station["lat"], radius)
+    pois = await osm.pois(station["lon"], station["lat"], radius)
     graph = network.build(roads)
     origin = to_m(Point(station["lon"], station["lat"]))
     buffer_m = origin.buffer(radius)
@@ -343,11 +343,13 @@ def _ped_shed(graph, origin, buffer_m) -> float:
 
 
 async def station_indicators(station: dict):
-    """The paper's 18 raw indicators for one station, before cross-station standardisation."""
-    context, branching = await asyncio.gather(
-        _context(station, TOD_BUFFER),
-        osm.routes(station["lon"], station["lat"], TOD_BUFFER),
-    )
+    """The paper's 18 raw indicators for one station, before cross-station standardisation.
+
+    Overpass queries run one at a time (not gathered) - public instances block IPs
+    that fire too many concurrent requests.
+    """
+    context = await _context(station, TOD_BUFFER)
+    branching = await osm.routes(station["lon"], station["lat"], TOD_BUFFER)
     _, pois, graph, origin, buffer_m, lines = context
     area_ha = buffer_m.area / 10000
 

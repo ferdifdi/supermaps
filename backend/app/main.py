@@ -144,7 +144,7 @@ _dashboard: list[dict] = []  # last computed table; what-if and chat score again
 
 
 @app.get("/api/analysis/tod-dashboard")
-async def tod_dashboard(modes: str = "KRL,MRT,LRT", limit: int = 60):
+async def tod_dashboard(modes: str = "KRL,MRT,LRT", limit: int = 25):
     """Ranked SCI table for the given comma-separated mode_labels (KRL/MRT/LRT/TJ).
 
     The index is relative, so every station in the table is standardised against the others.
@@ -154,7 +154,10 @@ async def tod_dashboard(modes: str = "KRL,MRT,LRT", limit: int = 60):
     if not stations:
         raise HTTPException(404, "no stations match those modes")
 
-    gate = asyncio.Semaphore(6)  # Overpass rate-limits, so cap the parallel fetches
+    # Public Overpass instances block IPs that send too many concurrent requests
+    # (this project has been blocklisted before - see commit 336350c). One station
+    # at a time keeps us well under that, at the cost of a slower first load.
+    gate = asyncio.Semaphore(1)
 
     async def one(station):
         async with gate:
