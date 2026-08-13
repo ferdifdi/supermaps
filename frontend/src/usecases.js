@@ -7,6 +7,7 @@ const ramp = (field, stops) => [
 ]
 
 const SCORE_STOPS = [[0, "#f7f7f7"], [0.25, "#c6dbef"], [0.5, "#6baed6"], [0.75, "#2171b5"], [1, "#08306b"]]
+const WALK_BUFFER = 500 // meters - must match backend/app/analysis.py's WALK_BUFFER
 
 export const PERSONAS = [
   { id: "komuter", label: "Masyarakat" },
@@ -38,6 +39,9 @@ export const USE_CASES = [
     layers: [
       {
         source: "grid", type: "fill",
+        // Count is a 500m walk radius from this cell's own centroid, not what's
+        // literally inside the cell - draw that radius on click so it's not a mystery.
+        reachRadius: WALK_BUFFER,
         paint: {
           "fill-color": ["case", ["get", "is_desert"], "#ef4444",
             ramp("basic_need_count", [[0, "#fee5d9"], [50, "#fc9272"], [120, "#de2d26"], [250, "#67000d"]])],
