@@ -30,13 +30,15 @@ export const api = {
   styles: () => get("/api/basemap/styles"),
   stations: () => get("/api/stations"),
   walkAccess: (id, minutes) => get(`/api/analysis/walk-access?station_id=${id}&minutes=${minutes}`),
-  amenityEquity: (id) => get(`/api/analysis/amenity-equity?station_id=${id}`),
+  amenityEquity: (id, radius) => get(`/api/analysis/amenity-equity?station_id=${id}&radius=${radius}`),
   siteSelection: (id, category) => get(`/api/analysis/site-selection?station_id=${id}&category=${category}`),
   resilience: (id) => get(`/api/analysis/resilience?station_id=${id}`),
   todDashboard: (modes) => get(`/api/analysis/tod-dashboard?modes=${modes}`),
   todMetadata: () => get("/api/analysis/tod-metadata"),
   todWhatIf: (stationId, overrides) => post("/api/analysis/tod-whatif", { station_id: stationId, overrides }),
   chat: (messages) => post("/api/ai/chat", { messages }),
+  equityDashboard: (modes, radius) => get(`/api/analysis/equity-dashboard?modes=${modes}&radius=${radius}`),
+  equityChat: (messages) => post("/api/ai/equity-chat", { messages }),
   insight: async (useCase, audience, summary) =>
     (await post("/api/ai/insight", { use_case: useCase, audience, summary })).text,
 }
