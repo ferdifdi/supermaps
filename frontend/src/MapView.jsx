@@ -66,6 +66,7 @@ export default function MapView({ styleUrl, stations, activeStation, result, use
       m.addLayer({ id: layerId, type: layer.type, source: sourceId, paint: layer.paint }, "stations")
       m.on("click", layerId, (e) => {
         const props = e.features[0].properties
+        if (props.station_id) onPickStation(props.station_id)
         const html = useCase.popup
           .filter((k) => props[k] !== undefined)
           .map((k) => `<div><b>${k}</b>: ${props[k]}</div>`)
@@ -73,13 +74,18 @@ export default function MapView({ styleUrl, stations, activeStation, result, use
         new maplibregl.Popup().setLngLat(e.lngLat).setHTML(html).addTo(m)
       })
     })
+
+    // The dashboard draws its own station symbols, so the plain point layer would just clutter them.
+    if (m.getLayer("stations")) {
+      m.setLayoutProperty("stations", "visibility", useCase.dashboard ? "none" : "visible")
+    }
     return () => {
       ids.forEach(({ sourceId, layerId }) => {
         if (m.getLayer(layerId)) m.removeLayer(layerId)
         if (m.getSource(sourceId)) m.removeSource(sourceId)
       })
     }
-  }, [result, useCase])
+  }, [result, useCase, onPickStation])
 
   // fly to station
   useEffect(() => {

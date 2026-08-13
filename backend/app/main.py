@@ -1,3 +1,5 @@
+import asyncio
+
 import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,6 +14,12 @@ app = FastAPI(title="SuperMaps API")
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
 )
+
+
+@app.exception_handler(httpx.TransportError)
+async def overpass_down(request, exc):
+    return Response('{"detail":"Overpass OSM API sedang tidak bisa diakses, coba lagi nanti."}',
+                     status_code=502, media_type="application/json")
 
 STYLES = ["street-v2.0", "satellite-v2.0", "dark-v2.0", "light-v2.0"]
 _stations: dict[str, dict] = {}
@@ -132,12 +140,46 @@ async def site_selection(station_id: str, category: str = "menugo", radius: int 
     return await analysis.site_selection(station, category, competitors, demand)
 
 
-@app.get("/api/analysis/tod-index")
-async def tod_index(station_ids: str):
-    """station_ids: comma separated. Index is relative, so send every station you compare."""
-    ids = [i for i in station_ids.split(",") if i]
-    indicators = [await analysis.station_indicators(await get_station(i)) for i in ids]
-    return analysis.tod_index(indicators)
+_dashboard: list[dict] = []  # last computed table; what-if and chat score against it
+
+
+@app.get("/api/analysis/tod-dashboard")
+async def tod_dashboard(modes: str = "KRL,MRT,LRT", limit: int = 60):
+    """Ranked SCI table for the given comma-separated mode_labels (KRL/MRT/LRT/TJ).
+
+    The index is relative, so every station in the table is standardised against the others.
+    """
+    wanted = [m for m in modes.split(",") if m]
+    stations = [s for s in await osm.stations() if s["mode_label"] in wanted][:limit]
+    if not stations:
+        raise HTTPException(404, "no stations match those modes")
+
+    gate = asyncio.Semaphore(6)  # Overpass rate-limits, so cap the parallel fetches
+
+    async def one(station):
+        async with gate:
+            return await analysis.station_indicators(station)
+
+    indicators = await asyncio.gather(*(one(s) for s in stations))
+    _dashboard[:] = analysis.tod_index(list(indicators))
+    return {"rows": _dashboard, "metadata": analysis.metadata()}
+
+
+class WhatIfBody(BaseModel):
+    station_id: str
+    overrides: dict[str, float]
+
+
+@app.post("/api/analysis/tod-whatif")
+async def tod_whatif(body: WhatIfBody):
+    if not _dashboard:
+        raise HTTPException(409, "run /api/analysis/tod-dashboard first")
+    return analysis.what_if(_dashboard, body.station_id, body.overrides)
+
+
+@app.get("/api/analysis/tod-metadata")
+def tod_metadata():
+    return analysis.metadata()
 
 
 @app.get("/api/analysis/resilience")
@@ -165,3 +207,14 @@ class InsightBody(BaseModel):
 @app.post("/api/ai/insight")
 async def insight(body: InsightBody):
     return {"text": await ai.insight(body.use_case, body.audience, body.summary)}
+
+
+class ChatBody(BaseModel):
+    messages: list[dict]
+
+
+@app.post("/api/ai/chat")
+async def chat(body: ChatBody):
+    if not _dashboard:
+        raise HTTPException(409, "run /api/analysis/tod-dashboard first")
+    return await ai.chat(body.messages, _dashboard)

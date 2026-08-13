@@ -1,4 +1,5 @@
 import { api } from "./api"
+import { CLASS_COLORS } from "./tod"
 
 const ramp = (field, stops) => [
   "interpolate", ["linear"], ["get", field],
@@ -68,33 +69,33 @@ export const USE_CASES = [
     persona: "kebijakan",
     title: "Indeks TOD & Prioritas Pengembangan",
     description: "Station Composite Index, ranking stasiun, dan tipologi rekomendasi pengembangan.",
-    multiStation: true,
-    run: async (station, opts) => {
-      const rows = await api.todIndex(opts.stationIds)
-      return {
-        stations: {
-          type: "FeatureCollection",
-          features: rows.map((r) => ({
-            type: "Feature",
-            geometry: { type: "Point", coordinates: [r.lon, r.lat] },
-            properties: { name: r.station, sci: r.sci, rank: r.rank, typology: r.typology, ...r.components },
-          })),
-        },
-        summary: { ranking: rows.map((r) => ({ rank: r.rank, station: r.station, sci: r.sci, typology: r.typology })) },
-      }
-    },
+    // Scores every station at once, so App drives it through the dashboard instead of `run`.
+    dashboard: true,
+    options: { modes: ["rail", "rail,bus"] },
     layers: [
       {
         source: "stations", type: "circle",
         paint: {
           "circle-radius": ["interpolate", ["linear"], ["get", "sci"], 0, 6, 1, 18],
-          "circle-color": ramp("sci", SCORE_STOPS),
-          "circle-stroke-width": 1, "circle-stroke-color": "#fff",
+          "circle-color": [
+            "match", ["get", "classification"],
+            "tinggi", CLASS_COLORS.tinggi,
+            "sedang", CLASS_COLORS.sedang,
+            CLASS_COLORS.rendah,
+          ],
+          // Filtered-out stations stay on the map, dimmed, so spatial context survives.
+          "circle-opacity": ["case", ["get", "dimmed"], 0.15, 0.85],
+          "circle-stroke-width": ["case", ["get", "selected"], 3, 1],
+          "circle-stroke-color": ["case", ["get", "selected"], "#111827", "#fff"],
+          "circle-stroke-opacity": ["case", ["get", "dimmed"], 0.2, 1],
         },
       },
     ],
-    legend: { title: "Station Composite Index", stops: SCORE_STOPS },
-    popup: ["name", "rank", "sci", "typology", "density", "economy", "walk_access", "accessibility"],
+    legend: {
+      title: "Klasifikasi Indeks TOD",
+      stops: [["tinggi", CLASS_COLORS.tinggi], ["sedang", CLASS_COLORS.sedang], ["rendah", CLASS_COLORS.rendah]],
+    },
+    popup: ["name", "rank", "sci", "classification", "typology"],
   },
   {
     id: "K-UC2",

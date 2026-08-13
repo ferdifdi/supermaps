@@ -11,6 +11,22 @@ from .config import CACHE_DIR, JABODETABEK_BBOX, OVERPASS_URLS
 BASIC_NEEDS = ["restaurant", "fast_food", "cafe", "food_court", "marketplace", "pharmacy", "clinic"]
 BASIC_SHOPS = ["convenience", "supermarket", "greengrocer", "bakery"]
 
+# OSM tags KRL/MRT/LRT/Transjakarta stations actually carry in Jabodetabek.
+MODE_LABELS = {"subway": "MRT", "light_rail": "LRT", "station": "KRL", "halt": "KRL", "bus": "TJ"}
+
+
+def mode_label(tags: dict) -> str:
+    """KRL / MRT / LRT / TJ from the raw OSM tagging."""
+    operator = tags.get("operator", "").lower()
+    if "transjakarta" in operator:
+        return "TJ"
+    if "mrt" in operator:
+        return "MRT"
+    if "lrt" in operator:
+        return "LRT"
+    raw = tags.get("station") or tags.get("railway") or "bus"
+    return MODE_LABELS.get(raw, "KRL")
+
 
 async def overpass(query: str) -> dict:
     key = hashlib.sha1(query.encode()).hexdigest()
@@ -71,6 +87,7 @@ async def stations() -> list[dict]:
             "id": str(el["id"]),
             "name": name,
             "mode": tags.get("station") or tags.get("railway") or "bus",
+            "mode_label": mode_label(tags),
             "operator": tags.get("operator", ""),
             "lon": el["lon"],
             "lat": el["lat"],
@@ -105,6 +122,10 @@ async def pois(lon: float, lat: float, radius: int) -> list[dict]:
       nwr["leisure"~"park|garden"](around:{radius},{lat},{lon});
       nwr["landuse"~"grass|forest|recreation_ground"](around:{radius},{lat},{lon});
       way["waterway"~"river|stream|canal|drain"](around:{radius},{lat},{lon});
+      node["highway"="crossing"](around:{radius},{lat},{lon});
+      node["highway"="bus_stop"](around:{radius},{lat},{lon});
+      node["public_transport"="platform"](around:{radius},{lat},{lon});
+      node["railway"~"station|halt|tram_stop"](around:{radius},{lat},{lon});
     );
     out center;
     """
@@ -125,9 +146,27 @@ async def pois(lon: float, lat: float, radius: int) -> list[dict]:
             "leisure": tags.get("leisure", ""),
             "landuse": tags.get("landuse", ""),
             "waterway": tags.get("waterway", ""),
+            "highway": tags.get("highway", ""),
+            "railway": tags.get("railway", ""),
+            "public_transport": tags.get("public_transport", ""),
+            "lit": tags.get("lit", ""),
+            "surveillance": tags.get("surveillance", ""),
+            "departures_board": tags.get("departures_board", ""),
+            "information": tags.get("information", ""),
             "name": tags.get("name", ""),
         })
     return out
+
+
+async def routes(lon: float, lat: float, radius: int) -> int:
+    """How many public-transport route relations pass within `radius` of a point."""
+    q = f"""
+    [out:json][timeout:10];
+    relation["type"="route"]["route"~"train|subway|light_rail|tram|bus"](around:{radius},{lat},{lon});
+    out ids;
+    """
+    data = await overpass(q)
+    return len(data["elements"])
 
 
 def is_basic_need(poi: dict) -> bool:
@@ -144,3 +183,17 @@ def is_commercial(poi: dict) -> bool:
 
 def is_green(poi: dict) -> bool:
     return bool(poi["leisure"] or poi["landuse"])
+
+
+def is_retail(poi: dict) -> bool:
+    """Paper's 'commercial': services and retail only, offices excluded to avoid double counting."""
+    return bool(poi["shop"]) or poi["building"] in ("commercial", "retail")
+
+
+def is_office(poi: dict) -> bool:
+    """Paper's 'business': non-service, non-retail."""
+    return bool(poi["office"]) or poi["building"] == "office"
+
+
+def is_transit_stop(poi: dict) -> bool:
+    return bool(poi["railway"] or poi["public_transport"]) or poi["highway"] == "bus_stop"

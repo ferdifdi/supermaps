@@ -21,10 +21,71 @@ CORRIDOR_BUFFER = 40
 CELL = 250
 
 WALK_WEIGHTS = {"road_network": 0.40, "ped_shed": 0.30, "intersection": 0.20, "residential_mix": 0.10}
-TOD_WEIGHTS = {
-    "density": 0.15, "land_use_diversity": 0.03, "walk_access": 0.06, "economy": 0.22,
-    "station_capacity": 0.19, "station_facility": 0.11, "accessibility": 0.15, "parking": 0.08,
+
+# Siburian et al. (2020) Table 1: 8 criteria, 18 indicators. Criterion weights sum to 0.99
+# in the paper (rounding), so the roll-up divides by the actual total rather than assuming 1.0.
+CRITERIA = {
+    "density": {"weight": 0.15, "indicators": {
+        "population_density": 0.67, "commercial_density": 0.33}},
+    "land_use_diversity": {"weight": 0.03, "indicators": {
+        "land_use_diversity": 1.00}},
+    "walk_access": {"weight": 0.06, "indicators": {
+        "residential_diversity": 0.10, "road_network": 0.40, "intersection": 0.20, "ped_shed": 0.30}},
+    "economy": {"weight": 0.22, "indicators": {
+        "business_density": 1.00}},
+    "station_capacity": {"weight": 0.19, "indicators": {
+        "passengers_peak": 0.67, "passengers_offpeak": 0.33}},
+    "station_facility": {"weight": 0.11, "indicators": {
+        "safety": 0.50, "information_display": 0.50}},
+    "accessibility": {"weight": 0.15, "indicators": {
+        "train_trips": 0.40, "branching": 0.30, "alt_transport": 0.20, "accessible_buildings": 0.10}},
+    "parking": {"weight": 0.08, "indicators": {
+        "car_parking": 0.67, "motorcycle_parking": 0.33}},
 }
+
+# Where each indicator's number actually comes from. Shown as a badge in the UI so a
+# stand-in is never mistaken for measurement.
+SOURCES = {
+    "population_density": "OSM", "commercial_density": "OSM", "land_use_diversity": "OSM",
+    "residential_diversity": "OSM", "road_network": "OSM", "intersection": "OSM",
+    "ped_shed": "OSM", "business_density": "OSM", "accessible_buildings": "OSM",
+    "branching": "OSM", "alt_transport": "OSM", "car_parking": "OSM", "motorcycle_parking": "OSM",
+    # No free ridership feed: activity density stands in for passenger load.
+    "passengers_peak": "PROXY", "passengers_offpeak": "PROXY",
+    # The paper measured these by field survey; OSM tagging is the closest automatable stand-in.
+    "safety": "PROXY", "information_display": "PROXY",
+    # The paper scored every station identically here (single MRT track).
+    "train_trips": "CONSTANT",
+}
+
+LABELS = {
+    "population_density": "Kepadatan penduduk", "commercial_density": "Kepadatan komersial",
+    "land_use_diversity": "Keragaman guna lahan", "residential_diversity": "Keragaman permukiman",
+    "road_network": "Jaringan jalan", "intersection": "Persimpangan",
+    "ped_shed": "Jangkauan pejalan kaki", "business_density": "Kepadatan bisnis",
+    "passengers_peak": "Penumpang jam sibuk", "passengers_offpeak": "Penumpang di luar jam sibuk",
+    "safety": "Keamanan & keselamatan", "information_display": "Papan informasi",
+    "train_trips": "Frekuensi perjalanan", "branching": "Percabangan jalur",
+    "alt_transport": "Transportasi alternatif", "accessible_buildings": "Bangunan terjangkau jalan kaki",
+    "car_parking": "Parkir mobil", "motorcycle_parking": "Parkir motor",
+}
+
+CRITERIA_LABELS = {
+    "density": "Kepadatan", "land_use_diversity": "Keragaman guna lahan",
+    "walk_access": "Akses jalan kaki", "economy": "Ekonomi",
+    "station_capacity": "Kapasitas stasiun", "station_facility": "Fasilitas stasiun",
+    "accessibility": "Aksesibilitas dari & ke stasiun", "parking": "Ketersediaan parkir",
+}
+
+INDICATOR_WEIGHT = {
+    ind: crit["weight"] * w
+    for crit in CRITERIA.values()
+    for ind, w in crit["indicators"].items()
+}
+INDICATOR_CRITERION = {
+    ind: name for name, crit in CRITERIA.items() for ind in crit["indicators"]
+}
+TOTAL_WEIGHT = sum(c["weight"] for c in CRITERIA.values())
 
 
 async def _context(station: dict, radius: int):
@@ -221,67 +282,246 @@ async def site_selection(station: dict, category: str, competitors: list[dict], 
 
 # --- K-UC1: TOD readiness ----------------------------------------------------
 
-async def station_indicators(station: dict, ridership: float | None = None):
-    _, pois, _, _, buffer_m, lines = await _context(station, TOD_BUFFER)
-    area_ha = buffer_m.area / 10000
-    res = _poi_points(pois, osm.is_residential)
-    com = _poi_points(pois, osm.is_commercial)
-    parking = [p for p in pois if p["amenity"] == "parking"]
-    facility = sum(1 for p in pois if p["amenity"] in ("shelter", "bench", "toilets", "police", "drinking_water"))
-    nodes = intersections(lines)
-    road_length = unary_union(lines).length
+def metadata() -> dict:
+    """Where every number comes from, for the provenance panel."""
+    return {
+        "method": "Siburian, Sumadio & Shidiq (2020), Jurnal Geografi Lingkungan Tropik 4(1), 46-58. "
+                  "8 kriteria / 18 indikator, standardisasi min-max, buffer 400 m.",
+        "buffer_m": TOD_BUFFER,
+        "sources": {
+            "OSM": "OpenStreetMap via Overpass API, ODbL. Diambil per stasiun dan disimpan di cache lokal.",
+            "PROXY": "Tidak ada sumber data gratis. Angka diturunkan dari kepadatan aktivitas atau tag OSM terkait.",
+            "CONSTANT": "Nilai sama untuk semua stasiun, mengikuti perlakuan di paper aslinya.",
+        },
+        "indicators": [
+            {
+                "indicator": k,
+                "label": LABELS[k],
+                "criterion": name,
+                "criterion_label": CRITERIA_LABELS[name],
+                "criterion_weight": crit["weight"],
+                "indicator_weight": w,
+                "effective_weight": round(crit["weight"] * w / TOTAL_WEIGHT, 4),
+                "source": SOURCES[k],
+            }
+            for name, crit in CRITERIA.items()
+            for k, w in crit["indicators"].items()
+        ],
+        "no_data": [
+            {"indicator": k, "label": LABELS[k], "reason": reason}
+            for k, reason in {
+                "passengers_peak": "Data penumpang jam sibuk per stasiun tidak tersedia gratis.",
+                "passengers_offpeak": "Data penumpang di luar jam sibuk per stasiun tidak tersedia gratis.",
+                "safety": "Paper mengukurnya lewat survei lapangan, tidak bisa diotomatiskan.",
+                "information_display": "Paper mengukurnya lewat survei lapangan, tidak bisa diotomatiskan.",
+            }.items()
+        ],
+    }
 
-    total = len(res) + len(com)
+
+def _land_use_diversity(pois: list[dict]) -> float:
+    """Kamruzzaman & Baker: 1 - sum of squared category shares. Shares by POI count."""
+    counts = [
+        sum(1 for p in pois if osm.is_residential(p)),
+        sum(1 for p in pois if osm.is_retail(p)),
+        sum(1 for p in pois if osm.is_office(p)),
+        sum(1 for p in pois if osm.is_green(p)),
+    ]
+    total = sum(counts)
+    if not total:
+        return 0.0
+    return 1 - sum((c / total) ** 2 for c in counts)
+
+
+def _ped_shed(graph, origin, buffer_m) -> float:
+    """Zhang-style ped-shed: 400 m network service area over the straight-line buffer area."""
+    if not graph.number_of_nodes():
+        return 0.0
+    minutes = TOD_BUFFER / network.WALK_SPEED / 60
+    reachable = network.isochrone(graph, origin, minutes, "length")
+    return min(reachable.area / buffer_m.area, 1.0)
+
+
+async def station_indicators(station: dict):
+    """The paper's 18 raw indicators for one station, before cross-station standardisation."""
+    context, branching = await asyncio.gather(
+        _context(station, TOD_BUFFER),
+        osm.routes(station["lon"], station["lat"], TOD_BUFFER),
+    )
+    _, pois, graph, origin, buffer_m, lines = context
+    area_ha = buffer_m.area / 10000
+
+    residential = sum(1 for p in pois if osm.is_residential(p))
+    retail = sum(1 for p in pois if osm.is_retail(p))
+    office = sum(1 for p in pois if osm.is_office(p))
+    non_residential = sum(1 for p in pois if not osm.is_residential(p))
+    all_day = sum(1 for p in pois if osm.is_basic_need(p) or osm.is_green(p))
+
+    raw = {
+        # The paper's own assumption: four occupants per residential building.
+        "population_density": residential * 4 / area_ha,
+        "commercial_density": retail / area_ha,
+        "land_use_diversity": _land_use_diversity(pois),
+        "residential_diversity": non_residential / (non_residential + residential) if residential else 0.0,
+        "road_network": unary_union(lines).length / 1000,
+        "intersection": len(intersections(lines)),
+        "ped_shed": _ped_shed(graph, origin, buffer_m),
+        "business_density": office / area_ha,
+        # Commuters surge where offices are; all-day trips track food, shops and parks.
+        "passengers_peak": office / area_ha,
+        "passengers_offpeak": all_day / area_ha,
+        "safety": sum(1 for p in pois if p["lit"] == "yes" or p["surveillance"]
+                      or p["amenity"] == "police" or p["highway"] == "crossing"),
+        "information_display": sum(1 for p in pois if p["departures_board"] or p["information"]),
+        "train_trips": 1.0,
+        "branching": branching,
+        "alt_transport": sum(1 for p in pois if osm.is_transit_stop(p)),
+        "accessible_buildings": sum(1 for p in pois if p["building"]),
+        "car_parking": sum(1 for p in pois if p["amenity"] == "parking"),
+        "motorcycle_parking": sum(1 for p in pois if p["amenity"] == "motorcycle_parking"),
+    }
     return {
         "station": station["name"],
         "station_id": station["id"],
+        "mode_label": station["mode_label"],
         "lon": station["lon"],
         "lat": station["lat"],
-        "raw": {
-            # PROXY: building counts stand in for population/commercial density (no free per-grid census).
-            "density": total / area_ha,
-            "land_use_diversity": (len(com) / total) if total else 0.0,
-            "walk_access": road_length / area_ha / 100 + len(nodes) / area_ha,
-            "economy": len(com) / area_ha,
-            "station_capacity": ridership or 0.0,
-            "station_facility": facility,
-            "accessibility": sum(1 for p in pois if p["amenity"] in ("bus_station", "taxi", "bicycle_parking")),
-            "parking": len(parking),
-        },
+        "raw": raw,
     }
 
 
 def tod_index(indicators: list[dict]):
-    """Min-max standardise every indicator across stations, then weighted sum."""
-    keys = list(TOD_WEIGHTS)
-    matrix = {k: normalize([ind["raw"][k] for ind in indicators]) for k in keys}
-    weights = TOD_WEIGHTS.copy()
-    if all(ind["raw"]["station_capacity"] == 0 for ind in indicators):
-        weights.pop("station_capacity")  # no ridership supplied: renormalise over the rest
-    total_w = sum(weights.values())
+    """Standardise each indicator across stations, roll up to criteria, then to SCI."""
+    scores = {k: normalize([ind["raw"][k] for ind in indicators]) for k in INDICATOR_WEIGHT}
 
     rows = []
     for i, ind in enumerate(indicators):
-        parts = {k: float(matrix[k][i]) for k in weights}
-        sci = sum(parts[k] * w for k, w in weights.items()) / total_w
-        rows.append({**ind, "sci": round(sci, 3), "components": {k: round(v, 3) for k, v in parts.items()}})
+        per_indicator = {k: round(float(scores[k][i]), 3) for k in INDICATOR_WEIGHT}
+        criteria = {
+            name: round(sum(per_indicator[k] * w for k, w in crit["indicators"].items()), 3)
+            for name, crit in CRITERIA.items()
+        }
+        sci = sum(criteria[name] * crit["weight"] for name, crit in CRITERIA.items()) / TOTAL_WEIGHT
+        rows.append({**ind, "sci": round(sci, 3), "criteria": criteria, "indicators": per_indicator})
 
     rows.sort(key=lambda r: r["sci"], reverse=True)
+    breaks = _breaks([r["sci"] for r in rows])
     for rank, row in enumerate(rows, 1):
         row["rank"] = rank
-        row["typology"] = _typology(row)
+        row["classification"] = _classify(row["sci"], breaks)
+        row["typology"], row["typology_reason"] = _typology(row)
+        row["priorities"] = priorities(row)
+        row.update(impact_benefit(row))
+    return quadrant(rows)
+
+
+def _breaks(sorted_desc: list[float]) -> tuple[float, float]:
+    """Two cut points splitting the stations into three equal-sized classes."""
+    if not sorted_desc:
+        return 0.0, 0.0
+    values = sorted(sorted_desc)
+    return values[len(values) // 3], values[2 * len(values) // 3]
+
+
+def _classify(sci: float, breaks: tuple[float, float]) -> str:
+    low, high = breaks
+    if sci >= high:
+        return "tinggi"
+    if sci >= low:
+        return "sedang"
+    return "rendah"
+
+
+def _typology(row: dict) -> tuple[str, str]:
+    """Which kind of development the existing character of the area actually supports."""
+    c = row["criteria"]
+    if row["sci"] < 0.3 or c["walk_access"] < 0.25:
+        return "pembenahan dasar", (
+            f"SCI {row['sci']} dan akses jalan kaki {c['walk_access']} masih rendah, "
+            "sehingga infrastruktur dasar perlu dibenahi sebelum pengembangan lain."
+        )
+    if c["economy"] >= 0.6 and c["density"] >= 0.5:
+        return "mixed-use", (
+            f"Ekonomi {c['economy']} dan kepadatan {c['density']} sama-sama kuat, "
+            "kawasan sanggup menampung fungsi campuran."
+        )
+    if c["economy"] >= 0.5:
+        return "retail cepat", (
+            f"Ekonomi {c['economy']} kuat tetapi kepadatan {c['density']} belum tinggi, "
+            "retail cepat paling cocok menyerap arus penumpang."
+        )
+    return "housing-support", (
+        f"Ekonomi {c['economy']} masih rendah dengan kepadatan {c['density']}, "
+        "kawasan lebih tepat diarahkan ke hunian dan layanan pendukungnya."
+    )
+
+
+def priorities(row: dict) -> list[dict]:
+    """Indicators ranked by how much SCI each one could still add if brought to 1.0."""
+    out = [
+        {
+            "indicator": k,
+            "label": LABELS[k],
+            "criterion": INDICATOR_CRITERION[k],
+            "score": row["indicators"][k],
+            "source": SOURCES[k],
+            "potential_gain": round(w * (1 - row["indicators"][k]) / TOTAL_WEIGHT, 4),
+        }
+        for k, w in INDICATOR_WEIGHT.items()
+    ]
+    out.sort(key=lambda p: p["potential_gain"], reverse=True)
+    return out
+
+
+def impact_benefit(row: dict) -> dict:
+    """Impact = how far from ideal. Benefit = how much usable foundation already exists.
+
+    Placeholder definition, kept trivial on purpose so it is easy to replace once the
+    real impact/benefit formula is agreed.
+    """
+    c = row["criteria"]
+    impact = round(1 - row["sci"], 3)
+    benefit = round((c["walk_access"] + c["accessibility"] + c["station_facility"]) / 3, 3)
+    return {"impact": impact, "benefit": benefit}
+
+
+def quadrant(rows: list[dict]) -> list[dict]:
+    """Label each station against the median impact and median benefit."""
+    if not rows:
+        return rows
+    mid_impact = float(np.median([r["impact"] for r in rows]))
+    mid_benefit = float(np.median([r["benefit"] for r in rows]))
+    for r in rows:
+        high_impact = r["impact"] >= mid_impact
+        high_benefit = r["benefit"] >= mid_benefit
+        r["quadrant"] = (
+            "quick win" if high_impact and high_benefit
+            else "dampak tinggi, effort besar" if high_impact
+            else "sudah baik, rawat saja" if high_benefit
+            else "prioritas rendah"
+        )
     return rows
 
 
-def _typology(row: dict) -> str:
-    c, sci = row["components"], row["sci"]
-    if sci < 0.3 or c["walk_access"] < 0.25:
-        return "perbaikan dasar"
-    if c["economy"] >= 0.6 and c["density"] >= 0.5:
-        return "mixed-use"
-    if c["economy"] >= 0.5:
-        return "retail cepat"
-    return "housing-support"
+def what_if(rows: list[dict], station_id: str, overrides: dict[str, float]) -> dict:
+    """Projected SCI and rank if the named indicators were lifted to the given scores."""
+    row = next(r for r in rows if r["station_id"] == station_id)
+    projected = {**row["indicators"], **overrides}
+    criteria = {
+        name: sum(projected[k] * w for k, w in crit["indicators"].items())
+        for name, crit in CRITERIA.items()
+    }
+    sci_after = sum(criteria[n] * c["weight"] for n, c in CRITERIA.items()) / TOTAL_WEIGHT
+    others = [r["sci"] for r in rows if r["station_id"] != station_id]
+    return {
+        "station": row["station"],
+        "sci_before": row["sci"],
+        "sci_after": round(sci_after, 3),
+        "delta": round(sci_after - row["sci"], 3),
+        "rank_before": row["rank"],
+        "rank_after": sum(1 for s in others if s > sci_after) + 1,
+        "criteria_after": {k: round(v, 3) for k, v in criteria.items()},
+    }
 
 
 # --- K-UC2: climate & environmental resilience -------------------------------
