@@ -31,6 +31,7 @@ export const api = {
   stations: () => get("/api/stations"),
   walkAccess: (id, minutes) => get(`/api/analysis/walk-access?station_id=${id}&minutes=${minutes}`),
   amenityEquity: (id, radius) => get(`/api/analysis/amenity-equity?station_id=${id}&radius=${radius}`),
+  route: (id, lon, lat, preference) => get(`/api/analysis/route?station_id=${id}&lon=${lon}&lat=${lat}&preference=${preference}`),
   siteSelection: (id, category) => get(`/api/analysis/site-selection?station_id=${id}&category=${category}`),
   resilience: (id) => get(`/api/analysis/resilience?station_id=${id}`),
   todDashboard: (modes) => get(`/api/analysis/tod-dashboard?modes=${modes}`),

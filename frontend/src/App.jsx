@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import MapView from "./MapView"
 import Chatbot from "./components/Chatbot"
-import EquityPanel from "./components/EquityPanel"
+import EquityDock from "./components/EquityDock"
 import FilterBar from "./components/FilterBar"
 import RightDock from "./components/RightDock"
 import { api } from "./api"
@@ -38,9 +38,11 @@ export default function App() {
   const [dockTab, setDockTab] = useState("ringkasan")
   const [whatIf, setWhatIf] = useState(null)
 
-  // M-UC2 extras (POI search/filter, compare)
+  // M-UC2 extras (POI search/filter, compare, route)
   const [poiCategoryFilter, setPoiCategoryFilter] = useState([])
   const [focusPoint, setFocusPoint] = useState(null)
+  const [routeResult, setRouteResult] = useState(null)
+  const [routingId, setRoutingId] = useState(null)
 
   useEffect(() => {
     api.styles().then((s) => { setStyles(s); setStyleUrl(s[0].url) })
@@ -79,14 +81,15 @@ export default function App() {
     }
   }, [useCase, todRows, visibleRows, stationId])
 
-  // M-UC2's POI category filter also thins what the map shows, not just the sidebar list.
+  // M-UC2's POI category filter thins what the map shows too, and the route (if any) is
+  // fetched separately from the base analysis, so both get merged in here for MapView.
   const mapResult = useMemo(() => {
-    if (useCase.extras !== "equity" || !result || !poiCategoryFilter.length) return result
-    return {
-      ...result,
-      poi: { ...result.poi, features: result.poi.features.filter((f) => poiCategoryFilter.includes(f.properties.category)) },
-    }
-  }, [useCase, result, poiCategoryFilter])
+    if (useCase.extras !== "equity" || !result) return result
+    const poi = poiCategoryFilter.length
+      ? { ...result.poi, features: result.poi.features.filter((f) => poiCategoryFilter.includes(f.properties.category)) }
+      : result.poi
+    return { ...result, poi, ...(routeResult && { route: routeResult }) }
+  }, [useCase, result, poiCategoryFilter, routeResult])
 
   async function run() {
     setStatus("Menjalankan analisis…")
@@ -105,7 +108,9 @@ export default function App() {
         setResult(null)
         setPoiCategoryFilter([])
         setFocusPoint(null)
+        setRouteResult(null)
         setResult(await useCase.run(station, { category, radius }))
+        if (useCase.extras === "equity") { setDockTab("ringkasan"); setDockOpen(true) }
       }
       setStatus("")
     } catch (e) {
@@ -120,6 +125,18 @@ export default function App() {
     } catch (e) {
       setInsight(`Gagal: ${e.message}`)
     }
+  }
+
+  async function routeToPoi(feature, index) {
+    setRoutingId(index)
+    try {
+      const [lon, lat] = feature.geometry.coordinates
+      const data = await api.route(stationId, lon, lat, "comfort")
+      setRouteResult(data.route)
+    } catch (e) {
+      setStatus(`Gagal ambil rute: ${e.message}`)
+    }
+    setRoutingId(null)
   }
 
   // Stable identity: MapView rebuilds its result layers whenever this callback changes.
@@ -248,7 +265,7 @@ export default function App() {
           </div>
         )}
 
-        {!useCase.dashboard && result?.summary && (
+        {!useCase.dashboard && useCase.extras !== "equity" && result?.summary && (
           <div className="section">
             <label>Ringkasan</label>
             <pre className="summary">{JSON.stringify(result.summary, null, 2)}</pre>
@@ -257,16 +274,10 @@ export default function App() {
           </div>
         )}
 
-        {useCase.extras === "equity" && result && station && (
-          <EquityPanel
-            station={station}
-            result={result}
-            radius={radius}
-            stations={stations}
-            categoryFilter={poiCategoryFilter}
-            onCategoryFilter={setPoiCategoryFilter}
-            onFocusPoi={(f) => setFocusPoint({ lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1] })}
-          />
+        {useCase.extras === "equity" && result && (
+          <div className="section">
+            <button className="secondary" onClick={() => setDockOpen(true)}>Buka panel detail</button>
+          </div>
         )}
 
         <div className="section">
@@ -341,6 +352,24 @@ export default function App() {
           onSelect={selectStation}
           whatIf={whatIf}
           onWhatIf={runWhatIf}
+        />
+      )}
+
+      {useCase.extras === "equity" && result && station && (
+        <EquityDock
+          open={dockOpen}
+          onToggle={() => setDockOpen((v) => !v)}
+          tab={dockTab}
+          onTab={setDockTab}
+          station={station}
+          result={result}
+          radius={radius}
+          stations={stations}
+          categoryFilter={poiCategoryFilter}
+          onCategoryFilter={setPoiCategoryFilter}
+          onFocusPoi={(f) => setFocusPoint({ lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1] })}
+          onRoutePoi={routeToPoi}
+          routingId={routingId}
         />
       )}
     </div>

@@ -65,12 +65,13 @@ export const USE_CASES = [
           "circle-stroke-width": 1, "circle-stroke-color": "#fff",
         },
       },
+      { source: "route", type: "line", paint: { "line-color": "#111827", "line-width": 4 } },
     ],
     legend: {
       title: "Kategori POI (redup = di luar jangkauan jalan kaki)",
       stops: [["Pangan & kuliner", CATEGORY_COLORS.pangan], ["Minimarket & toko", CATEGORY_COLORS.minimarket], ["Kesehatan", CATEGORY_COLORS.kesehatan]],
     },
-    popup: ["name", "category", "reachable"],
+    popup: ["name", "category", "reachable", "length_m", "minutes"],
   },
   {
     id: "U-UC1",
