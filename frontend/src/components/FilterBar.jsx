@@ -1,13 +1,6 @@
 import { useState } from "react"
-import { CLASSIFICATIONS, EMPTY_FILTERS, MODES, TYPOLOGIES } from "../tod"
 
-const GROUPS = [
-  { key: "modes", label: "Moda", options: MODES },
-  { key: "classifications", label: "Klasifikasi", options: CLASSIFICATIONS },
-  { key: "typologies", label: "Tipologi", options: TYPOLOGIES },
-]
-
-export default function FilterBar({ filters, onChange, fromChat, matched, total }) {
+export default function FilterBar({ groups, emptyFilters, filters, onChange, fromChat, matched, total }) {
   const [open, setOpen] = useState(null)
 
   const toggle = (key, value) => {
@@ -18,14 +11,14 @@ export default function FilterBar({ filters, onChange, fromChat, matched, total 
     })
   }
 
-  const chips = GROUPS.flatMap(({ key, options }) =>
+  const chips = groups.flatMap(({ key, options }) =>
     filters[key].filter((v) => options.includes(v)).map((v) => ({ key, value: v })),
   )
 
   return (
     <div className="filterbar">
       <div className="filterbar-row">
-        {GROUPS.map(({ key, label, options }) => (
+        {groups.map(({ key, label, options }) => (
           <div key={key} className="filter-group">
             <button
               className={filters[key].length ? "filter-btn active" : "filter-btn"}
@@ -56,7 +49,7 @@ export default function FilterBar({ filters, onChange, fromChat, matched, total 
         </span>
 
         {chips.length > 0 && (
-          <button className="filter-reset" onClick={() => onChange(EMPTY_FILTERS)}>
+          <button className="filter-reset" onClick={() => onChange(emptyFilters)}>
             Reset
           </button>
         )}

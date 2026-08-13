@@ -1,14 +1,6 @@
 import { useEffect, useRef, useState } from "react"
-import { api } from "../api"
 
-const SUGGESTIONS = [
-  "Ringkas indeks TOD semua stasiun",
-  "Stasiun mana yang paling perlu diperbaiki?",
-  "Tunjukkan stasiun KRL dengan klasifikasi rendah",
-  "Stasiun mana yang masuk kuadran quick win?",
-]
-
-export default function Chatbot({ ready, onFilters, onFocus }) {
+export default function Chatbot({ title, chatFn, suggestions, filterKeys, notReadyLabel, ready, onFilters, onFocus }) {
   const [open, setOpen] = useState(false)
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState("")
@@ -24,17 +16,11 @@ export default function Chatbot({ ready, onFilters, onFocus }) {
     setInput("")
     setBusy(true)
     try {
-      const reply = await api.chat(history)
+      const reply = await chatFn(history)
       setMessages([...history, { role: "assistant", content: reply.answer }])
       const filters = reply.filters || {}
-      const any = ["modes", "classifications", "typologies"].some((k) => filters[k]?.length)
-      if (any) {
-        onFilters({
-          modes: filters.modes || [],
-          classifications: filters.classifications || [],
-          typologies: filters.typologies || [],
-        })
-      }
+      const any = filterKeys.some((k) => filters[k]?.length)
+      if (any) onFilters(Object.fromEntries(filterKeys.map((k) => [k, filters[k] || []])))
       if (reply.focus_station) onFocus(reply.focus_station)
     } catch (e) {
       setMessages([...history, { role: "assistant", content: `Gagal: ${e.message}` }])
@@ -53,17 +39,17 @@ export default function Chatbot({ ready, onFilters, onFocus }) {
   return (
     <div className="chat">
       <div className="chat-head">
-        <b>Tanya data TOD</b>
+        <b>{title}</b>
         <button className="mini" onClick={() => setOpen(false)}>
           Tutup
         </button>
       </div>
 
       <div className="chat-body">
-        {!ready && <p className="note">Jalankan analisis Indeks TOD dulu agar tabel tersedia.</p>}
+        {!ready && <p className="note">{notReadyLabel}</p>}
         {ready && !messages.length && (
           <div className="chat-suggestions">
-            {SUGGESTIONS.map((s) => (
+            {suggestions.map((s) => (
               <button key={s} className="mini" onClick={() => send(s)}>
                 {s}
               </button>
