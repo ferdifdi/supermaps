@@ -282,6 +282,15 @@ export default function App() {
                 Dashboard pakai radius garis lurus (cepat). Panel Detail per stasiun pakai isochrone
                 jaringan jalan sebenarnya di radius yang sama.
               </p>
+
+              <label>Atau langsung ke satu stasiun</label>
+              <select value={stationId} onChange={(e) => selectStation(e.target.value)}>
+                <option value="">— pilih stasiun —</option>
+                {stations.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name} ({s.mode_label})</option>
+                ))}
+              </select>
+              <p className="note">Langsung buka tab Detail tanpa perlu menjalankan dashboard kota dulu.</p>
             </>
           )}
 
@@ -444,6 +453,7 @@ export default function App() {
           rows={visibleEquityRows}
           metadata={equityMeta}
           selected={stationId}
+          stationInfo={station}
           onSelect={selectStation}
           radius={equityRadius}
           onRadius={setEquityRadius}

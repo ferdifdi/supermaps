@@ -5,6 +5,7 @@ const TABS = [
   { id: "ringkasan", label: "Ringkasan" },
   { id: "peringkat", label: "Peringkat" },
   { id: "kategori", label: "Kategori" },
+  { id: "bandingkan", label: "Bandingkan" },
   { id: "detail", label: "Detail" },
 ]
 
@@ -152,6 +153,71 @@ function KategoriTab({ rows }) {
   )
 }
 
+function CompareTab({ rows }) {
+  const [aId, setAId] = useState(rows[0]?.station_id || "")
+  const [bId, setBId] = useState(rows[1]?.station_id || "")
+  const a = rows.find((r) => r.station_id === aId)
+  const b = rows.find((r) => r.station_id === bId)
+  const max = Math.max(a?.basic_need_poi || 0, b?.basic_need_poi || 0, 1)
+
+  const Bar = ({ value, color }) => (
+    <span className="bar">
+      <span style={{ width: `${(value / max) * 100}%`, background: color }} />
+    </span>
+  )
+
+  return (
+    <>
+      <div className="section">
+        <label>Stasiun A</label>
+        <select value={aId} onChange={(e) => setAId(e.target.value)}>
+          {rows.map((r) => <option key={r.station_id} value={r.station_id}>{r.station}</option>)}
+        </select>
+        <label>Stasiun B</label>
+        <select value={bId} onChange={(e) => setBId(e.target.value)}>
+          {rows.map((r) => <option key={r.station_id} value={r.station_id}>{r.station}</option>)}
+        </select>
+      </div>
+
+      {a && b && (
+        <div className="section">
+          <label>Total POI kebutuhan dasar</label>
+          <div className="criterion">
+            <div className="criterion-head" style={{ cursor: "default" }}>
+              <span>{a.station}</span>
+              <Bar value={a.basic_need_poi} color="#0f766e" />
+              <span className="criterion-value">{a.basic_need_poi}</span>
+            </div>
+            <div className="criterion-head" style={{ cursor: "default" }}>
+              <span>{b.station}</span>
+              <Bar value={b.basic_need_poi} color="#6baed6" />
+              <span className="criterion-value">{b.basic_need_poi}</span>
+            </div>
+          </div>
+
+          {CATEGORIES.map((cat) => (
+            <div key={cat} className="section">
+              <label>{CATEGORY_LABELS[cat]}</label>
+              <div className="criterion">
+                <div className="criterion-head" style={{ cursor: "default" }}>
+                  <span>{a.station}</span>
+                  <Bar value={a.categories[cat]} color={CATEGORY_COLORS[cat]} />
+                  <span className="criterion-value">{a.categories[cat]}</span>
+                </div>
+                <div className="criterion-head" style={{ cursor: "default" }}>
+                  <span>{b.station}</span>
+                  <Bar value={b.categories[cat]} color={CATEGORY_COLORS[cat]} />
+                  <span className="criterion-value">{b.categories[cat]}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  )
+}
+
 function CategoryChips({ active, onToggle }) {
   return (
     <div className="dock-actions">
@@ -210,14 +276,17 @@ function PoiSearch({ poiFeatures, categoryFilter, onCategoryFilter, onSelectPoi 
   )
 }
 
-function Detail({ row, radius, onRadius, detail, status, categoryFilter, onCategoryFilter, onSelectPoi }) {
-  if (!row) return <p className="note">Pilih stasiun di peta, tabel, atau papan peringkat.</p>
+function Detail({ station, rank, radius, onRadius, detail, status, categoryFilter, onCategoryFilter, onSelectPoi }) {
+  if (!station) return <p className="note">Pilih stasiun di peta, tabel, papan peringkat, atau dropdown di sidebar.</p>
 
   return (
     <>
       <div className="detail-head">
-        <h2>{row.station}</h2>
-        <p className="note">{row.mode_label} · peringkat {row.rank} dari total POI</p>
+        <h2>{station.name}</h2>
+        <p className="note">
+          {station.mode_label}
+          {rank && ` · peringkat ${rank.rank} dari total POI`}
+        </p>
       </div>
 
       <div className="section">
@@ -288,10 +357,10 @@ function Detail({ row, radius, onRadius, detail, status, categoryFilter, onCateg
 }
 
 export default function EquityDock({
-  open, onToggle, tab, onTab, rows, metadata, selected, onSelect,
+  open, onToggle, tab, onTab, rows, metadata, selected, stationInfo, onSelect,
   radius, onRadius, detail, detailStatus, categoryFilter, onCategoryFilter, onSelectPoi,
 }) {
-  const row = rows.find((r) => r.station_id === selected)
+  const rank = rows.find((r) => r.station_id === selected)
 
   return (
     <>
@@ -308,13 +377,18 @@ export default function EquityDock({
         </div>
 
         <div className="dock-body">
-          {!rows.length && <p className="note">Jalankan analisis dulu.</p>}
+          {!rows.length && tab !== "detail" && <p className="note">Jalankan analisis dulu.</p>}
           {!!rows.length && tab === "ringkasan" && <Summary rows={rows} metadata={metadata} onSelect={onSelect} />}
           {!!rows.length && tab === "peringkat" && <Leaderboard rows={rows} onSelect={onSelect} />}
           {!!rows.length && tab === "kategori" && <KategoriTab rows={rows} />}
-          {!!rows.length && tab === "detail" && (
+          {tab === "bandingkan" && (
+            rows.length >= 2
+              ? <CompareTab rows={rows} />
+              : <p className="note">Jalankan analisis dulu (butuh minimal 2 stasiun).</p>
+          )}
+          {tab === "detail" && (
             <Detail
-              row={row} radius={radius} onRadius={onRadius}
+              station={stationInfo} rank={rank} radius={radius} onRadius={onRadius}
               detail={detail} status={detailStatus}
               categoryFilter={categoryFilter} onCategoryFilter={onCategoryFilter}
               onSelectPoi={onSelectPoi}
