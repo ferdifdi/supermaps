@@ -19,19 +19,21 @@ Loaded and spatially indexed by `backend/app/mapid_data.py`.
 | KLINIK | `basic_need` | same |
 | PUSKESMAS | `basic_need` | same |
 | RUMAH SAKIT | `basic_need` | same |
-| MAKANAN DAN MINUMAN | `basic_need` | same |
-| RESTORAN | `basic_need` | same |
-| PERDAGANGAN DAN RETAIL | `retail` (+ `basic_need` for MINIMARKET/SUPERMARKET/TOKO KELONTONG/PASAR only) | K-UC1 `commercial_density`, `land_use_diversity` |
+| MAKANAN DAN MINUMAN | `basic_need` (category `pangan`) | same |
+| PERDAGANGAN DAN RETAIL | `retail` (+ `basic_need`/`minimarket` for MINIMARKET/SUPERMARKET/TOKO KELONTONG/PASAR only) | K-UC1 `commercial_density`, `land_use_diversity` |
 | KANTOR | `office` | K-UC1 `business_density`, `passengers_peak` proxy, `land_use_diversity` |
 | HALTE | `transit` | K-UC1 `alt_transport` |
 | STASIUN | `transit` | K-UC1 `alt_transport` |
 
+RESTORAN is deliberately **not downloaded/used** - it overlaps the same physical places
+already in MAKANAN DAN MINUMAN (both are food establishments), and counting both would
+double the food category's numbers.
+
 PERDAGANGAN DAN RETAIL is a mixed bag - most of it (Toko Pakaian, Elektronik, Mainan, ...)
 is discretionary shopping, not a daily need, so only MINIMARKET/SUPERMARKET/TOKO
 KELONTONG/PASAR also count toward `basic_need`. TOKO MAKANAN DAN MINUMAN inside this
-category is deliberately **not** counted as basic_need - it likely overlaps the same
-physical places already in MAKANAN DAN MINUMAN/RESTORAN, and double-counting would
-inflate the indicator.
+category is deliberately **not** counted as basic_need either, for the same
+overlap-with-MAKANAN-DAN-MINUMAN reason as RESTORAN.
 
 Which raw indicator each role feeds is in `backend/app/analysis.py` (`station_indicators`,
 `_land_use_diversity`, `amenity_equity`) - the mapping above is a summary, that file is

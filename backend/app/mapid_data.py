@@ -29,7 +29,6 @@ ROLES = {
     "PUSKESMAS": "basic_need",
     "RUMAH SAKIT": "basic_need",
     "MAKANAN DAN MINUMAN": "basic_need",
-    "RESTORAN": "basic_need",
     "PERDAGANGAN DAN RETAIL": "retail",
     "KANTOR": "office",
     "HALTE": "transit",
@@ -43,6 +42,20 @@ ROLES = {
 # TOKO MAKANAN DAN MINUMAN is deliberately excluded: it likely overlaps the same
 # physical places already counted in MAKANAN DAN MINUMAN/RESTORAN.
 EXTRA_BASIC_NEED_SUBTYPES = {"MINIMARKET", "SUPERMARKET", "TOKO KELONTONG", "PASAR"}
+
+# M-UC2's three daily-need categories (proposal: "pangan/minimarket/apotek"), by TIPE_1/TIPE_2.
+BASIC_NEED_CATEGORIES = {"pangan", "minimarket", "kesehatan"}
+
+
+def _basic_need_category(props: dict) -> str | None:
+    if props.get("TIPE_1") == "MAKANAN DAN MINUMAN":
+        return "pangan"
+    if props.get("TIPE_1") == "KESEHATAN DAN PENGOBATAN":
+        return "kesehatan"
+    if props.get("TIPE_2") in EXTRA_BASIC_NEED_SUBTYPES:
+        return "minimarket"
+    return None
+
 
 _points: list[Point] = []
 _roles: list[list[str]] = []
@@ -61,11 +74,15 @@ def _load():
                 lon, lat = f["geometry"]["coordinates"][:2]
                 props = f["properties"]
                 roles = [role]
-                if props.get("TIPE_2") in EXTRA_BASIC_NEED_SUBTYPES:
+                category = _basic_need_category(props)
+                if category:
                     roles.append("basic_need")
                 _points.append(to_m(Point(lon, lat)))
                 _roles.append(roles)
-                _props.append({"lon": lon, "lat": lat, "name": props.get("NAMA", "")})
+                _props.append({
+                    "lon": lon, "lat": lat, "name": props.get("NAMA", ""),
+                    "category": category,
+                })
     _tree = STRtree(_points) if _points else STRtree([])
 
 
