@@ -118,8 +118,22 @@ async def route(station_id: str, lon: float, lat: float, preference: str = "comf
 
 
 @app.get("/api/analysis/amenity-equity")
-async def amenity_equity(station_id: str):
-    return await analysis.amenity_equity(await get_station(station_id))
+async def amenity_equity(station_id: str, radius: int = 500):
+    return await analysis.amenity_equity(await get_station(station_id), radius)
+
+
+_equity_dashboard: list[dict] = []  # last computed table; chat reads against it
+
+
+@app.get("/api/analysis/equity-dashboard")
+async def equity_dashboard(modes: str = "KRL,MRT,LRT,TJ", radius: int = 500):
+    """Every matching station's basic-need POI counts, MAPID-only so this is fast."""
+    wanted = [m for m in modes.split(",") if m]
+    stations = [s for s in await osm.stations() if s["mode_label"] in wanted]
+    if not stations:
+        raise HTTPException(404, "no stations match those modes")
+    _equity_dashboard[:] = analysis.equity_dashboard(stations, radius)
+    return {"rows": _equity_dashboard, "metadata": analysis.equity_metadata(radius)}
 
 
 @app.get("/api/analysis/site-selection")
@@ -221,3 +235,10 @@ async def chat(body: ChatBody):
     if not _dashboard:
         raise HTTPException(409, "run /api/analysis/tod-dashboard first")
     return await ai.chat(body.messages, _dashboard)
+
+
+@app.post("/api/ai/equity-chat")
+async def equity_chat(body: ChatBody):
+    if not _equity_dashboard:
+        raise HTTPException(409, "run /api/analysis/equity-dashboard first")
+    return await ai.equity_chat(body.messages, _equity_dashboard)
