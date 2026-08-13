@@ -40,13 +40,14 @@ export const USE_CASES = [
         source: "grid", type: "fill",
         paint: {
           "fill-color": ["case", ["get", "is_desert"], "#ef4444",
-            ramp("basic_need_count", [[0, "#fee5d9"], [10, "#fc9272"], [30, "#de2d26"], [60, "#67000d"]])],
+            ramp("basic_need_count", [[0, "#fee5d9"], [50, "#fc9272"], [120, "#de2d26"], [250, "#67000d"]])],
           "fill-opacity": 0.65,
         },
       },
       { source: "poi", type: "circle", paint: { "circle-radius": 3, "circle-color": "#111827" } },
     ],
-    legend: { title: "Jumlah POI kebutuhan dasar dalam 500 m", stops: [[0, "#ef4444"], [10, "#fc9272"], [30, "#de2d26"], [60, "#67000d"]] },
+    // Thresholds tuned for MAPID's much denser POI counts (was 0/10/30/60 under OSM).
+    legend: { title: "Jumlah POI kebutuhan dasar dalam 500 m", stops: [[0, "#ef4444"], [50, "#fc9272"], [120, "#de2d26"], [250, "#67000d"]] },
     popup: ["basic_need_count", "is_desert"],
   },
   {
