@@ -10,7 +10,7 @@ from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import unary_union
 from shapely.strtree import STRtree
 
-from . import network, osm
+from . import mapid_data, network, osm
 from .geo import fc, feature, grid, intersections, normalize, to_deg, to_m
 
 WALK_BUFFER = 500
@@ -44,11 +44,17 @@ CRITERIA = {
 # Where each indicator's number actually comes from. Shown as a badge in the UI so a
 # stand-in is never mistaken for measurement.
 SOURCES = {
-    "population_density": "OSM", "commercial_density": "OSM", "land_use_diversity": "OSM",
+    "population_density": "OSM",
+    "commercial_density": "MAPID",  # PERDAGANGAN DAN RETAIL
+    "land_use_diversity": "MIXED",  # OSM residential/green + MAPID retail/office
     "residential_diversity": "OSM", "road_network": "OSM", "intersection": "OSM",
-    "ped_shed": "OSM", "business_density": "OSM", "accessible_buildings": "OSM",
-    "branching": "OSM", "alt_transport": "OSM", "car_parking": "OSM", "motorcycle_parking": "OSM",
-    # No free ridership feed: activity density stands in for passenger load.
+    "ped_shed": "OSM",
+    "business_density": "MAPID",  # KANTOR
+    "accessible_buildings": "OSM",
+    "branching": "OSM",
+    "alt_transport": "MAPID",  # HALTE + STASIUN
+    "car_parking": "OSM", "motorcycle_parking": "OSM",
+    # No free ridership feed: MAPID office/all-day-activity density stands in for passenger load.
     "passengers_peak": "PROXY", "passengers_offpeak": "PROXY",
     # The paper measured these by field survey; OSM tagging is the closest automatable stand-in.
     "safety": "PROXY", "information_display": "PROXY",
@@ -188,9 +194,15 @@ async def comfortable_route(station: dict, dest_lon: float, dest_lat: float, pre
 # --- M-UC2: food & amenity equity -------------------------------------------
 
 async def amenity_equity(station: dict):
-    _, pois, _, _, buffer_m, _ = await _context(station, WALK_BUFFER)
+    # No Overpass call here at all: the grid only needs the buffer geometry (no roads
+    # needed), and basic-need POIs now come entirely from MAPID.
+    buffer_m = to_m(Point(station["lon"], station["lat"])).buffer(WALK_BUFFER)
     cells = grid(buffer_m, CELL)
-    basic = _poi_points(pois, osm.is_basic_need)
+    # MAPID's food/health categories are far better mapped in Indonesia than OSM's.
+    basic = [
+        to_m(Point(p["lon"], p["lat"]))
+        for p in mapid_data.basic_needs(station["lon"], station["lat"], WALK_BUFFER)
+    ]
     features, deserts = [], 0
     for c in cells:
         reach = c.centroid.buffer(WALK_BUFFER)
@@ -290,7 +302,9 @@ def metadata() -> dict:
         "buffer_m": TOD_BUFFER,
         "sources": {
             "OSM": "OpenStreetMap via Overpass API, ODbL. Diambil per stasiun dan disimpan di cache lokal.",
-            "PROXY": "Tidak ada sumber data gratis. Angka diturunkan dari kepadatan aktivitas atau tag OSM terkait.",
+            "MAPID": "MAPID Data Catalogue, diunduh manual sebagai GeoJSON (lihat backend/data/README.md). Update tahunan.",
+            "MIXED": "Gabungan OSM (sebagian kategori) dan MAPID (sebagian kategori lain).",
+            "PROXY": "Tidak ada sumber data gratis. Angka diturunkan dari kepadatan aktivitas atau tag terkait.",
             "CONSTANT": "Nilai sama untuk semua stasiun, mengikuti perlakuan di paper aslinya.",
         },
         "indicators": [
@@ -319,13 +333,18 @@ def metadata() -> dict:
     }
 
 
-def _land_use_diversity(pois: list[dict]) -> float:
-    """Kamruzzaman & Baker: 1 - sum of squared category shares. Shares by POI count."""
+def _land_use_diversity(osm_pois: list[dict], retail_pois: list[dict], office_pois: list[dict]) -> float:
+    """Kamruzzaman & Baker: 1 - sum of squared category shares. Shares by POI count.
+
+    Residential/green come from OSM (MAPID doesn't map those yet). Retail/office come
+    straight from MAPID's own categories, already filtered by mapid_data - no OSM
+    classifier involved, so this doesn't touch Overpass for what MAPID covers.
+    """
     counts = [
-        sum(1 for p in pois if osm.is_residential(p)),
-        sum(1 for p in pois if osm.is_retail(p)),
-        sum(1 for p in pois if osm.is_office(p)),
-        sum(1 for p in pois if osm.is_green(p)),
+        sum(1 for p in osm_pois if osm.is_residential(p)),
+        len(retail_pois),
+        len(office_pois),
+        sum(1 for p in osm_pois if osm.is_green(p)),
     ]
     total = sum(counts)
     if not total:
@@ -353,31 +372,38 @@ async def station_indicators(station: dict):
     _, pois, graph, origin, buffer_m, lines = context
     area_ha = buffer_m.area / 10000
 
+    # MAPID replaces OSM for categories it covers (see data/README.md); OSM stays the
+    # only source for what MAPID hasn't got (residential, green, parking, road network).
+    # Read directly from MAPID's own categories - no OSM classifier involved, so this
+    # doesn't touch Overpass at all for retail/office/basic-need/transit.
+    retail_pois = mapid_data.retail(station["lon"], station["lat"], TOD_BUFFER)
+    office_pois = mapid_data.offices(station["lon"], station["lat"], TOD_BUFFER)
+    basic_need_pois = mapid_data.basic_needs(station["lon"], station["lat"], TOD_BUFFER)
+    transit_pois = mapid_data.transit_stops(station["lon"], station["lat"], TOD_BUFFER)
+
     residential = sum(1 for p in pois if osm.is_residential(p))
-    retail = sum(1 for p in pois if osm.is_retail(p))
-    office = sum(1 for p in pois if osm.is_office(p))
     non_residential = sum(1 for p in pois if not osm.is_residential(p))
-    all_day = sum(1 for p in pois if osm.is_basic_need(p) or osm.is_green(p))
+    all_day = len(basic_need_pois) + sum(1 for p in pois if osm.is_green(p))
 
     raw = {
         # The paper's own assumption: four occupants per residential building.
         "population_density": residential * 4 / area_ha,
-        "commercial_density": retail / area_ha,
-        "land_use_diversity": _land_use_diversity(pois),
+        "commercial_density": len(retail_pois) / area_ha,
+        "land_use_diversity": _land_use_diversity(pois, retail_pois, office_pois),
         "residential_diversity": non_residential / (non_residential + residential) if residential else 0.0,
         "road_network": unary_union(lines).length / 1000,
         "intersection": len(intersections(lines)),
         "ped_shed": _ped_shed(graph, origin, buffer_m),
-        "business_density": office / area_ha,
+        "business_density": len(office_pois) / area_ha,
         # Commuters surge where offices are; all-day trips track food, shops and parks.
-        "passengers_peak": office / area_ha,
+        "passengers_peak": len(office_pois) / area_ha,
         "passengers_offpeak": all_day / area_ha,
         "safety": sum(1 for p in pois if p["lit"] == "yes" or p["surveillance"]
                       or p["amenity"] == "police" or p["highway"] == "crossing"),
         "information_display": sum(1 for p in pois if p["departures_board"] or p["information"]),
         "train_trips": 1.0,
         "branching": branching,
-        "alt_transport": sum(1 for p in pois if osm.is_transit_stop(p)),
+        "alt_transport": len(transit_pois),
         "accessible_buildings": sum(1 for p in pois if p["building"]),
         "car_parking": sum(1 for p in pois if p["amenity"] == "parking"),
         "motorcycle_parking": sum(1 for p in pois if p["amenity"] == "motorcycle_parking"),

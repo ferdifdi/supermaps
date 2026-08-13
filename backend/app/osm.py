@@ -8,9 +8,6 @@ import httpx
 
 from .config import CACHE_DIR, JABODETABEK_BBOX, OVERPASS_URLS
 
-BASIC_NEEDS = ["restaurant", "fast_food", "cafe", "food_court", "marketplace", "pharmacy", "clinic"]
-BASIC_SHOPS = ["convenience", "supermarket", "greengrocer", "bakery"]
-
 # OSM tags KRL/MRT/LRT/Transjakarta stations actually carry in Jabodetabek.
 MODE_LABELS = {"subway": "MRT", "light_rail": "LRT", "station": "KRL", "halt": "KRL", "bus": "TJ"}
 
@@ -169,10 +166,6 @@ async def routes(lon: float, lat: float, radius: int) -> int:
     return len(data["elements"])
 
 
-def is_basic_need(poi: dict) -> bool:
-    return poi["amenity"] in BASIC_NEEDS or poi["shop"] in BASIC_SHOPS
-
-
 def is_residential(poi: dict) -> bool:
     return poi["building"] in ("residential", "apartments", "house")
 
@@ -183,17 +176,3 @@ def is_commercial(poi: dict) -> bool:
 
 def is_green(poi: dict) -> bool:
     return bool(poi["leisure"] or poi["landuse"])
-
-
-def is_retail(poi: dict) -> bool:
-    """Paper's 'commercial': services and retail only, offices excluded to avoid double counting."""
-    return bool(poi["shop"]) or poi["building"] in ("commercial", "retail")
-
-
-def is_office(poi: dict) -> bool:
-    """Paper's 'business': non-service, non-retail."""
-    return bool(poi["office"]) or poi["building"] == "office"
-
-
-def is_transit_stop(poi: dict) -> bool:
-    return bool(poi["railway"] or poi["public_transport"]) or poi["highway"] == "bus_stop"

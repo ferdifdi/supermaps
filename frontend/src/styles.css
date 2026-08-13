@@ -224,6 +224,8 @@ button.secondary { background: #f3f4f6; color: #111827; border: 1px solid #e5e7e
 
 .badge-proxy { background: #fffbeb; border-color: #fde68a; color: #92400e; }
 .badge-constant { background: #f3f4f6; }
+.badge-mapid { background: #f0fdfa; border-color: #99f6e4; color: #0f766e; }
+.badge-mixed { background: #eef2ff; border-color: #c7d2fe; color: #3730a3; }
 
 .metadata { margin-top: 16px; padding-top: 12px; border-top: 1px solid #e5e7eb; }
 .note-list { margin: 4px 0 12px; padding-left: 16px; color: #6b7280; line-height: 1.5; }
