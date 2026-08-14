@@ -29,33 +29,34 @@ ROLES = {
     "PUSKESMAS": "basic_need",
     "RUMAH SAKIT": "basic_need",
     "MAKANAN DAN MINUMAN": "basic_need",
-    "PERDAGANGAN DAN RETAIL": "retail",
+    "PUSAT PERBELANJAAN": "basic_need",
+    "PASAR": "basic_need",
+    "PASAR MODERN": "basic_need",
+    "BANK": "basic_need",
+    "ATM": "basic_need",
+    "PERDAGANGAN DAN RETAIL": "retail",  # also basic_need, see BASIC_NEED_CATEGORY_BY_PREFIX
     "KANTOR": "office",
     "HALTE": "transit",
     "STASIUN": "transit",
 }
 
-# PERDAGANGAN DAN RETAIL is a mixed bag (Toko Pakaian, Elektronik, Mainan, ...) - most
-# of it is discretionary shopping, not a daily need. These TIPE_2 sub-categories get
-# "basic_need" *in addition to* their file's base role ("retail"), since they're the
-# only genuinely daily-necessity ones in that category.
-# TOKO MAKANAN DAN MINUMAN is deliberately excluded: it likely overlaps the same
-# physical places already counted in MAKANAN DAN MINUMAN/RESTORAN.
-EXTRA_BASIC_NEED_SUBTYPES = {"MINIMARKET", "SUPERMARKET", "TOKO KELONTONG", "PASAR"}
-
-# M-UC2's three daily-need categories (proposal: "pangan/minimarket/apotek"), by TIPE_1/TIPE_2.
-BASIC_NEED_CATEGORIES = {"pangan", "minimarket", "kesehatan"}
-
-
-def _basic_need_category(props: dict) -> str | None:
-    if props.get("TIPE_1") == "MAKANAN DAN MINUMAN":
-        return "pangan"
-    if props.get("TIPE_1") == "KESEHATAN DAN PENGOBATAN":
-        return "kesehatan"
-    if props.get("TIPE_2") in EXTRA_BASIC_NEED_SUBTYPES:
-        return "minimarket"
-    return None
-
+# M-UC2's five daily-need categories, one per source file (RESTORAN stays excluded -
+# checked empirically, it's a 100% exact-coordinate duplicate of MAKANAN DAN MINUMAN;
+# see data/README.md).
+BASIC_NEED_CATEGORY_BY_PREFIX = {
+    "MAKANAN DAN MINUMAN": "pangan",
+    "PUSAT PERBELANJAAN": "pusat_perbelanjaan_pasar",
+    "PASAR": "pusat_perbelanjaan_pasar",
+    "PASAR MODERN": "pusat_perbelanjaan_pasar",
+    "BANK": "keuangan",
+    "ATM": "keuangan",
+    "PERDAGANGAN DAN RETAIL": "perdagangan_retail",
+    "APOTEK": "kesehatan",
+    "KLINIK": "kesehatan",
+    "PUSKESMAS": "kesehatan",
+    "RUMAH SAKIT": "kesehatan",
+}
+BASIC_NEED_CATEGORIES = ("pangan", "pusat_perbelanjaan_pasar", "keuangan", "perdagangan_retail", "kesehatan")
 
 _points: list[Point] = []
 _roles: list[list[str]] = []
@@ -68,20 +69,24 @@ def _load():
     if _tree is not None:
         return
     for prefix, role in ROLES.items():
+        category = BASIC_NEED_CATEGORY_BY_PREFIX.get(prefix)
         for path in DATA_DIR.glob(f"{prefix} DI *.geojson"):
             data = json.loads(path.read_text(encoding="utf-8"))
             for f in data["features"]:
                 lon, lat = f["geometry"]["coordinates"][:2]
                 props = f["properties"]
                 roles = [role]
-                category = _basic_need_category(props)
-                if category:
+                if category and role != "basic_need":
                     roles.append("basic_need")
                 _points.append(to_m(Point(lon, lat)))
                 _roles.append(roles)
                 _props.append({
                     "lon": lon, "lat": lat, "name": props.get("NAMA", ""),
                     "category": category,
+                    "tipe_2": props.get("TIPE_2", ""), "tipe_3": props.get("TIPE_3", ""),
+                    "alamat": props.get("ALAMAT", ""), "telepon": props.get("TELEPON", ""),
+                    "status": props.get("STATUS", ""), "kecamatan": props.get("KECAMATAN", ""),
+                    "desa": props.get("DESA", ""),
                 })
     _tree = STRtree(_points) if _points else STRtree([])
 
@@ -106,7 +111,9 @@ def offices(lon: float, lat: float, radius: int) -> list[dict]:
 
 
 def basic_needs(lon: float, lat: float, radius: int) -> list[dict]:
-    """APOTEK, KLINIK, PUSKESMAS, RUMAH SAKIT, MAKANAN DAN MINUMAN, RESTORAN."""
+    """APOTEK, KLINIK, PUSKESMAS, RUMAH SAKIT, MAKANAN DAN MINUMAN, PUSAT PERBELANJAAN,
+    PASAR, PASAR MODERN, BANK, ATM, PERDAGANGAN DAN RETAIL. Each item's `category` field
+    is one of BASIC_NEED_CATEGORIES."""
     return _near(lon, lat, radius, "basic_need")
 
 

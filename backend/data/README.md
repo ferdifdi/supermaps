@@ -13,27 +13,36 @@ Loaded and spatially indexed by `backend/app/mapid_data.py`.
 
 ## What's used for what
 
-| Category (file prefix) | Role | Used for |
-|---|---|---|
-| APOTEK | `basic_need` | M-UC2 amenity equity; K-UC1 `passengers_offpeak` proxy |
-| KLINIK | `basic_need` | same |
-| PUSKESMAS | `basic_need` | same |
-| RUMAH SAKIT | `basic_need` | same |
-| MAKANAN DAN MINUMAN | `basic_need` (category `pangan`) | same |
-| PERDAGANGAN DAN RETAIL | `retail` (+ `basic_need`/`minimarket` for MINIMARKET/SUPERMARKET/TOKO KELONTONG/PASAR only) | K-UC1 `commercial_density`, `land_use_diversity` |
-| KANTOR | `office` | K-UC1 `business_density`, `passengers_peak` proxy, `land_use_diversity` |
-| HALTE | `transit` | K-UC1 `alt_transport` |
-| STASIUN | `transit` | K-UC1 `alt_transport` |
+| Category (file prefix) | Role | M-UC2 category | Used for |
+|---|---|---|---|
+| APOTEK | `basic_need` | `kesehatan` | M-UC2 amenity equity; K-UC1 `passengers_offpeak` proxy |
+| KLINIK | `basic_need` | `kesehatan` | same |
+| PUSKESMAS | `basic_need` | `kesehatan` | same |
+| RUMAH SAKIT | `basic_need` | `kesehatan` | same |
+| MAKANAN DAN MINUMAN | `basic_need` | `pangan` | same |
+| PUSAT PERBELANJAAN | `basic_need` | `pusat_perbelanjaan_pasar` | M-UC2 only |
+| PASAR | `basic_need` | `pusat_perbelanjaan_pasar` | M-UC2 only |
+| PASAR MODERN | `basic_need` | `pusat_perbelanjaan_pasar` | M-UC2 only |
+| BANK | `basic_need` | `keuangan` | M-UC2 only |
+| ATM | `basic_need` | `keuangan` | M-UC2 only |
+| PERDAGANGAN DAN RETAIL | `retail` + `basic_need` | `perdagangan_retail` | K-UC1 `commercial_density`, `land_use_diversity`; M-UC2 (whole file, no TIPE_2 filtering) |
+| KANTOR | `office` | - | K-UC1 `business_density`, `passengers_peak` proxy, `land_use_diversity` |
+| HALTE | `transit` | - | K-UC1 `alt_transport` |
+| STASIUN | `transit` | - | K-UC1 `alt_transport` |
 
-RESTORAN is deliberately **not downloaded/used** - it overlaps the same physical places
-already in MAKANAN DAN MINUMAN (both are food establishments), and counting both would
+M-UC2's 5 categories are assigned per source file in `mapid_data.BASIC_NEED_CATEGORY_BY_PREFIX`,
+not by inspecting `TIPE_1`/`TIPE_2` - simpler and matches how the data was actually downloaded
+(each category is its own MAPID file/download, not a subtype split within one file).
+
+RESTORAN is deliberately **not downloaded/used**: checked empirically (Kota Bekasi sample,
+1353 records) - 100% of it is an exact name+coordinate duplicate of MAKANAN DAN MINUMAN,
+same establishments re-exported under a different MAPID category. Counting both would
 double the food category's numbers.
 
-PERDAGANGAN DAN RETAIL is a mixed bag - most of it (Toko Pakaian, Elektronik, Mainan, ...)
-is discretionary shopping, not a daily need, so only MINIMARKET/SUPERMARKET/TOKO
-KELONTONG/PASAR also count toward `basic_need`. TOKO MAKANAN DAN MINUMAN inside this
-category is deliberately **not** counted as basic_need either, for the same
-overlap-with-MAKANAN-DAN-MINUMAN reason as RESTORAN.
+An earlier version of this table split PERDAGANGAN DAN RETAIL by `TIPE_2` (MINIMARKET/
+SUPERMARKET/TOKO KELONTONG/PASAR only counted as `basic_need`, general retail excluded).
+That's gone now - the whole file counts toward `perdagangan_retail`, and PASAR is its own
+downloaded category (see table) rather than a `PERDAGANGAN DAN RETAIL` subtype.
 
 Which raw indicator each role feeds is in `backend/app/analysis.py` (`station_indicators`,
 `_land_use_diversity`, `amenity_equity`) - the mapping above is a summary, that file is
