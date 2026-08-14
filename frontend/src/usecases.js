@@ -1,6 +1,6 @@
 import { api } from "./api"
 import { CLASS_COLORS } from "./tod"
-import { CATEGORY_COLORS } from "./equity"
+import { CATEGORIES, CATEGORY_COLORS, CATEGORY_LABELS } from "./equity"
 
 const ramp = (field, stops) => [
   "interpolate", ["linear"], ["get", field],
@@ -34,24 +34,32 @@ export const USE_CASES = [
     id: "M-UC2",
     persona: "komuter",
     title: "Basic Needs untuk Komuter",
-    description: "Ketersediaan pangan, minimarket, dan kesehatan dalam jangkauan jalan kaki dari stasiun (MAPID Data Catalogue).",
+    description: "Ketersediaan pangan, pusat perbelanjaan/pasar, keuangan, retail, dan kesehatan dalam jangkauan jalan kaki dari stasiun (MAPID Data Catalogue).",
     extras: "equity",
     options: { radius: [100, 200, 300, 400, 500] },
     run: (station, opts) => api.amenityEquity(station.id, opts.radius || 500),
+    // "mode" layers only render when App's map-mode toggle matches; layers without a
+    // mode (POI dots, route, isochrone outline) always render regardless of which mode
+    // is active - the outline in particular needs to stay visible in heatmap modes too,
+    // so the coverage flag (green/red) doesn't disappear just because the fill is hidden.
     layers: [
-      { source: "isochrone", type: "fill", paint: { "fill-color": "#0f766e", "fill-opacity": 0.12 } },
-      { source: "isochrone", type: "line", paint: { "line-color": "#0f766e", "line-width": 2 } },
+      { source: "isochrone", type: "fill", mode: "isochrone", paint: { "fill-color": "#0f766e", "fill-opacity": 0.12 } },
       {
-        source: "poi", type: "heatmap",
+        source: "isochrone", type: "line",
         paint: {
-          "heatmap-weight": 1,
-          "heatmap-intensity": 1,
-          "heatmap-radius": 22,
-          "heatmap-opacity": 0.55,
-          "heatmap-color": [
-            "interpolate", ["linear"], ["heatmap-density"],
-            0, "rgba(0,0,0,0)", 0.2, "#c6dbef", 0.4, "#6baed6", 0.6, "#2171b5", 1, "#08306b",
-          ],
+          "line-color": ["case", ["get", "complete"], "#0f766e", "#ef4444"],
+          "line-width": 2,
+        },
+      },
+      {
+        // Grid choropleth, not a blurred kernel heatmap - a 250m cell with 0 POI stays
+        // untinted so empty cells read as empty, not as "low density".
+        source: "grid", type: "fill", mode: "heatmap_poi",
+        paint: {
+          "fill-color": ["case", ["==", ["get", "poi_count"], 0], "rgba(0,0,0,0)",
+            ramp("poi_count", [[0, "#eff3ff"], [5, "#c6dbef"], [15, "#6baed6"], [30, "#2171b5"], [50, "#08306b"]])],
+          "fill-opacity": 0.65,
+          "fill-outline-color": "rgba(255,255,255,0.4)",
         },
       },
       {
@@ -59,19 +67,27 @@ export const USE_CASES = [
         paint: {
           "circle-radius": 5,
           "circle-color": ["match", ["get", "category"],
-            "pangan", CATEGORY_COLORS.pangan, "minimarket", CATEGORY_COLORS.minimarket,
-            CATEGORY_COLORS.kesehatan],
+            ...CATEGORIES.flatMap((c) => [c, CATEGORY_COLORS[c]]),
+            "#6b7280"],
           "circle-opacity": ["case", ["get", "reachable"], 1, 0.35],
           "circle-stroke-width": 1, "circle-stroke-color": "#fff",
         },
       },
       { source: "route", type: "line", paint: { "line-color": "#111827", "line-width": 4 } },
     ],
-    legend: {
-      title: "Kategori POI (redup = di luar jangkauan jalan kaki)",
-      stops: [["Pangan & kuliner", CATEGORY_COLORS.pangan], ["Minimarket & toko", CATEGORY_COLORS.minimarket], ["Kesehatan", CATEGORY_COLORS.kesehatan]],
+    // Legend switches with the map mode (see App.jsx) - each mode colors the map by a
+    // different property, so a single fixed legend would be wrong two-thirds of the time.
+    legends: {
+      isochrone: {
+        title: "Kategori POI (redup = di luar jangkauan jalan kaki)",
+        stops: CATEGORIES.map((c) => [CATEGORY_LABELS[c], CATEGORY_COLORS[c]]),
+      },
+      heatmap_poi: {
+        title: "Jumlah POI per grid 250 m",
+        stops: [[0, "#eff3ff"], [5, "#c6dbef"], [15, "#6baed6"], [30, "#2171b5"], ["50+", "#08306b"]],
+      },
     },
-    popup: ["name", "category", "reachable", "length_m", "minutes"],
+    popup: ["name", "category", "tipe_2", "status", "reachable", "length_m", "minutes"],
   },
   {
     id: "U-UC1",
