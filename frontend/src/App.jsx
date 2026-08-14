@@ -5,6 +5,7 @@ import EquityDock from "./components/EquityDock"
 import FilterBar from "./components/FilterBar"
 import RightDock from "./components/RightDock"
 import { api } from "./api"
+import * as equity from "./equity"
 import * as tod from "./tod"
 import { PERSONAS, USE_CASES } from "./usecases"
 
@@ -43,6 +44,7 @@ export default function App() {
   const [focusPoint, setFocusPoint] = useState(null)
   const [routeResult, setRouteResult] = useState(null)
   const [routingId, setRoutingId] = useState(null)
+  const [mapMode, setMapMode] = useState("isochrone")
 
   useEffect(() => {
     api.styles().then((s) => { setStyles(s); setStyleUrl(s[0].url) })
@@ -83,12 +85,19 @@ export default function App() {
 
   // M-UC2's POI category filter thins what the map shows too, and the route (if any) is
   // fetched separately from the base analysis, so both get merged in here for MapView.
+  // The isochrone outline also carries a "complete" flag so its color still shows
+  // coverage status even in the heatmap modes, where the fill is hidden.
   const mapResult = useMemo(() => {
     if (useCase.extras !== "equity" || !result) return result
     const poi = poiCategoryFilter.length
       ? { ...result.poi, features: result.poi.features.filter((f) => poiCategoryFilter.includes(f.properties.category)) }
       : result.poi
-    return { ...result, poi, ...(routeResult && { route: routeResult }) }
+    const complete = equity.CATEGORIES.every((c) => !result.summary.categories[c].is_desert)
+    const isochrone = {
+      ...result.isochrone,
+      features: result.isochrone.features.map((f) => ({ ...f, properties: { ...f.properties, complete } })),
+    }
+    return { ...result, poi, isochrone, ...(routeResult && { route: routeResult }) }
   }, [useCase, result, poiCategoryFilter, routeResult])
 
   async function run() {
@@ -297,6 +306,7 @@ export default function App() {
             focusPoint={focusPoint}
             result={useCase.dashboard ? dashboardResult : mapResult}
             useCase={useCase}
+            mapMode={mapMode}
             onPickStation={selectStation}
           />
         )}
@@ -313,17 +323,20 @@ export default function App() {
           />
         )}
 
-        {(useCase.dashboard ? dashboardResult : result) && (
-          <div className="legend">
-            <b>{useCase.legend.title}</b>
-            {useCase.legend.stops.map(([value, color]) => (
-              <div key={value} className="legend-row">
-                <span className="swatch" style={{ background: color }} />
-                {value}
-              </div>
-            ))}
-          </div>
-        )}
+        {(useCase.dashboard ? dashboardResult : result) && (() => {
+          const activeLegend = useCase.legends ? useCase.legends[mapMode] : useCase.legend
+          return (
+            <div className="legend">
+              <b>{activeLegend.title}</b>
+              {activeLegend.stops.map(([value, color]) => (
+                <div key={value} className="legend-row">
+                  <span className="swatch" style={{ background: color }} />
+                  {value}
+                </div>
+              ))}
+            </div>
+          )
+        })()}
 
         {useCase.dashboard && (
           <Chatbot
@@ -370,6 +383,8 @@ export default function App() {
           onFocusPoi={(f) => setFocusPoint({ lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1] })}
           onRoutePoi={routeToPoi}
           routingId={routingId}
+          mapMode={mapMode}
+          onMapMode={setMapMode}
         />
       )}
     </div>

@@ -257,6 +257,9 @@ button.secondary { background: #f3f4f6; color: #111827; border: 1px solid #e5e7e
 
 .board-row:hover { background: #f0fdfa; }
 .board-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.poi-detail { padding: 4px 10px 8px 20px; }
+.poi-detail p { margin: 2px 0; }
 .board-bar { height: 6px; background: #f3f4f6; border-radius: 3px; overflow: hidden; }
 .board-bar > span { display: block; height: 100%; }
 .board-value { text-align: right; color: #6b7280; font-variant-numeric: tabular-nums; }
