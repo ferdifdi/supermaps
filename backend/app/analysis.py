@@ -193,7 +193,7 @@ async def comfortable_route(station: dict, dest_lon: float, dest_lat: float, pre
 
 # --- M-UC2: food & amenity equity -------------------------------------------
 
-EQUITY_CATEGORIES = ("pangan", "minimarket", "kesehatan")
+EQUITY_CATEGORIES = mapid_data.BASIC_NEED_CATEGORIES
 
 
 async def amenity_equity(station: dict, radius: int = WALK_BUFFER):
@@ -213,6 +213,16 @@ async def amenity_equity(station: dict, radius: int = WALK_BUFFER):
     all_basic = [to_m(Point(p["lon"], p["lat"])) for p in raw_pois]
     inside = [reach.contains(p) for p in all_basic]
 
+    poi_features = [
+        feature(p, {
+            "name": r["name"], "category": r["category"], "reachable": ins,
+            "tipe_2": r["tipe_2"], "tipe_3": r["tipe_3"], "alamat": r["alamat"],
+            "telepon": r["telepon"], "status": r["status"],
+            "kecamatan": r["kecamatan"], "desa": r["desa"],
+        })
+        for p, r, ins in zip(all_basic, raw_pois, inside)
+    ]
+
     category_summary = {}
     for cat in EQUITY_CATEGORIES:
         cat_inside = sum(1 for r, ins in zip(raw_pois, inside) if r["category"] == cat and ins)
@@ -221,12 +231,22 @@ async def amenity_equity(station: dict, radius: int = WALK_BUFFER):
             "poi_total": cat_total, "poi_reachable": cat_inside, "is_desert": cat_inside == 0,
         }
 
+    # Grid for the "heatmap POI" map-mode: a literal 250m choropleth over the straight-line
+    # buffer, separate from the isochrone (which stays the real walk-network reach used for
+    # the coverage flag). No price attribute exists anywhere in the MAPID Data Catalogue
+    # download (checked: NAMA/TIPE_1-3/TELEPON/ALAMAT/location admin/STATUS/dates only),
+    # so there's no "heatmap harga" - a price heatmap would have to be invented, not derived.
+    buffer_m = to_m(Point(station["lon"], station["lat"])).buffer(radius)
+    cells = grid(buffer_m, CELL)
+    grid_features = [
+        feature(c, {"poi_count": sum(1 for p in all_basic if c.contains(p))})
+        for c in cells
+    ]
+
     return {
         "isochrone": fc([feature(reach, {"minutes": round(minutes, 1)})]),
-        "poi": fc([
-            feature(p, {"name": r["name"], "category": r["category"], "reachable": ins})
-            for p, r, ins in zip(all_basic, raw_pois, inside)
-        ]),
+        "poi": fc(poi_features),
+        "grid": fc(grid_features),
         "summary": {
             "station": station["name"],
             "basic_need_poi_total": len(all_basic),
@@ -235,8 +255,6 @@ async def amenity_equity(station: dict, radius: int = WALK_BUFFER):
             "isochrone_area_ha": round(reach.area / 10000, 1),
         },
     }
-
-
 
 
 # --- U-UC1: site selection & market gap -------------------------------------
