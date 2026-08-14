@@ -4,7 +4,7 @@ import "maplibre-gl/dist/maplibre-gl.css"
 
 const JAKARTA = [106.8271129, -6.1754398]
 
-export default function MapView({ styleUrl, stations, activeStation, focusPoint, result, useCase, onPickStation }) {
+export default function MapView({ styleUrl, stations, activeStation, focusPoint, result, useCase, mapMode, onPickStation }) {
   const container = useRef(null)
   const map = useRef(null)
   const loaded = useRef(false)
@@ -56,6 +56,7 @@ export default function MapView({ styleUrl, stations, activeStation, focusPoint,
     if (!m || !loaded.current || !useCase) return
     const ids = []
     useCase.layers.forEach((layer, i) => {
+      if (layer.mode && layer.mode !== mapMode) return
       const data = result?.[layer.source]
       if (!data) return
       const sourceId = `res-${layer.source}`
@@ -88,7 +89,7 @@ export default function MapView({ styleUrl, stations, activeStation, focusPoint,
         if (m.getSource(sourceId)) m.removeSource(sourceId)
       })
     }
-  }, [result, useCase, onPickStation])
+  }, [result, useCase, mapMode, onPickStation])
 
   // fly to station
   useEffect(() => {
