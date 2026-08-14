@@ -1,9 +1,6 @@
 import { useState } from "react"
 import { api } from "../api"
-import { CATEGORY_COLORS } from "../equity"
-
-const CATEGORIES = ["pangan", "minimarket", "kesehatan"]
-const CATEGORY_LABELS = { pangan: "Pangan & kuliner", minimarket: "Minimarket & toko", kesehatan: "Kesehatan" }
+import { CATEGORIES, CATEGORY_COLORS, CATEGORY_LABELS } from "../equity"
 
 const TABS = [
   { id: "ringkasan", label: "Ringkasan" },
@@ -12,7 +9,28 @@ const TABS = [
   { id: "bandingkan", label: "Bandingkan" },
 ]
 
-function Ringkasan({ station, result }) {
+const MAP_MODES = [
+  { id: "isochrone", label: "Isochrone" },
+  { id: "heatmap_poi", label: "Heatmap POI" },
+]
+
+function CoverageFlag({ categories }) {
+  const missing = CATEGORIES.filter((c) => categories[c].is_desert)
+  if (!missing.length) {
+    return (
+      <p className="note" style={{ color: "#0f766e", fontWeight: 600 }}>
+        ✓ Lengkap — semua kebutuhan dasar tersedia dalam jangkauan jalan kaki.
+      </p>
+    )
+  }
+  return (
+    <p className="note" style={{ color: "#ef4444", fontWeight: 600 }}>
+      ✗ Tidak lengkap — {missing.map((c) => CATEGORY_LABELS[c]).join(", ")} tidak tersedia dalam jangkauan jalan kaki.
+    </p>
+  )
+}
+
+function Ringkasan({ station, result, mapMode, onMapMode }) {
   const s = result.summary
   return (
     <>
@@ -20,7 +38,20 @@ function Ringkasan({ station, result }) {
         <h2>{station.name}</h2>
         <p className="note">{station.mode_label}</p>
       </div>
+
       <div className="section">
+        <label>Tampilan peta</label>
+        <div className="dock-actions">
+          {MAP_MODES.map((m) => (
+            <button key={m.id} className={mapMode === m.id ? "mini active" : "mini"} onClick={() => onMapMode(m.id)}>
+              {m.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="section">
+        <CoverageFlag categories={s.categories} />
         <p className="note">
           <b>{s.basic_need_poi_reachable}</b> dari {s.basic_need_poi_total} POI kebutuhan dasar
           benar-benar terjangkau jalan kaki ({s.isochrone_area_ha} ha area jangkauan).
@@ -34,13 +65,14 @@ function Kategori({ categories }) {
   const max = Math.max(...CATEGORIES.map((c) => categories[c].poi_total), 1)
   return (
     <div className="section">
+      <CoverageFlag categories={categories} />
       {CATEGORIES.map((cat) => {
         const c = categories[cat]
         return (
           <div key={cat} className="criterion">
             <div className="criterion-head" style={{ cursor: "default" }}>
               <span>
-                <span className="dot" style={{ background: CATEGORY_COLORS[cat] }} />
+                {c.is_desert ? "✗" : "✓"} <span className="dot" style={{ background: CATEGORY_COLORS[cat] }} />
                 {CATEGORY_LABELS[cat]}
               </span>
               <span className="bar">
@@ -56,13 +88,29 @@ function Kategori({ categories }) {
   )
 }
 
+function PoiDetail({ props }) {
+  return (
+    <div className="poi-detail">
+      {props.tipe_2 && <p className="note">Jenis: {props.tipe_2}{props.tipe_3 && props.tipe_3 !== "-" ? ` — ${props.tipe_3}` : ""}</p>}
+      {props.status && <p className="note">Status: {props.status}</p>}
+      {props.alamat && <p className="note">📍 {props.alamat}</p>}
+      {props.telepon && <p className="note">📞 {props.telepon}</p>}
+      {(props.kecamatan || props.desa) && (
+        <p className="note">{[props.desa, props.kecamatan].filter(Boolean).join(", ")}</p>
+      )}
+    </div>
+  )
+}
+
 function PoiSearch({ result, categoryFilter, onCategoryFilter, onFocusPoi, onRoutePoi, routingId }) {
   const [q, setQ] = useState("")
+  const [expanded, setExpanded] = useState(null)
   const all = result.poi.features
   const byCategory = categoryFilter.length ? all.filter((f) => categoryFilter.includes(f.properties.category)) : all
-  const matches = q.trim()
-    ? byCategory.filter((f) => f.properties.name.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 30)
-    : byCategory.slice(0, 30)
+  const matches = (q.trim()
+    ? byCategory.filter((f) => f.properties.name.toLowerCase().includes(q.trim().toLowerCase()))
+    : byCategory
+  ).slice(0, 30)
 
   const toggleCategory = (cat) =>
     onCategoryFilter(categoryFilter.includes(cat) ? categoryFilter.filter((c) => c !== cat) : [...categoryFilter, cat])
@@ -91,16 +139,22 @@ function PoiSearch({ result, categoryFilter, onCategoryFilter, onFocusPoi, onRou
       <div className="board">
         {matches.length === 0 && <p className="note">Tidak ada POI cocok.</p>}
         {matches.map((f, i) => (
-          <div key={i} className="board-row" style={{ display: "flex", gap: 6 }}>
-            <button style={{ flex: 1, textAlign: "left", border: "none", background: "none", cursor: "pointer", padding: 0 }} onClick={() => onFocusPoi(f)}>
-              <span className="board-name">
-                <span className="dot" style={{ background: CATEGORY_COLORS[f.properties.category] }} />
-                {f.properties.name || "(tanpa nama)"}
-              </span>
-            </button>
-            <button className="mini" onClick={() => onRoutePoi(f, i)} disabled={routingId === i}>
-              {routingId === i ? "…" : "Rute"}
-            </button>
+          <div key={i}>
+            <div className="board-row" style={{ display: "flex", gap: 6 }}>
+              <button
+                style={{ flex: 1, textAlign: "left", border: "none", background: "none", cursor: "pointer", padding: 0 }}
+                onClick={() => { onFocusPoi(f); setExpanded(expanded === i ? null : i) }}
+              >
+                <span className="board-name">
+                  <span className="dot" style={{ background: CATEGORY_COLORS[f.properties.category] }} />
+                  {f.properties.name || "(tanpa nama)"}
+                </span>
+              </button>
+              <button className="mini" onClick={() => onRoutePoi(f, i)} disabled={routingId === i}>
+                {routingId === i ? "…" : "Rute"}
+              </button>
+            </div>
+            {expanded === i && <PoiDetail props={f.properties} />}
           </div>
         ))}
         {byCategory.length > 30 && !q.trim() && <p className="note">Menampilkan 30 pertama. Ketik untuk mencari.</p>}
@@ -156,7 +210,7 @@ function Bandingkan({ station, result, radius, stations }) {
 
 export default function EquityDock({
   open, onToggle, tab, onTab, station, result, radius, stations,
-  categoryFilter, onCategoryFilter, onFocusPoi, onRoutePoi, routingId,
+  categoryFilter, onCategoryFilter, onFocusPoi, onRoutePoi, routingId, mapMode, onMapMode,
 }) {
   return (
     <>
@@ -173,7 +227,7 @@ export default function EquityDock({
         </div>
 
         <div className="dock-body">
-          {tab === "ringkasan" && <Ringkasan station={station} result={result} />}
+          {tab === "ringkasan" && <Ringkasan station={station} result={result} mapMode={mapMode} onMapMode={onMapMode} />}
           {tab === "kategori" && <Kategori categories={result.summary.categories} />}
           {tab === "poi" && (
             <PoiSearch
