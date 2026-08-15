@@ -32,8 +32,11 @@ export const api = {
   walkAccess: (id, minutes) => get(`/api/analysis/walk-access?station_id=${id}&minutes=${minutes}`),
   amenityEquity: (id, radius) => get(`/api/analysis/amenity-equity?station_id=${id}&radius=${radius}`),
   route: (id, lon, lat, preference) => get(`/api/analysis/route?station_id=${id}&lon=${lon}&lat=${lat}&preference=${preference}`),
-  siteSelection: (id, category) => get(`/api/analysis/site-selection?station_id=${id}&category=${category}`),
-  resilience: (id) => get(`/api/analysis/resilience?station_id=${id}`),
+  siteSelection: (id, businessType, subtype) =>
+    get(`/api/analysis/site-selection?station_id=${id}&business_type=${encodeURIComponent(businessType)}${subtype ? `&subtype=${encodeURIComponent(subtype)}` : ""}`),
+  businessTypes: () => get("/api/analysis/business-types"),
+  businessSubtypes: (prefix) => get(`/api/analysis/business-subtypes?prefix=${encodeURIComponent(prefix)}`),
+  resilience: (id, useInarisk = true) => get(`/api/analysis/resilience?station_id=${id}&use_inarisk=${useInarisk}`),
   todDashboard: (modes) => get(`/api/analysis/tod-dashboard?modes=${modes}`),
   todMetadata: () => get("/api/analysis/tod-metadata"),
   todWhatIf: (stationId, overrides) => post("/api/analysis/tod-whatif", { station_id: stationId, overrides }),

@@ -4,7 +4,7 @@ import "maplibre-gl/dist/maplibre-gl.css"
 
 const JAKARTA = [106.8271129, -6.1754398]
 
-export default function MapView({ styleUrl, stations, activeStation, focusPoint, result, useCase, mapMode, onPickStation }) {
+export default function MapView({ styleUrl, stations, activeStation, focusPoint, result, useCase, mapMode, onPickStation, picking, onMapPick }) {
   const container = useRef(null)
   const map = useRef(null)
   const loaded = useRef(false)
@@ -38,7 +38,7 @@ export default function MapView({ styleUrl, stations, activeStation, focusPoint,
         m.addSource("stations", { type: "geojson", data })
         m.addLayer({
           id: "stations", type: "circle", source: "stations",
-          paint: { "circle-radius": 4, "circle-color": "#0f766e", "circle-stroke-width": 1, "circle-stroke-color": "#fff" },
+          paint: { "circle-radius": 4, "circle-color": "#5b4bdb", "circle-stroke-width": 1, "circle-stroke-color": "#fff" },
         })
         m.on("click", "stations", (e) => onPickStation(e.features[0].properties.id))
         m.on("mouseenter", "stations", () => { m.getCanvas().style.cursor = "pointer" })
@@ -100,6 +100,17 @@ export default function MapView({ styleUrl, stations, activeStation, focusPoint,
   useEffect(() => {
     if (map.current && focusPoint) map.current.flyTo({ center: [focusPoint.lon, focusPoint.lat], zoom: 17 })
   }, [focusPoint])
+
+  // destination picking mode (M-UC1 route tab) - click anywhere on the map to set the target
+  useEffect(() => {
+    const m = map.current
+    if (!m) return
+    m.getCanvas().style.cursor = picking ? "crosshair" : ""
+    if (!picking) return
+    const handler = (e) => onMapPick({ lon: e.lngLat.lng, lat: e.lngLat.lat })
+    m.on("click", handler)
+    return () => m.off("click", handler)
+  }, [picking, onMapPick])
 
   return <div ref={container} className="map" />
 }

@@ -18,7 +18,7 @@ function CoverageFlag({ categories }) {
   const missing = CATEGORIES.filter((c) => categories[c].is_desert)
   if (!missing.length) {
     return (
-      <p className="note" style={{ color: "#0f766e", fontWeight: 600 }}>
+      <p className="note" style={{ color: "#22c55e", fontWeight: 600 }}>
         ✓ Lengkap — semua kebutuhan dasar tersedia dalam jangkauan jalan kaki.
       </p>
     )

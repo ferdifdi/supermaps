@@ -10,9 +10,9 @@ export const CATEGORY_LABELS = {
 
 // "kesehatan" avoids red - #ef4444 is already used elsewhere as the "is_desert" flag color.
 export const CATEGORY_COLORS = {
-  pangan: "#0f766e",
-  pusat_perbelanjaan_pasar: "#6baed6",
-  keuangan: "#a855f7",
-  perdagangan_retail: "#f59e0b",
-  kesehatan: "#ec4899",
+  pangan: "#5b4bdb",
+  pusat_perbelanjaan_pasar: "#4a90e2",
+  keuangan: "#b87cf6",
+  perdagangan_retail: "#f06fae",
+  kesehatan: "#22c55e",
 }

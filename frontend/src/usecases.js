@@ -21,14 +21,152 @@ export const USE_CASES = [
     persona: "komuter",
     title: "Navigasi Transit & Akses Jalan Kaki",
     description: "Skor akses jalan kaki per grid 250 m dan isochrone jalan kaki dari stasiun.",
+    extras: "walk",
+    methodology: {
+      data: [
+        { source: "OSM (Overpass API)", detail: "Jaringan jalan, POI, halte/stasiun, pohon - live, di-cache lokal" },
+        { source: "TransJakarta GTFS", year: 2026, detail: "frequencies.txt (headway asli per trip), stops.txt" },
+        { source: "OpenAQ v3", detail: "PM2.5 real-time dari stasiun pemantau terdekat (perlu API key - kosong kalau belum dikonfigurasi)" },
+        { source: "MAPID Data Catalogue - URBAN HEAT ISLAND", year: 2022, detail: "kelas zona panas per kabupaten/kota" },
+        { source: "MAPID Data Catalogue - INDEKS EKOLOGI", year: 2024, detail: "indeks per grid" },
+        { source: "MAPID Data Catalogue - Curah Hujan (Presipitasi)", year: 2020, detail: "kelas & intensitas per provinsi" },
+      ],
+      processing: [
+        { step: "Skor akses jalan kaki", detail: "Weighted sum (Siburian et al. 2020): 40% jaringan jalan + 30% ped-shed + 20% persimpangan + 10% campuran hunian, per grid 250m" },
+        { step: "Isochrone & rute", detail: "Dijkstra: \"tercepat\" (jarak murni) dan \"ramah kursi roda\" (jarak, ruas wheelchair=no dipenalti berat) - tidak ada formula kenyamanan racikan sendiri" },
+        { step: "Transfer efisien", detail: "TransJakarta pakai headway asli dari GTFS; KRL/MRT/LRT/bus lain proxy jarak jalan kaki OSM (ditandai is_proxy di peta)" },
+        { step: "Kualitas udara", detail: "Interpolasi IDW ke hex grid dari stasiun OpenAQ terdekat - layer konteks, tidak masuk skor manapun" },
+        { step: "UHI / Indeks ekologi / Curah hujan", detail: "Ditampilkan apa adanya dari MAPID Data Catalogue, tanpa dihitung ulang atau digabung jadi skor" },
+      ],
+    },
     run: (station) => api.walkAccess(station.id, 10),
     layers: [
-      { source: "isochrone", type: "fill", paint: { "fill-color": "#f59e0b", "fill-opacity": 0.15 } },
-      { source: "isochrone", type: "line", paint: { "line-color": "#f59e0b", "line-width": 2 } },
-      { source: "grid", type: "fill", paint: { "fill-color": ramp("walk_score", SCORE_STOPS), "fill-opacity": 0.7 } },
+      // All walk-related layers are gated to mode "isochrone" so toggling to "udara"
+      // shows air quality alone, not layered on top of the walk map.
+      { source: "isochrone", type: "fill", mode: "isochrone", paint: { "fill-color": "#f59e0b", "fill-opacity": 0.15 } },
+      { source: "isochrone", type: "line", mode: "isochrone", paint: { "line-color": "#f59e0b", "line-width": 2 } },
+      { source: "grid", type: "fill", mode: "isochrone", paint: { "fill-color": ramp("walk_score", SCORE_STOPS), "fill-opacity": 0.7 } },
+      {
+        // TJ stops (real GTFS headway) vs KRL/MRT/LRT/other-bus points (OSM proxy,
+        // distance only) - is_proxy drives a visibly different style so the map itself
+        // signals which numbers are real, per the "harus dikasih tau kalau proxy" requirement.
+        source: "transfer_points", type: "circle", mode: "isochrone",
+        paint: {
+          "circle-radius": 6,
+          "circle-color": ["case", ["get", "is_proxy"], "#9ca3af", "#22c55e"],
+          "circle-stroke-width": 2,
+          "circle-stroke-color": ["case", ["get", "is_proxy"], "#6b7280", "#166534"],
+          "circle-opacity": 0.9,
+        },
+      },
+      { source: "route", type: "line", mode: "isochrone", paint: { "line-color": "#111827", "line-width": 4 } },
+      {
+        // Hex-grid choropleth, IDW-interpolated from real OpenAQ stations - a maplibre
+        // "heatmap" layer blurs by screen-pixel radius (visibly shifts color on zoom),
+        // this doesn't since it's a plain data-driven fill like uhi/ecology_index/rainfall.
+        source: "air_quality_grid", type: "fill", mode: "udara",
+        paint: {
+          "fill-opacity": 0.65,
+          "fill-color": ramp("pm25", [[0, "#22c55e"], [12, "#84cc16"], [35.4, "#f59e0b"], [55.4, "#f97316"], [150.4, "#ef4444"]]),
+        },
+      },
+      {
+        // Individual OSM street trees, blurred into a density heatmap - a proxy for
+        // canopy/shade coverage, not a validated vegetation index.
+        source: "canopy", type: "heatmap", mode: "vegetasi",
+        paint: {
+          "heatmap-radius": 25, "heatmap-opacity": 0.7,
+          "heatmap-color": [
+            "interpolate", ["linear"], ["heatmap-density"],
+            0, "rgba(34,197,94,0)", 0.5, "#86efac", 1, "#15803d",
+          ],
+        },
+      },
+      {
+        source: "ecology_poi", type: "circle", mode: "vegetasi",
+        paint: { "circle-radius": 5, "circle-color": "#22c55e", "circle-stroke-width": 1, "circle-stroke-color": "#fff" },
+      },
+      {
+        // Raw wheelchair tag per road segment - no invented weighting, just the OSM fact.
+        source: "accessibility_roads", type: "line", mode: "aksesibilitas",
+        paint: {
+          "line-width": 4,
+          "line-color": [
+            "match", ["get", "wheelchair"],
+            "yes", "#22c55e", "limited", "#f59e0b", "no", "#ef4444",
+            "#9ca3af",
+          ],
+        },
+      },
+      {
+        // MAPID Data Catalogue, published as-is - one zone per kabupaten/kota (coarse).
+        source: "uhi", type: "fill", mode: "uhi",
+        paint: {
+          "fill-opacity": 0.5,
+          "fill-color": ["match", ["get", "CLASS"],
+            "HOT ZONE", "#ef4444", "VERY WARM ZONE", "#f97316", "NORMAL ZONE", "#22c55e", "#9ca3af"],
+        },
+      },
+      {
+        // MAPID Data Catalogue - INDEKS (0-1) per grid cell, published value, no rescoring.
+        source: "ecology_index", type: "fill", mode: "ekologi_index",
+        paint: {
+          "fill-opacity": 0.65,
+          "fill-color": ramp("INDEKS", [[0, "#ef4444"], [0.3, "#f59e0b"], [0.6, "#a3e635"], [1, "#15803d"]]),
+        },
+      },
+      {
+        // MAPID Data Catalogue - rainfall zone per province (coarse), published as-is.
+        source: "rainfall", type: "fill", mode: "hujan",
+        paint: {
+          "fill-opacity": 0.5,
+          "fill-color": ["match", ["get", "Kelas"],
+            "Hujan normal", "#eff3ff", "Hujan deras", "#6baed6", "Hujan sangat deras", "#08306b", "#9ca3af"],
+        },
+      },
     ],
-    legend: { title: "Skor akses jalan kaki", stops: SCORE_STOPS },
-    popup: ["walk_score", "road_network", "ped_shed", "intersection", "residential_mix"],
+    legends: {
+      isochrone: {
+        title: "Skor akses jalan kaki",
+        stops: SCORE_STOPS,
+        note: "Titik transfer: hijau = headway asli (GTFS TransJakarta), abu-abu = proxy jarak jalan kaki (OSM, KRL/MRT/LRT/bus lain - belum ada data jadwal publik).",
+      },
+      udara: {
+        title: "PM2.5 (µg/m³) - interpolasi dari stasiun OpenAQ terdekat",
+        stops: [["baik (≤12)", "#22c55e"], ["sedang (≤35)", "#f59e0b"], ["tidak sehat (≤150)", "#ef4444"], ["berbahaya (>150)", "#7f1d1d"]],
+        note: "Diinterpolasi (inverse-distance) dari stasiun OpenAQ nyata di sekitar - bukan pengukuran per titik, stasiun aslinya jarang (bisa berjarak beberapa km).",
+      },
+      vegetasi: {
+        title: "Kanopi & ruang hijau (OSM)",
+        stops: [["kepadatan pohon", "#22c55e"], ["taman/RTH", "#22c55e"]],
+        note: "Titik pohon individual (density heatmap) + taman/RTH dari tag OSM. Bukan indeks vegetasi tervalidasi (NDVI dsb).",
+      },
+      aksesibilitas: {
+        title: "Tag kursi roda per ruas jalan (OSM)",
+        stops: [["ramah (yes)", "#22c55e"], ["terbatas (limited)", "#f59e0b"], ["tidak ramah (no)", "#ef4444"], ["tidak ditandai", "#9ca3af"]],
+        note: "Tag wheelchair= mentah per ruas jalan, bukan skor gabungan.",
+      },
+      uhi: {
+        title: "Urban Heat Island (MAPID, 2022)",
+        stops: [["zona normal", "#22c55e"], ["zona hangat", "#f97316"], ["zona panas", "#ef4444"]],
+        note: "Data MAPID Data Catalogue per kabupaten/kota - satu zona besar, jadi biasanya tampil rata dalam radius 500m stasiun (memang resolusi aslinya sekasar itu).",
+      },
+      ekologi_index: {
+        title: "Indeks Ekologi per grid (MAPID, 2024)",
+        stops: [["buruk (0)", "#ef4444"], ["sedang (0.3)", "#f59e0b"], ["cukup (0.6)", "#a3e635"], ["baik (1)", "#15803d"]],
+        note: "Nilai INDEKS asli dari MAPID Data Catalogue, ditampilkan apa adanya.",
+      },
+      hujan: {
+        title: "Curah Hujan (MAPID, 2020)",
+        stops: [["normal", "#eff3ff"], ["deras", "#6baed6"], ["sangat deras", "#08306b"]],
+        note: "Data MAPID Data Catalogue per provinsi - zona besar, biasanya rata dalam radius 500m stasiun.",
+      },
+    },
+    popup: ["walk_score", "road_network", "ped_shed", "intersection", "residential_mix",
+      "name", "mode", "distance_m", "headway_min_peak", "is_proxy",
+      "preference", "length_m", "minutes", "blocked_segments_crossed",
+      "pm25", "category", "station", "wheelchair", "sidewalk", "highway",
+      "KELAS", "CLASS", "TEMPERATUR", "INDEKS", "STATUS", "Kelas", "Rata-rata Intensitas (mm/hari)"],
   },
   {
     id: "M-UC2",
@@ -36,6 +174,21 @@ export const USE_CASES = [
     title: "Basic Needs untuk Komuter",
     description: "Ketersediaan pangan, pusat perbelanjaan/pasar, keuangan, retail, dan kesehatan dalam jangkauan jalan kaki dari stasiun (MAPID Data Catalogue).",
     extras: "equity",
+    methodology: {
+      data: [
+        {
+          source: "MAPID Data Catalogue - APOTEK, KLINIK, PUSKESMAS, RUMAH SAKIT, MAKANAN DAN MINUMAN, PUSAT PERBELANJAAN, PASAR, PASAR MODERN, BANK, ATM, PERDAGANGAN DAN RETAIL",
+          year: 2025, detail: "per kabupaten/kota Jabodetabek",
+        },
+        { source: "OSM (Overpass API)", detail: "Jaringan jalan buat isochrone & rute jalan kaki" },
+      ],
+      processing: [
+        { step: "Isochrone", detail: "Buffer jalan kaki dari stasiun, radius pilihan 100-500m" },
+        { step: "Overlay POI", detail: "Tiap POI basic-need dicek reachable/tidak dalam isochrone, per kategori" },
+        { step: "Heatmap POI", detail: "Grid choropleth 250m: jumlah POI per sel" },
+        { step: "Skor", detail: "Tidak ada equity_score komposit - cuma raw count/rasio per kategori (sengaja dihindari, gak ada dasar buat bobot antar kategori)" },
+      ],
+    },
     options: { radius: [100, 200, 300, 400, 500] },
     run: (station, opts) => api.amenityEquity(station.id, opts.radius || 500),
     // "mode" layers only render when App's map-mode toggle matches; layers without a
@@ -43,11 +196,11 @@ export const USE_CASES = [
     // is active - the outline in particular needs to stay visible in heatmap modes too,
     // so the coverage flag (green/red) doesn't disappear just because the fill is hidden.
     layers: [
-      { source: "isochrone", type: "fill", mode: "isochrone", paint: { "fill-color": "#0f766e", "fill-opacity": 0.12 } },
+      { source: "isochrone", type: "fill", mode: "isochrone", paint: { "fill-color": "#5b4bdb", "fill-opacity": 0.12 } },
       {
         source: "isochrone", type: "line",
         paint: {
-          "line-color": ["case", ["get", "complete"], "#0f766e", "#ef4444"],
+          "line-color": ["case", ["get", "complete"], "#22c55e", "#ef4444"],
           "line-width": 2,
         },
       },
@@ -93,16 +246,85 @@ export const USE_CASES = [
     id: "U-UC1",
     persona: "usaha",
     title: "Site Selection & Market Gap",
-    description: "Catchment Voronoi kompetitor (Mapid Missions) dan skor kelayakan lokasi usaha.",
-    options: { category: ["menugo", "propertigo", "struckgo"] },
-    run: (station, opts) => api.siteSelection(station.id, opts.category || "menugo"),
+    description: "Pilih tipe bisnis, lihat kompetitor setipe (MAPID Data Catalogue) dan anchor demand di sekitar stasiun - layer terpisah, tanpa skor gabungan.",
+    extras: "site",
+    methodology: {
+      data: [
+        {
+          source: "MAPID Data Catalogue - kompetitor (tipe bisnis dipilih user)",
+          year: 2025, detail: "Contoh: pilih \"MAKANAN DAN MINUMAN\" -> 222 kompetitor asli ketemu di radius 1km Dukuh Atas.",
+        },
+        {
+          source: "MAPID Data Catalogue - KANTOR, APOTEK/KLINIK/PUSKESMAS/RUMAH SAKIT/BANK/ATM/PASAR/dst, HALTE/STASIUN",
+          year: 2025, detail: "Anchor: pekerja kantoran, kebutuhan sehari-hari, penumpang transit.",
+        },
+        { source: "OSM (Overpass API)", detail: "Jaringan jalan buat walk_score" },
+      ],
+      processing: [
+        { step: "Walk score", detail: "Siburian et al. 2020, per grid 250m - ditampilkan berdiri sendiri, bukan digabung ke metrik lain" },
+        { step: "Kompetitor", detail: "Titik MAPID Data Catalogue dengan kategori persis sama dengan tipe bisnis yang dipilih - hitungan mentah per grid, tidak dinormalisasi" },
+        { step: "Anchor", detail: "Hitungan mentah kantor/kebutuhan dasar/transit MAPID per grid" },
+        { step: "Tidak ada skor gabungan", detail: "Tidak ada formula tervalidasi buat nimbang aksesibilitas vs kompetitor vs anchor, jadi semua ditampilkan apa adanya - pilih sendiri layer mana yang mau dilihat" },
+        { step: "Catchment", detail: "Voronoi dari titik kompetitor dalam radius" },
+      ],
+    },
+    // Real MAPID Data Catalogue categories only (see backend/app/mapid_data.py
+    // BUSINESS_TYPES) - MAPID Missions (StrukGo/MenuGo/PropertiGo) was dropped here,
+    // coverage was too sparse to be usable (0-2 hits in a 1km radius).
+    options: {
+      businessType: [
+        "APOTEK", "KLINIK", "PUSKESMAS", "RUMAH SAKIT", "MAKANAN DAN MINUMAN",
+        "PUSAT PERBELANJAAN", "PASAR", "PASAR MODERN", "BANK", "ATM",
+        "PERDAGANGAN DAN RETAIL", "KANTOR",
+      ],
+    },
+    run: (station, opts) => api.siteSelection(station.id, opts.businessType || "APOTEK", opts.subtype),
     layers: [
-      { source: "grid", type: "fill", paint: { "fill-color": ramp("suitability", SCORE_STOPS), "fill-opacity": 0.7 } },
+      { source: "grid", type: "fill", mode: "walk_score", paint: { "fill-color": ramp("walk_score", SCORE_STOPS), "fill-opacity": 0.7 } },
+      {
+        source: "grid", type: "fill", mode: "kompetitor",
+        paint: { "fill-color": ramp("competitor_count", [[0, "#f7f7f7"], [1, "#e9d5ff"], [2, "#c084fc"], [4, "#9333ea"], [6, "#581c87"]]), "fill-opacity": 0.7 },
+      },
+      {
+        source: "grid", type: "fill", mode: "anchor",
+        paint: {
+          "fill-opacity": 0.7,
+          "fill-color": [
+            "interpolate", ["linear"],
+            ["+", ["get", "anchor_kantor"], ["get", "anchor_kebutuhan_dasar"], ["get", "anchor_transit"]],
+            0, "#f7f7f7", 3, "#bbf7d0", 8, "#4ade80", 15, "#16a34a", 25, "#14532d",
+          ],
+        },
+      },
       { source: "catchment", type: "line", paint: { "line-color": "#7c3aed", "line-width": 1 } },
-      { source: "competitors", type: "circle", paint: { "circle-radius": 4, "circle-color": "#7c3aed" } },
+      {
+        source: "anchors", type: "circle",
+        paint: {
+          "circle-radius": 4,
+          "circle-color": ["match", ["get", "anchor_type"],
+            "kantor", "#4a90e2", "kebutuhan_dasar", "#22c55e", "transit", "#f59e0b", "#9ca3af"],
+          "circle-opacity": 0.6,
+        },
+      },
+      // One business type per query, so every competitor dot is the same solid color -
+      // no rainbow mixing, gampang dibedain dari anchor.
+      { source: "competitors", type: "circle", paint: { "circle-radius": 6, "circle-color": "#7c3aed", "circle-stroke-width": 1.5, "circle-stroke-color": "#fff" } },
     ],
-    legend: { title: "Skor kelayakan lokasi", stops: SCORE_STOPS },
-    popup: ["suitability", "accessibility", "demand", "market_gap", "competitors"],
+    legends: {
+      walk_score: { title: "Walk score (Siburian et al. 2020)", stops: SCORE_STOPS },
+      kompetitor: {
+        title: "Jumlah kompetitor per grid",
+        stops: [[0, "#f7f7f7"], [1, "#e9d5ff"], [2, "#c084fc"], [4, "#9333ea"], ["6+", "#581c87"]],
+        note: "Titik ungu di peta = kompetitor tipe bisnis yang dipilih (MAPID Data Catalogue). Hitungan mentah, bukan skor.",
+      },
+      anchor: {
+        title: "Anchor MAPID per grid (kantor+kebutuhan dasar+transit)",
+        stops: [[0, "#f7f7f7"], [3, "#bbf7d0"], [8, "#4ade80"], [15, "#16a34a"], ["25+", "#14532d"]],
+        note: "Titik kecil: biru = kantor, hijau = kebutuhan dasar, oranye = transit.",
+      },
+    },
+    popup: ["walk_score", "competitor_count", "anchor_kantor", "anchor_kebutuhan_dasar", "anchor_transit",
+      "name", "anchor_type", "category", "business_type", "subtype", "alamat"],
   },
   {
     id: "K-UC1",
@@ -111,6 +333,20 @@ export const USE_CASES = [
     description: "Station Composite Index, ranking stasiun, dan tipologi rekomendasi pengembangan.",
     // Scores every station at once, so App drives it through the dashboard instead of `run`.
     dashboard: true,
+    methodology: {
+      data: [
+        { source: "OSM (Overpass API)", detail: "Stasiun/halte, jaringan jalan, POI (proxy kepadatan penduduk & jalur transit)" },
+        {
+          source: "MAPID Data Catalogue - PERDAGANGAN DAN RETAIL, KANTOR, HALTE, STASIUN",
+          year: 2025, detail: "kepadatan komersial/bisnis, transportasi alternatif",
+        },
+      ],
+      processing: [
+        { step: "Station Composite Index (SCI)", detail: "8 kriteria/18 indikator, Siburian et al. 2020 Table 1 - skor kriteria dijumlah berbobot lalu dibagi total bobot" },
+        { step: "Sumber tiap indikator", detail: "OSM/MAPID kalau bisa diukur langsung; PROXY (kepadatan aktivitas dari MAPID/OSM) buat data penumpang & keamanan yang gak ada feed gratisnya; CONSTANT buat frekuensi perjalanan (paper menilai semua stasiun sama, 1 jalur MRT)" },
+        { step: "Transparansi sumber", detail: "Tiap indikator ditandai OSM/MAPID/MIXED/PROXY/CONSTANT - lihat badge di detail stasiun" },
+      ],
+    },
     options: { modes: ["rail", "rail,bus"] },
     layers: [
       {
@@ -141,18 +377,93 @@ export const USE_CASES = [
     id: "K-UC2",
     persona: "kebijakan",
     title: "Climate & Environmental Resilience",
-    description: "Kerentanan koridor akses stasiun terhadap panas dan banjir, beserta peringkatnya.",
-    run: (station) => api.resilience(station.id),
+    description: "Risiko banjir/longsor per koridor (BNPB InaRISK) dan konteks UHI/ekologi/curah hujan (MAPID) - layer terpisah, tanpa skor gabungan.",
+    methodology: {
+      data: [
+        {
+          source: "BNPB InaRISK - Indeks Bahaya Banjir & Tanah Longsor (Jabodetabek-Punjur)",
+          detail: "gis.bnpb.go.id, raster resmi pemerintah, live, gratis, tanpa auth. Diquery per titik lewat operasi \"identify\".",
+        },
+        { source: "MAPID Data Catalogue - URBAN HEAT ISLAND", year: 2022, detail: "kelas zona panas per kabupaten/kota" },
+        { source: "MAPID Data Catalogue - INDEKS EKOLOGI", year: 2024, detail: "indeks per grid (turunan RSEI)" },
+        { source: "MAPID Data Catalogue - Curah Hujan (Presipitasi)", year: 2020, detail: "kelas & intensitas per provinsi" },
+        { source: "OSM (Overpass API)", detail: "Jaringan jalan buat koridor & rute detour" },
+      ],
+      processing: [
+        {
+          step: "Sampling InaRISK", detail:
+            "Satu koridor bisa 500+ ruas jalan; query InaRISK per ruas kepanjangan (~4-5 detik/panggilan, pernah 10 menit total). Diganti: sample hex grid kasar (~20-40 sel per radius 500m), tiap koridor pakai nilai sel terdekat - data pemerintah asli, cuma resolusi spasial diturunkan demi kecepatan.",
+        },
+        { step: "Klasifikasi", detail: "rendah/sedang/tinggi pakai skema klasifikasi InaRISK sendiri (≤0.33/≤0.66/>0.66), bukan buatan project ini" },
+        {
+          step: "Rute aman (detour)", detail:
+            "Hard avoidance seperti wheelchair=no di M-UC1: ruas yang InaRISK klasifikasikan \"tinggi\" (banjir atau longsor) dipenalti berat di routing, bukan skor gabungan",
+        },
+        { step: "UHI/Ekologi/Curah hujan", detail: "Ditampilkan apa adanya dari MAPID Data Catalogue, tanpa dihitung ulang" },
+        { step: "Tidak ada skor gabungan", detail: "Versi lama nge-blend proxy tutupan hijau (panas) + jarak sungai (banjir) jadi \"vulnerability\" 0.5/0.5 - keduanya proxy buatan sendiri. Sudah dihapus." },
+      ],
+    },
+    options: {
+      dataSource: [
+        { id: true, label: "InaRISK (real-time, bisa lambat)" },
+        { id: false, label: "MAPID saja (cepat, tidak real-time)" },
+      ],
+    },
+    run: (station, opts) => api.resilience(station.id, opts.useInarisk ?? true),
     layers: [
       {
-        source: "corridors", type: "fill",
+        source: "corridors", type: "fill", mode: "banjir",
         paint: {
-          "fill-color": ramp("vulnerability", [[0, "#eff3ff"], [0.4, "#fdd0a2"], [0.7, "#fd8d3c"], [1, "#a63603"]]),
-          "fill-opacity": 0.7,
+          "fill-opacity": 0.65,
+          "fill-color": ["match", ["get", "banjir_class"],
+            "tinggi", "#ef4444", "sedang", "#f59e0b", "rendah", "#22c55e", "#e5e7eb"],
+        },
+      },
+      {
+        source: "corridors", type: "fill", mode: "longsor",
+        paint: {
+          "fill-opacity": 0.65,
+          "fill-color": ["match", ["get", "longsor_class"],
+            "tinggi", "#ef4444", "sedang", "#f59e0b", "rendah", "#22c55e", "#e5e7eb"],
+        },
+      },
+      {
+        source: "uhi", type: "fill", mode: "uhi",
+        paint: {
+          "fill-opacity": 0.5,
+          "fill-color": ["match", ["get", "CLASS"],
+            "HOT ZONE", "#ef4444", "VERY WARM ZONE", "#f97316", "NORMAL ZONE", "#22c55e", "#9ca3af"],
+        },
+      },
+      {
+        source: "ecology_index", type: "fill", mode: "ekologi_index",
+        paint: { "fill-opacity": 0.65, "fill-color": ramp("INDEKS", [[0, "#ef4444"], [0.3, "#f59e0b"], [0.6, "#a3e635"], [1, "#15803d"]]) },
+      },
+      {
+        source: "rainfall", type: "fill", mode: "hujan",
+        paint: {
+          "fill-opacity": 0.5,
+          "fill-color": ["match", ["get", "Kelas"],
+            "Hujan normal", "#eff3ff", "Hujan deras", "#6baed6", "Hujan sangat deras", "#08306b", "#9ca3af"],
         },
       },
     ],
-    legend: { title: "Indeks kerentanan koridor", stops: [[0, "#eff3ff"], [0.4, "#fdd0a2"], [0.7, "#fd8d3c"], [1, "#a63603"]] },
-    popup: ["highway", "vulnerability", "heat_proxy", "flood_proxy", "rank"],
+    legends: {
+      banjir: {
+        title: "Indeks bahaya banjir per koridor (BNPB InaRISK)",
+        stops: [["rendah", "#22c55e"], ["sedang", "#f59e0b"], ["tinggi", "#ef4444"], ["tidak ada data", "#e5e7eb"]],
+        note: "Klasifikasi resmi InaRISK. Abu-abu = di luar cakupan raster atau mode MAPID-saja dipilih.",
+      },
+      longsor: {
+        title: "Indeks bahaya longsor per koridor (BNPB InaRISK)",
+        stops: [["rendah", "#22c55e"], ["sedang", "#f59e0b"], ["tinggi", "#ef4444"], ["tidak ada data", "#e5e7eb"]],
+        note: "Klasifikasi resmi InaRISK. Abu-abu = di luar cakupan raster atau mode MAPID-saja dipilih.",
+      },
+      uhi: { title: "Urban Heat Island (MAPID, 2022)", stops: [["zona normal", "#22c55e"], ["zona hangat", "#f97316"], ["zona panas", "#ef4444"]] },
+      ekologi_index: { title: "Indeks Ekologi per grid (MAPID, 2024)", stops: [["buruk (0)", "#ef4444"], ["sedang (0.3)", "#f59e0b"], ["cukup (0.6)", "#a3e635"], ["baik (1)", "#15803d"]] },
+      hujan: { title: "Curah Hujan (MAPID, 2020)", stops: [["normal", "#eff3ff"], ["deras", "#6baed6"], ["sangat deras", "#08306b"]] },
+    },
+    popup: ["highway", "banjir_value", "banjir_class", "longsor_value", "longsor_class",
+      "KELAS", "CLASS", "TEMPERATUR", "INDEKS", "STATUS", "Kelas", "Rata-rata Intensitas (mm/hari)"],
   },
 ]
