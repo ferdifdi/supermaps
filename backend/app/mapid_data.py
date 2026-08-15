@@ -58,8 +58,16 @@ BASIC_NEED_CATEGORY_BY_PREFIX = {
 }
 BASIC_NEED_CATEGORIES = ("pangan", "pusat_perbelanjaan_pasar", "keuangan", "perdagangan_retail", "kesehatan")
 
+# U-UC1 business-type competitor search (see analysis.site_selection) - the exact MAPID
+# prefixes a business owner can pick as "what am I opening", excluding transit (HALTE/
+# STASIUN aren't a business type). Real MAPID Data Catalogue POIs, not MAPID Missions -
+# Missions (StrukGo/MenuGo/PropertiGo) was dropped for U-UC1, coverage was too sparse to
+# be usable (see docs).
+BUSINESS_TYPES = [p for p in ROLES if p not in ("HALTE", "STASIUN")]
+
 _points: list[Point] = []
 _roles: list[list[str]] = []
+_prefixes: list[str] = []
 _props: list[dict] = []
 _tree: STRtree | None = None
 
@@ -80,6 +88,7 @@ def _load():
                     roles.append("basic_need")
                 _points.append(to_m(Point(lon, lat)))
                 _roles.append(roles)
+                _prefixes.append(prefix)
                 _props.append({
                     "lon": lon, "lat": lat, "name": props.get("NAMA", ""),
                     "category": category,
@@ -98,6 +107,32 @@ def _near(lon: float, lat: float, radius: int, role: str) -> list[dict]:
     origin = to_m(Point(lon, lat))
     idx = _tree.query(origin.buffer(radius))
     return [_props[i] for i in idx if role in _roles[i] and _points[i].distance(origin) <= radius]
+
+
+def by_prefix(lon: float, lat: float, radius: int, prefix: str, subtype: str | None = None) -> list[dict]:
+    """Points from exactly one MAPID category (e.g. "APOTEK") - not the broader role
+    bucket _near() uses, for when the caller needs one specific business type, not a
+    whole group of them (competitor search in U-UC1). `subtype` further filters to one
+    TIPE_2 value (e.g. prefix="MAKANAN DAN MINUMAN", subtype="RESTORAN") - see subtypes()."""
+    _load()
+    if not _points or prefix not in ROLES:
+        return []
+    origin = to_m(Point(lon, lat))
+    idx = _tree.query(origin.buffer(radius))
+    return [
+        _props[i] for i in idx
+        if _prefixes[i] == prefix and (subtype is None or _props[i]["tipe_2"] == subtype)
+        and _points[i].distance(origin) <= radius
+    ]
+
+
+def subtypes(prefix: str) -> list[str]:
+    """Distinct TIPE_2 values MAPID recorded for one category (e.g. MAKANAN DAN MINUMAN
+    -> RESTORAN/MINUMAN/ROTI DAN KUE/BAR) - populates U-UC1's business-subtype dropdown.
+    Empty list if the category has no TIPE_2 data (most only have one level)."""
+    _load()
+    values = {_props[i]["tipe_2"] for i in range(len(_props)) if _prefixes[i] == prefix and _props[i]["tipe_2"]}
+    return sorted(values)
 
 
 def retail(lon: float, lat: float, radius: int) -> list[dict]:

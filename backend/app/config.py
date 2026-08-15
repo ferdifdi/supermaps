@@ -10,6 +10,7 @@ MAPID_BASEMAP_KEY = os.environ["MAPID_BASEMAP_KEY"]
 MAPID_DATA_KEY = os.environ["MAPID_DATA_KEY"]
 MAPID_CATALOGUE_KEY = os.environ["MAPID_CATALOGUE_KEY"]
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+OPENAQ_API_KEY = os.getenv("OPENAQ_API_KEY", "")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://localhost:8000")
 

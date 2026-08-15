@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from . import ai, analysis, mapid, osm
+from . import ai, analysis, mapid, mapid_data, osm
 from .config import MAPID_BASEMAP_KEY, MAPID_BASEMAP_URL, PUBLIC_BASE_URL, catalogue_layers
 from .geo import buffer_deg
 
@@ -113,7 +113,7 @@ async def walk_access(station_id: str, minutes: float = 10.0):
 
 
 @app.get("/api/analysis/route")
-async def route(station_id: str, lon: float, lat: float, preference: str = "comfort"):
+async def route(station_id: str, lon: float, lat: float, preference: str = "fast"):
     return await analysis.comfortable_route(await get_station(station_id), lon, lat, preference)
 
 
@@ -123,21 +123,19 @@ async def amenity_equity(station_id: str, radius: int = 500):
 
 
 @app.get("/api/analysis/site-selection")
-async def site_selection(station_id: str, category: str = "menugo", radius: int = 1000):
+async def site_selection(station_id: str, business_type: str = "APOTEK", subtype: str | None = None, radius: int = 1000):
     station = await get_station(station_id)
-    polygon = buffer_deg(station["lon"], station["lat"], radius).__geo_interface__
-    features = await mapid.fetch_mission(category, polygon)
-    competitors = [
-        {"lon": f["geometry"]["coordinates"][0], "lat": f["geometry"]["coordinates"][1],
-         "name": f["properties"].get("name", "")}
-        for f in features if f["geometry"]["type"] == "Point"
-    ]
-    acts = await mapid.fetch_activities(polygon)
-    demand = [
-        {"lon": a["geometry"]["coordinates"][0], "lat": a["geometry"]["coordinates"][1]}
-        for a in acts if a["geometry"]["type"] == "Point"
-    ]
-    return await analysis.site_selection(station, category, competitors, demand)
+    return await analysis.site_selection(station, business_type, subtype, radius)
+
+
+@app.get("/api/analysis/business-types")
+def business_types():
+    return mapid_data.BUSINESS_TYPES
+
+
+@app.get("/api/analysis/business-subtypes")
+def business_subtypes(prefix: str):
+    return mapid_data.subtypes(prefix)
 
 
 _dashboard: list[dict] = []  # last computed table; what-if and chat score against it
@@ -186,16 +184,16 @@ def tod_metadata():
 
 
 @app.get("/api/analysis/resilience")
-async def resilience(station_id: str):
-    result = await analysis.resilience(await get_station(station_id))
+async def resilience(station_id: str, use_inarisk: bool = True):
+    result = await analysis.resilience(await get_station(station_id), use_inarisk)
     result.pop("graph")
     result.pop("origin")
     return result
 
 
 @app.get("/api/analysis/detour")
-async def detour(station_id: str, lon: float, lat: float):
-    result = await analysis.resilience(await get_station(station_id))
+async def detour(station_id: str, lon: float, lat: float, use_inarisk: bool = True):
+    result = await analysis.resilience(await get_station(station_id), use_inarisk)
     return analysis.detour(result["graph"], result["origin"], lon, lat)
 
 

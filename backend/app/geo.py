@@ -1,8 +1,10 @@
 """Geometry helpers. Metric work is done in UTM 48S (EPSG:32748), output is WGS84."""
 
+import math
+
 import numpy as np
 from pyproj import Transformer
-from shapely.geometry import Point, box, mapping, shape
+from shapely.geometry import Point, Polygon, box, mapping, shape
 from shapely.ops import transform, unary_union
 from shapely.strtree import STRtree
 
@@ -32,6 +34,31 @@ def grid(poly_m, cell: float = 250.0):
             c = box(x, y, x + cell, y + cell)
             if c.intersects(poly_m):
                 cells.append(c)
+    return cells
+
+
+def hex_grid(poly_m, size: float = 40.0):
+    """Pointy-top hexagon tiling (in metric CRS) covering a metric polygon. `size` is the
+    center-to-vertex radius. No directional bias like a square grid, so it reads better
+    for continuous environmental fields (e.g. interpolated air quality)."""
+    minx, miny, maxx, maxy = poly_m.bounds
+    dx, dy = math.sqrt(3) * size, 1.5 * size
+    cells = []
+    row = 0
+    y = miny - size
+    while y - size <= maxy:
+        offset = dx / 2 if row % 2 else 0
+        x = minx - size + offset
+        while x - size <= maxx:
+            hexagon = Polygon([
+                (x + size * math.cos(math.radians(60 * i - 30)), y + size * math.sin(math.radians(60 * i - 30)))
+                for i in range(6)
+            ])
+            if hexagon.intersects(poly_m):
+                cells.append(hexagon)
+            x += dx
+        y += dy
+        row += 1
     return cells
 
 

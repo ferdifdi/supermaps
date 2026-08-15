@@ -4,14 +4,16 @@ Weights follow the proposal (Siburian et al., 2020).
 Proxies used where a free national dataset is not available are marked PROXY.
 """
 
+import asyncio
+
 import numpy as np
 from scipy.spatial import Voronoi
 from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import unary_union
 from shapely.strtree import STRtree
 
-from . import mapid_data, network, osm
-from .geo import fc, feature, grid, intersections, normalize, to_deg, to_m
+from . import airquality, gtfs, inarisk, mapid_data, mapid_environment, network, osm
+from .geo import fc, feature, grid, hex_grid, intersections, normalize, to_deg, to_m
 
 WALK_BUFFER = 500
 TOD_BUFFER = 400
@@ -150,8 +152,120 @@ def _walk_score_grid(cells, lines, nodes, residential, commercial):
 
 # --- M-UC1: comfortable navigation ------------------------------------------
 
+# "comfort" stays an internal edge weight (network.py) - accessible = comfort * wheelchair
+# factor - but isn't offered as its own route preference: it's a self-built formula
+# (sidewalk/lit/surface/shade/AQI tag multipliers), not from Siburian et al. or any other
+# validated source, so presenting it as "rute ternyaman" overstated what it actually is.
+ROUTE_WEIGHTS = {"fast": "length", "accessible": "accessible"}
+
+
+async def _walk_graph(station: dict, radius: int):
+    """Like _context, but also fetches trees and air quality for the "Kenyamanan" tab's
+    raw display layers (canopy, air_quality_grid) - those aren't routing inputs (see
+    network.py), just shown as-is, so this is the one place both get pulled."""
+    roads, pois, graph, origin, buffer_m, lines = await _context(station, radius)
+    raw_trees = await osm.trees(station["lon"], station["lat"], radius)
+    aq = await airquality.nearby_pm25(station["lon"], station["lat"])
+    graph = network.build(roads)
+    return roads, pois, graph, origin, buffer_m, lines, aq, raw_trees
+
+
+def _accessibility_summary(roads: list[dict]) -> dict:
+    """Share of road length with a usable sidewalk / explicit wheelchair access - the
+    info layer for gap #4, independent of any single route."""
+    total = sidewalk = wheelchair_ok = wheelchair_no = 0.0
+    for r in roads:
+        pts = [to_m(Point(lon, lat)) for lon, lat in r["coords"]]
+        length = sum(a.distance(b) for a, b in zip(pts, pts[1:]))
+        total += length
+        if r.get("sidewalk") in ("both", "left", "right", "yes"):
+            sidewalk += length
+        if r.get("wheelchair") in ("yes", "limited"):
+            wheelchair_ok += length
+        elif r.get("wheelchair") == "no":
+            wheelchair_no += length
+    if total == 0:
+        return {"sidewalk_ratio": None, "wheelchair_tagged_ratio": None, "wheelchair_no_ratio": None}
+    return {
+        "sidewalk_ratio": round(sidewalk / total, 3),
+        "wheelchair_tagged_ratio": round(wheelchair_ok / total, 3),
+        "wheelchair_no_ratio": round(wheelchair_no / total, 3),
+    }
+
+
+def _transfer_points(station: dict, pois: list[dict], radius: int) -> dict:
+    """Transfer-efficiency layer (gap #1). TransJakarta stops get a real average headway
+    from GTFS frequencies.txt (is_proxy=False). KRL/MRT/LRT/other-bus points only have OSM
+    tags, no schedule data exists for them, so they carry walking distance only and
+    is_proxy=True - the frontend must show that distinction, not present them as equal.
+    """
+    origin_m = to_m(Point(station["lon"], station["lat"]))
+    real = gtfs.nearby_stops(station["lon"], station["lat"], radius)
+    points = [{
+        "name": s["name"], "lon": s["lon"], "lat": s["lat"], "mode": "TJ",
+        "distance_m": s["distance_m"], "headway_min_peak": s["headway_min_peak"],
+        "wheelchair": s["wheelchair"] or None, "is_proxy": False,
+    } for s in real]
+    seen = {(round(s["lon"], 5), round(s["lat"], 5)) for s in real}
+
+    for p in pois:
+        if not (p["railway"] or p["public_transport"] or p["highway"] == "bus_stop"):
+            continue
+        key = (round(p["lon"], 5), round(p["lat"], 5))
+        if key in seen or not p["name"]:
+            continue
+        seen.add(key)
+        mode = "KRL" if p["railway"] in ("station", "halt") else \
+            "LRT" if p["railway"] == "tram_stop" else "Bus"
+        dist = to_m(Point(p["lon"], p["lat"])).distance(origin_m)
+        if dist > radius:
+            continue
+        points.append({
+            "name": p["name"], "lon": p["lon"], "lat": p["lat"], "mode": mode,
+            "distance_m": round(dist), "headway_min_peak": None,
+            "wheelchair": p["wheelchair"] or None, "is_proxy": True,
+        })
+
+    points.sort(key=lambda x: x["distance_m"])
+    # lon/lat already WGS84 (from GTFS/OSM) - build the FeatureCollection directly
+    # instead of via feature()/to_deg, which expect a metric geometry.
+    return fc([
+        {"type": "Feature", "geometry": {"type": "Point", "coordinates": [p["lon"], p["lat"]]}, "properties": p}
+        for p in points
+    ])
+
+
+AQ_HEX_SIZE = 35  # meters, center-to-vertex - fine enough to read as a spread across the
+# walk buffer without being so small it looks noisy.
+
+
+def _air_quality_grid(buffer_m, aq_stations: list[dict]) -> dict:
+    """PM2.5 choropleth: a fine hex grid inside the walk buffer, each cell's value
+    inverse-distance-weighted from nearby real OpenAQ stations. Polygons (not points) so
+    the frontend can render a plain fill layer - a maplibre "heatmap" layer blurs by
+    screen-space pixel radius, which visibly shifts color as you zoom; a fill choropleth
+    doesn't have that problem. Hexagons (not squares) avoid the grid's directional bias,
+    which reads better for a continuous interpolated field than the walk_score's square grid.
+    """
+    if not aq_stations:
+        return fc([])
+    station_pts = [to_m(Point(s["station_lon"], s["station_lat"])) for s in aq_stations]
+    cells = hex_grid(buffer_m, AQ_HEX_SIZE)
+    features = []
+    for c in cells:
+        centroid = c.centroid
+        weights, values = [], []
+        for pt, s in zip(station_pts, aq_stations):
+            d = max(centroid.distance(pt), 1.0)
+            weights.append(1.0 / d**2)
+            values.append(s["pm25"])
+        pm25 = sum(w * v for w, v in zip(weights, values)) / sum(weights)
+        features.append(feature(c, {"pm25": round(pm25, 1), "category": airquality._category(pm25)}))
+    return fc(features)
+
+
 async def walk_access(station: dict, minutes: float = 10.0):
-    roads, pois, graph, origin, buffer_m, lines = await _context(station, WALK_BUFFER)
+    roads, pois, graph, origin, buffer_m, lines, aq, raw_trees = await _walk_graph(station, WALK_BUFFER)
     cells = grid(buffer_m, CELL)
     parts = _walk_score_grid(
         cells, lines, intersections(lines),
@@ -166,27 +280,74 @@ async def walk_access(station: dict, minutes: float = 10.0):
         })
         for i, c in enumerate(cells)
     ]
-    iso_comfort = network.isochrone(graph, origin, minutes, "comfort")
     iso_fast = network.isochrone(graph, origin, minutes, "length")
+    iso_accessible = network.isochrone(graph, origin, minutes, "accessible")
+    transfer = _transfer_points(station, pois, WALK_BUFFER)
+    aq_stations = await airquality.nearby_stations(station["lon"], station["lat"])
+    air_quality_grid = _air_quality_grid(buffer_m, aq_stations)
+
+    # "Kenyamanan" tab (comfort context): raw environmental layers only, no composite
+    # score - user explicitly rejected building a comfort index on top of these.
+    canopy = fc([
+        {"type": "Feature", "geometry": {"type": "Point", "coordinates": [t["lon"], t["lat"]]}, "properties": {}}
+        for t in raw_trees
+    ])
+    green = [p for p in pois if osm.is_green(p)]
+    ecology_poi = fc([
+        {"type": "Feature", "geometry": {"type": "Point", "coordinates": [p["lon"], p["lat"]]},
+         "properties": {"leisure": p["leisure"], "landuse": p["landuse"], "name": p["name"]}}
+        for p in green
+    ])
+    # Raw per-segment wheelchair/sidewalk tags as their own map, not folded into any score.
+    accessibility_roads = fc([
+        {"type": "Feature", "geometry": {"type": "LineString", "coordinates": r["coords"]},
+         "properties": {"wheelchair": r.get("wheelchair") or None, "sidewalk": r.get("sidewalk") or None,
+                        "highway": r["highway"]}}
+        for r in roads
+    ])
+
+    # MAPID Data Catalogue - published values shown as-is (see mapid_environment.py).
+    buffer_deg = to_deg(buffer_m)
+    uhi = mapid_environment.uhi(buffer_deg)
+    ecology_index = mapid_environment.ecology_index(buffer_deg)
+    rainfall = mapid_environment.rainfall(buffer_deg)
+
     return {
         "grid": fc(features),
         "isochrone": fc([
             feature(iso_fast, {"kind": "fastest", "minutes": minutes}),
-            feature(iso_comfort, {"kind": "most_comfortable", "minutes": minutes}),
+            feature(iso_accessible, {"kind": "accessible", "minutes": minutes}),
         ]),
+        "transfer_points": transfer,
+        "air_quality_grid": air_quality_grid,
+        "air_quality_stations": aq_stations,
+        "canopy": canopy,
+        "ecology_poi": ecology_poi,
+        "accessibility_roads": accessibility_roads,
+        "uhi": uhi,
+        "ecology_index": ecology_index,
+        "rainfall": rainfall,
         "summary": {
+            "transfer_points_real": sum(1 for t in transfer["features"] if not t["properties"]["is_proxy"]),
+            "transfer_points_proxy": sum(1 for t in transfer["features"] if t["properties"]["is_proxy"]),
+            "air_quality": aq,
             "station": station["name"],
             "mean_walk_score": round(float(score.mean()), 3),
+            "walk_score_components": {k: round(float(parts[k].mean()), 3) for k in WALK_WEIGHTS},
             "cells": len(cells),
-            "isochrone_area_ha": round(iso_comfort.area / 10000, 1),
+            "isochrone_area_ha": round(iso_fast.area / 10000, 1),
+            "accessible_area_ha": round(iso_accessible.area / 10000, 1),
+            "tree_count": len(raw_trees),
+            "green_space_count": len(green),
+            **_accessibility_summary(roads),
         },
     }
 
 
-async def comfortable_route(station: dict, dest_lon: float, dest_lat: float, preference: str = "comfort"):
-    roads, _, graph, origin, _, _ = await _context(station, WALK_BUFFER * 3)
+async def comfortable_route(station: dict, dest_lon: float, dest_lat: float, preference: str = "fast"):
+    roads, _, graph, origin, _, _, _, _ = await _walk_graph(station, WALK_BUFFER * 3)
     dest = to_m(Point(dest_lon, dest_lat))
-    weight = "comfort" if preference == "comfort" else "length"
+    weight = ROUTE_WEIGHTS.get(preference, "length")
     line, stats = network.route(graph, origin, dest, weight)
     return {"route": fc([feature(line, {"preference": preference, **stats})]), "summary": stats}
 
@@ -279,49 +440,90 @@ def _voronoi_polygons(points: list[Point], clip: Polygon):
     return polys
 
 
-async def site_selection(station: dict, category: str, competitors: list[dict], demand_points: list[dict]):
-    """competitors/demand_points: [{"lon":..,"lat":..}] from MAPID missions/activities."""
-    _, pois, _, _, buffer_m, lines = await _context(station, WALK_BUFFER * 2)
+SITE_ANCHOR_RADIUS = WALK_BUFFER * 2
+
+
+def _site_anchors(lon: float, lat: float) -> list[dict]:
+    """MAPID Data Catalogue traffic generators near the station - office workers,
+    daily-need POIs, transit riders."""
+    return (
+        [{**a, "anchor_type": "kantor"} for a in mapid_data.offices(lon, lat, SITE_ANCHOR_RADIUS)]
+        + [{**a, "anchor_type": "kebutuhan_dasar"} for a in mapid_data.basic_needs(lon, lat, SITE_ANCHOR_RADIUS)]
+        + [{**a, "anchor_type": "transit"} for a in mapid_data.transit_stops(lon, lat, SITE_ANCHOR_RADIUS)]
+    )
+
+
+async def site_selection(station: dict, business_type: str, subtype: str | None = None, radius: int = SITE_ANCHOR_RADIUS):
+    """business_type: one of mapid_data.BUSINESS_TYPES (e.g. "MAKANAN DAN MINUMAN").
+    subtype: optional, one of mapid_data.subtypes(business_type) (e.g. "RESTORAN") to
+    narrow further. Competitors are the same-type MAPID Data Catalogue POIs already
+    nearby, not MAPID Missions (StrukGo/MenuGo/PropertiGo) - that data was dropped here,
+    coverage was too sparse to be usable (checked: 0-2 results in a 1km radius against
+    real stations, see docs/m-uc1-gaps.md for the equivalent M-UC1 finding).
+
+    No composite "suitability" or "market gap" score - there's no validated formula for
+    weighing accessibility against competition/anchor density, so this doesn't invent
+    one. Every grid cell carries independent raw counts (walk_score is the one exception
+    - it's the cited Siburian et al. formula, shown standalone, not fused with anything
+    here) so the map shows several honest layers instead of one made-up number.
+    """
+    _, pois, _, _, buffer_m, lines = await _context(station, radius)
     cells = grid(buffer_m, CELL)
-    comp = [to_m(Point(c["lon"], c["lat"])) for c in competitors]
-    demand = [to_m(Point(d["lon"], d["lat"])) for d in demand_points]
+    competitors_raw = mapid_data.by_prefix(station["lon"], station["lat"], radius, business_type, subtype)
+    comp = [to_m(Point(c["lon"], c["lat"])) for c in competitors_raw]
+    anchors_raw = _site_anchors(station["lon"], station["lat"])
+    anchors = {
+        t: [to_m(Point(a["lon"], a["lat"])) for a in anchors_raw if a["anchor_type"] == t]
+        for t in ("kantor", "kebutuhan_dasar", "transit")
+    }
     parts = _walk_score_grid(
         cells, lines, intersections(lines),
         _poi_points(pois, osm.is_residential), _poi_points(pois, osm.is_commercial),
     )
-    access = sum(parts[k] * w for k, w in WALK_WEIGHTS.items())
-
-    demand_count = [sum(1 for d in demand if c.buffer(250).contains(d)) for c in cells]
-    comp_count = [sum(1 for p in comp if c.buffer(250).contains(p)) for c in cells]
-    demand_n = normalize(demand_count)
-    gap = demand_n - normalize(comp_count)
-    suitability = 0.5 * access + 0.5 * demand_n
+    walk_score = sum(parts[k] * w for k, w in WALK_WEIGHTS.items())
 
     features = [
         feature(c, {
-            "suitability": round(float(suitability[i]), 3),
-            "accessibility": round(float(access[i]), 3),
-            "demand": round(float(demand_n[i]), 3),
-            "market_gap": round(float(gap[i]), 3),
-            "competitors": comp_count[i],
+            "walk_score": round(float(walk_score[i]), 3),
+            "competitor_count": sum(1 for p in comp if c.buffer(250).contains(p)),
+            "anchor_kantor": sum(1 for a in anchors["kantor"] if c.buffer(250).contains(a)),
+            "anchor_kebutuhan_dasar": sum(1 for a in anchors["kebutuhan_dasar"] if c.buffer(250).contains(a)),
+            "anchor_transit": sum(1 for a in anchors["transit"] if c.buffer(250).contains(a)),
         })
         for i, c in enumerate(cells)
     ]
     catchment = [
-        feature(poly, {"competitor_index": i, "name": competitors[i].get("name", ""), "category": category})
+        feature(poly, {"competitor_index": i, "name": competitors_raw[i].get("name", ""), "business_type": business_type})
         for i, poly in _voronoi_polygons(comp, buffer_m)
     ]
-    best = max(features, key=lambda f: f["properties"]["suitability"]) if features else None
+    anchors_fc = fc([
+        {"type": "Feature", "geometry": {"type": "Point", "coordinates": [a["lon"], a["lat"]]},
+         "properties": {"name": a.get("name", ""), "anchor_type": a["anchor_type"], "category": a.get("category", "")}}
+        for a in anchors_raw
+    ])
+    competitors_fc = fc([
+        {"type": "Feature", "geometry": {"type": "Point", "coordinates": [c["lon"], c["lat"]]},
+         "properties": {
+             "name": c.get("name", ""), "business_type": business_type,
+             "subtype": c.get("tipe_2", ""), "alamat": c.get("alamat", ""),
+         }}
+        for c in competitors_raw
+    ])
     return {
         "grid": fc(features),
         "catchment": fc(catchment),
-        "competitors": fc([feature(p, {"category": category}) for p in comp]),
+        "competitors": competitors_fc,
+        "anchors": anchors_fc,
         "summary": {
             "station": station["name"],
-            "category": category,
-            "competitors": len(comp),
-            "demand_points": len(demand),
-            "best_cell_suitability": best["properties"]["suitability"] if best else None,
+            "business_type": business_type,
+            "subtype": subtype,
+            "competitors": len(competitors_raw),
+            "anchor_count": len(anchors_raw),
+            "anchor_kantor": len(anchors["kantor"]),
+            "anchor_kebutuhan_dasar": len(anchors["kebutuhan_dasar"]),
+            "anchor_transit": len(anchors["transit"]),
+            "mean_walk_score": round(float(walk_score.mean()), 3) if len(walk_score) else None,
         },
     }
 
@@ -588,49 +790,99 @@ def what_if(rows: list[dict], station_id: str, overrides: dict[str, float]) -> d
 
 # --- K-UC2: climate & environmental resilience -------------------------------
 
-async def resilience(station: dict):
-    roads, pois, graph, origin, buffer_m, lines = await _context(station, WALK_BUFFER)
-    green = _poi_points(pois, osm.is_green)
-    water = [to_m(Point(p["lon"], p["lat"])) for p in pois if p["waterway"]]
+HAZARD_SAMPLE_SIZE = 120  # meters, center-to-vertex - coarser than AQ_HEX_SIZE on purpose,
+# each cell is a live InaRISK HTTP call (~4-5s), so this trades resolution for speed.
 
-    corridors = []
-    for i, line in enumerate(lines):
-        poly = line.buffer(CORRIDOR_BUFFER)
-        # PROXY: green cover stands in for Landsat LST, waterway proximity for InaRISK flood risk.
-        heat = 1.0 - min(sum(1 for g in green if poly.contains(g)) / 3.0, 1.0)
-        flood = 1.0 - min(min((w.distance(line) for w in water), default=500) / 500.0, 1.0)
-        corridors.append({"poly": poly, "heat": heat, "flood": flood, "index": i,
-                          "highway": roads[i]["highway"]})
 
-    for c in corridors:
-        c["vulnerability"] = round(0.5 * c["heat"] + 0.5 * c["flood"], 3)
-    corridors.sort(key=lambda c: c["vulnerability"], reverse=True)
+async def resilience(station: dict, use_inarisk: bool = True):
+    """No composite "vulnerability" score - the old version blended a green-cover heat
+    proxy with a waterway-distance flood proxy into one number (0.5/0.5), which was two
+    stand-ins invented for this project multiplied together. Replaced with real published
+    hazard data: BNPB InaRISK's flood/landslide index (Jabodetabek-scoped, live, no auth
+    - see inarisk.py) per corridor, plus MAPID Data Catalogue's UHI/rainfall/ecology-index
+    layers for the buffer (already downloaded for M-UC1's Kenyamanan tab, shown as-is here
+    too - see mapid_environment.py). Every layer stands alone; nothing is fused.
+
+    use_inarisk: InaRISK is a live government server, not this project's, and each
+    "identify" call measured ~4-5s - a 500m buffer can have 500+ road segments, and
+    querying every one individually took over 10 minutes end to end. So instead it's
+    sampled on a coarse hex grid (~20-40 cells) and each corridor just takes its nearest
+    sample's value - same real government data, resampled for practical speed, not
+    invented. When False, corridors skip flood/landslide entirely and only the
+    pre-downloaded MAPID layers (UHI/rainfall/ecology-index - static files, no external
+    request) are returned, trading the flood/landslide layer for speed and reliability.
+    """
+    roads, _pois, graph, origin, buffer_m, lines = await _context(station, WALK_BUFFER)
+
+    if use_inarisk:
+        sample_cells = hex_grid(buffer_m, HAZARD_SAMPLE_SIZE)
+        sem = asyncio.Semaphore(8)
+
+        async def _sample_hazard(cell):
+            pt = to_deg(cell.centroid)
+            async with sem:
+                return await inarisk.hazard(pt.x, pt.y)
+
+        sample_hazards = await asyncio.gather(*(_sample_hazard(c) for c in sample_cells))
+        sample_points = [c.centroid for c in sample_cells]
+        sample_tree = STRtree(sample_points)
+
+        def _hazard_near(point_m):
+            idx = sample_tree.nearest(point_m)
+            return sample_hazards[idx]
+    else:
+        def _hazard_near(point_m):
+            return {"banjir": None, "longsor": None}
+
+    corridors = [
+        {
+            "poly": line.buffer(CORRIDOR_BUFFER), "index": i, "highway": road["highway"],
+            **{k: v for k, v in _hazard_near(line.centroid).items()},
+        }
+        for i, (road, line) in enumerate(zip(roads, lines))
+    ]
+
+    # Hard avoidance, not a blended score - same pattern as M-UC1's wheelchair=no routing:
+    # BNPB's own "tinggi" classification flags a corridor, routing steers around it.
+    risky_polys = [
+        c["poly"] for c in corridors
+        if (c["banjir"] and c["banjir"]["class"] == "tinggi") or (c["longsor"] and c["longsor"]["class"] == "tinggi")
+    ]
+    risky = unary_union(risky_polys) if risky_polys else None
+    for u, v, data in graph.edges(data=True):
+        mid = Point((u[0] + v[0]) / 2, (u[1] + v[1]) / 2)
+        blocked = risky is not None and not risky.is_empty and risky.contains(mid)
+        data["safe"] = data["length"] * (network.HAZARD_BLOCK_FACTOR if blocked else 1.0)
 
     features = [
         feature(c["poly"], {
             "corridor_id": c["index"], "highway": c["highway"],
-            "heat_proxy": round(c["heat"], 3), "flood_proxy": round(c["flood"], 3),
-            "vulnerability": c["vulnerability"], "rank": rank,
+            "banjir_value": c["banjir"]["value"] if c["banjir"] else None,
+            "banjir_class": c["banjir"]["class"] if c["banjir"] else None,
+            "longsor_value": c["longsor"]["value"] if c["longsor"] else None,
+            "longsor_class": c["longsor"]["class"] if c["longsor"] else None,
         })
-        for rank, c in enumerate(corridors, 1)
+        for c in corridors
     ]
 
-    # Detour: route to the far edge of the buffer avoiding the worst corridors.
-    risky = unary_union([c["poly"] for c in corridors if c["vulnerability"] > 0.6])
-    for u, v, data in graph.edges(data=True):
-        mid = Point((u[0] + v[0]) / 2, (u[1] + v[1]) / 2)
-        data["safe"] = data["length"] * (3.0 if not risky.is_empty and risky.contains(mid) else 1.0)
+    buffer_wgs84 = to_deg(buffer_m)
+    uhi = mapid_environment.uhi(buffer_wgs84)
+    ecology_index = mapid_environment.ecology_index(buffer_wgs84)
+    rainfall = mapid_environment.rainfall(buffer_wgs84)
 
     return {
         "corridors": fc(features),
+        "uhi": uhi,
+        "ecology_index": ecology_index,
+        "rainfall": rainfall,
         "summary": {
             "station": station["name"],
             "corridors": len(corridors),
-            "mean_vulnerability": round(float(np.mean([c["vulnerability"] for c in corridors])), 3) if corridors else 0,
-            "worst": [
-                {"corridor_id": c["index"], "highway": c["highway"], "vulnerability": c["vulnerability"]}
-                for c in corridors[:5]
-            ],
+            "use_inarisk": use_inarisk,
+            "banjir_known": sum(1 for c in corridors if c["banjir"]),
+            "banjir_tinggi": sum(1 for c in corridors if c["banjir"] and c["banjir"]["class"] == "tinggi"),
+            "longsor_known": sum(1 for c in corridors if c["longsor"]),
+            "longsor_tinggi": sum(1 for c in corridors if c["longsor"] and c["longsor"]["class"] == "tinggi"),
         },
         "graph": graph,
         "origin": origin,

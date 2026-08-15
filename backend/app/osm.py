@@ -94,7 +94,10 @@ async def stations() -> list[dict]:
 
 
 async def roads(lon: float, lat: float, radius: int) -> list[dict]:
-    """Walkable road centerlines around a point: [{"coords": [[lon,lat],...], "highway": str}]"""
+    """Walkable road centerlines around a point, with the tags routing comfort/accessible
+    impedance is built from (see network.py): sidewalk presence, lighting, surface,
+    wheelchair access. None of these feed walk_score (Siburian et al. formula, kept to its
+    original 4 components) - they only ever affect route choice, not the area-level score."""
     q = f"""
     [out:json][timeout:10];
     way["highway"]["highway"!~"motorway|motorway_link|trunk|trunk_link"](around:{radius},{lat},{lon});
@@ -102,9 +105,29 @@ async def roads(lon: float, lat: float, radius: int) -> list[dict]:
     """
     data = await overpass(q)
     return [
-        {"coords": [[p["lon"], p["lat"]] for p in el["geometry"]], "highway": el["tags"]["highway"]}
+        {
+            "coords": [[p["lon"], p["lat"]] for p in el["geometry"]],
+            "highway": el["tags"]["highway"],
+            "sidewalk": el["tags"].get("sidewalk", ""),
+            "lit": el["tags"].get("lit", ""),
+            "surface": el["tags"].get("surface", ""),
+            "wheelchair": el["tags"].get("wheelchair", ""),
+        }
         for el in data["elements"] if el.get("geometry")
     ]
+
+
+async def trees(lon: float, lat: float, radius: int) -> list[dict]:
+    """Individual street trees - a per-segment shade proxy, distinct from the park/garden
+    POIs already in pois(). Phase 1 (OSM tags) only; street-level imagery (Mapillary/Street
+    View) extraction is not wired in - no image pipeline exists in this project."""
+    q = f"""
+    [out:json][timeout:10];
+    node["natural"="tree"](around:{radius},{lat},{lon});
+    out;
+    """
+    data = await overpass(q)
+    return [{"lon": el["lon"], "lat": el["lat"]} for el in data["elements"]]
 
 
 async def pois(lon: float, lat: float, radius: int) -> list[dict]:
@@ -150,6 +173,9 @@ async def pois(lon: float, lat: float, radius: int) -> list[dict]:
             "surveillance": tags.get("surveillance", ""),
             "departures_board": tags.get("departures_board", ""),
             "information": tags.get("information", ""),
+            "wheelchair": tags.get("wheelchair", ""),
+            "tactile_paving": tags.get("tactile_paving", ""),
+            "kerb": tags.get("kerb", ""),
             "name": tags.get("name", ""),
         })
     return out
