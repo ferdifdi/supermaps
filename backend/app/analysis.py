@@ -814,16 +814,26 @@ async def resilience(station: dict, use_inarisk: bool = True):
     """
     roads, _pois, graph, origin, buffer_m, lines = await _context(station, WALK_BUFFER)
 
+    inarisk_unavailable = False
     if use_inarisk:
         sample_cells = hex_grid(buffer_m, HAZARD_SAMPLE_SIZE)
         sem = asyncio.Semaphore(8)
+        errors = 0
 
         async def _sample_hazard(cell):
+            nonlocal errors
             pt = to_deg(cell.centroid)
             async with sem:
-                return await inarisk.hazard(pt.x, pt.y)
+                try:
+                    return await inarisk.hazard(pt.x, pt.y)
+                except inarisk.InaRiskUnavailable:
+                    errors += 1
+                    return {"banjir": None, "longsor": None}
 
         sample_hazards = await asyncio.gather(*(_sample_hazard(c) for c in sample_cells))
+        # If every sample failed, BNPB's server itself is down/unreachable right now -
+        # every corridor coming back with no data means "unknown", not "no hazard here".
+        inarisk_unavailable = bool(sample_cells) and errors == len(sample_cells)
         sample_points = [c.centroid for c in sample_cells]
         sample_tree = STRtree(sample_points)
 
@@ -879,6 +889,7 @@ async def resilience(station: dict, use_inarisk: bool = True):
             "station": station["name"],
             "corridors": len(corridors),
             "use_inarisk": use_inarisk,
+            "inarisk_unavailable": inarisk_unavailable,
             "banjir_known": sum(1 for c in corridors if c["banjir"]),
             "banjir_tinggi": sum(1 for c in corridors if c["banjir"] and c["banjir"]["class"] == "tinggi"),
             "longsor_known": sum(1 for c in corridors if c["longsor"]),

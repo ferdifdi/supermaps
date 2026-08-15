@@ -16,6 +16,12 @@ from .config import CACHE_DIR
 
 BASE_URL = "https://gis.bnpb.go.id/server/rest/services/inarisk"
 
+
+class InaRiskUnavailable(Exception):
+    """BNPB's server errored or didn't respond - distinct from a successful response
+    whose pixel value is legitimately "NoData" (no mapped hazard at that point, common
+    and expected). Callers should not treat this the same as "no hazard here"."""
+
 # Jabodetabek-Punjur-scoped layers ("_JBTBPJ") - BNPB also publishes national rasters,
 # but these are the ones actually covering (and resolved for) this project's study area.
 LAYERS = {
@@ -49,8 +55,8 @@ async def _identify(layer: str, lon: float, lat: float) -> float | None:
                 r = await client.get(f"{BASE_URL}/{LAYERS[layer]}/MapServer/identify", params=params)
                 r.raise_for_status()
                 data = r.json()
-        except httpx.HTTPError:
-            return None
+        except httpx.HTTPError as e:
+            raise InaRiskUnavailable(f"{layer} identify failed: {e}") from e
         path.write_text(json.dumps(data), encoding="utf-8")
     results = data.get("results", [])
     if not results:
@@ -67,7 +73,9 @@ async def _identify(layer: str, lon: float, lat: float) -> float | None:
 async def hazard(lon: float, lat: float) -> dict:
     """{"banjir": {"value": .., "class": ..} | None, "longsor": {...} | None} at a point.
     None per-layer where BNPB has no data for that spot (common - most of a city isn't
-    inside any hazard zone, that's not a bug)."""
+    inside any hazard zone, that's not a bug). Raises InaRiskUnavailable if the server
+    itself couldn't be reached - callers should catch that separately, it means "unknown",
+    not "no hazard"."""
     out = {}
     for name in LAYERS:
         value = await _identify(name, lon, lat)
