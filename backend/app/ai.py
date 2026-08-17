@@ -8,6 +8,15 @@ from .config import GROQ_API_KEY, GROQ_MODEL
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
+# User-selectable in AiPanel - "smart" (better reasoning, tighter free-tier rate limit)
+# vs "fast" (fallback when smart gets rate-limited).
+MODELS = {"smart": "openai/gpt-oss-120b", "fast": "openai/gpt-oss-20b"}
+
+
+class GroqRateLimited(Exception):
+    """Groq returned 429 - distinct from other failures so the API can tell the
+    frontend specifically "switch model", not just a generic error."""
+
 SYSTEM = (
     "Kamu analis perencanaan kota untuk SuperMaps, WebGIS kawasan transit Jabodetabek. "
     "Kamu menerima hasil analisis spasial dalam JSON. Jelaskan artinya untuk pembaca awam "
@@ -44,12 +53,14 @@ filters memfilter peta. Isi hanya kalau pengguna memang meminta penyaringan, sel
 array kosong. focus_station diisi station_id kalau pertanyaan menyorot satu stasiun."""
 
 
-async def _complete(messages: list[dict], json_mode: bool = False) -> str:
-    payload = {"model": GROQ_MODEL, "messages": messages, "temperature": 0.2}
+async def _complete(messages: list[dict], json_mode: bool = False, model: str | None = None) -> str:
+    payload = {"model": model or GROQ_MODEL, "messages": messages, "temperature": 0.2}
     if json_mode:
         payload["response_format"] = {"type": "json_object"}
     async with httpx.AsyncClient(timeout=60) as client:
         r = await client.post(GROQ_URL, headers={"Authorization": f"Bearer {GROQ_API_KEY}"}, json=payload)
+        if r.status_code == 429:
+            raise GroqRateLimited(f"model {payload['model']} sedang rate-limited")
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"]
 
@@ -87,3 +98,70 @@ async def chat(messages: list[dict], rows: list[dict]) -> dict:
         json_mode=True,
     )
     return json.loads(text)
+
+
+# --- Q&A over an already-run result, uniform across every use case -----------
+# One system prompt for all five use cases - the model infers what fields exist from
+# the JSON keys it's given each call (they differ naturally per use case) instead of
+# a hardcoded per-use-case blurb to keep in sync by hand.
+ASK_SYSTEM = (
+    "Kamu konsultan SuperMaps, WebGIS kawasan transit Jabodetabek. Pengguna sedang melihat "
+    "\"{label}\". Kamu menerima hasil analisis spasial use case ini dalam JSON (geometri sudah "
+    "dihapus, tinggal properti) - field yang ada beda-beda tergantung use case, baca langsung "
+    "dari JSON-nya, jangan asumsikan struktur tetap.\n\n"
+    "Pengguna boleh menanyakan apa saja seputar konteks ini - bukan cuma \"jelaskan angka grid "
+    "ini\", tapi juga pertanyaan bisnis/praktis: kelayakan buka usaha, risiko, prioritas, "
+    "perbandingan lokasi, strategi, dsb. Jawab dengan penalaran konsultan sungguhan: gabungkan "
+    "angka dari JSON dengan pengetahuan umum kamu (prinsip bisnis, tata kota, mitigasi risiko, "
+    "dll) untuk kasih jawaban yang berguna dan actionable, bukan cuma membacakan angka.\n\n"
+    "Aturan integritas data (bukan pembatas topik): setiap ANGKA yang kamu sebut harus benar-"
+    "benar ada di JSON - jangan mengarang angka atau skor gabungan yang tidak ada (proyek ini "
+    "sengaja tidak punya skor \"suitability\"/\"vulnerability\" gabungan - tampilkan komponennya "
+    "terpisah). Tapi penalaran, opini, rekomendasi, dan pengetahuan umum di luar JSON itu boleh "
+    "dan diharapkan, selama kamu jelas mana yang \"dari data\" dan mana yang \"opini/pengetahuan "
+    "umum\". Kalau JSON tidak punya data yang relevan buat menjawab, tetap boleh kasih pandangan "
+    "umum, tapi bilang terus terang bagian itu bukan dari data proyek ini.\n\n"
+    "Jawab dalam Bahasa Indonesia, natural seperti konsultan ngobrol, tidak perlu template kaku."
+)
+
+
+MAX_PROMPT_CHARS = 8000  # Groq free tier rejects (413) large request bodies well before
+# any model's real context limit - this is a request-size budget, not a token budget.
+
+
+def _compact_result(result: dict, cap: int = 12) -> dict:
+    """Drop geometry, keep properties/summary - geometries are huge and the model only
+    ever needs to reason about the numbers/labels, never the coordinates. `cap` is
+    deliberately small (not "as many as fit") - a chat answer only needs enough rows to
+    reason about, not the full dataset."""
+    def strip(v):
+        if isinstance(v, dict) and v.get("type") == "FeatureCollection":
+            return [f.get("properties", {}) for f in v["features"][:cap]]
+        if isinstance(v, list):
+            return v[:cap]
+        return v
+    return {k: strip(v) for k, v in result.items()}
+
+
+def _budget(compact: dict) -> str:
+    """Hard ceiling on the final JSON string regardless of how many keys/rows survived
+    _compact_result - summary first (small, most important), other keys added only while
+    the whole thing still serializes under budget, so a result with many large sections
+    can't blow the request size."""
+    summary = compact.pop("summary", None)
+    out = {"summary": summary} if summary is not None else {}
+    for k, v in compact.items():
+        candidate = {**out, k: v}
+        if len(json.dumps(candidate, ensure_ascii=False)) > MAX_PROMPT_CHARS:
+            continue
+        out = candidate
+    return json.dumps(out, ensure_ascii=False)
+
+
+async def ask(use_case_id: str, label: str, messages: list[dict], result: dict, model: str = "smart") -> str:
+    system = ASK_SYSTEM.format(label=label)
+    compact = _budget(_compact_result(result))
+    return await _complete(
+        [{"role": "system", "content": f"{system}\n\nHasil analisis:\n{compact}"}] + messages,
+        model=MODELS.get(model, MODELS["smart"]),
+    )

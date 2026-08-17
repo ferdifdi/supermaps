@@ -219,3 +219,21 @@ async def chat(body: ChatBody):
     if not _dashboard:
         raise HTTPException(409, "run /api/analysis/tod-dashboard first")
     return await ai.chat(body.messages, _dashboard)
+
+
+class AskBody(BaseModel):
+    use_case_id: str
+    label: str
+    messages: list[dict]
+    result: dict
+    model: str = "smart"
+
+
+@app.post("/api/ai/ask")
+async def ask(body: AskBody):
+    try:
+        answer = await ai.ask(body.use_case_id, body.label, body.messages, body.result, body.model)
+    except ai.GroqRateLimited:
+        other = "fast" if body.model == "smart" else "smart"
+        raise HTTPException(429, f"Model sedang rate-limited. Coba ganti ke model \"{other}\".")
+    return {"answer": answer}
