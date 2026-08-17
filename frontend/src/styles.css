@@ -30,6 +30,7 @@ body {
 .app { display: flex; height: 100dvh; position: relative; }
 
 .sidebar {
+  position: relative;
   width: 0;
   flex: none;
   background: var(--surface);
@@ -64,21 +65,105 @@ body {
 
 .sidebar-toggle.open { left: 356px; }
 
+/* Mobile: sidebar and dock both become the same bottom sheet (Gojek-style - one sheet,
+   two switchable sections), driven by mobileSection/sheetSnap state in App.jsx. Only
+   one of .sidebar/.dock is ever shown, per the "mobile-buat"/"mobile-hasil" class App
+   puts on .app; --sheet-h is set on the root element during drag (see startSheetDrag). */
 @media (max-width: 768px) {
-  .sidebar {
+  .sidebar-toggle, .dock-toggle { display: none; }
+
+  /* Always fills the available width - no cap, so it widens on wider phones instead
+     of staying pinned to a fixed max width. */
+  .sidebar, .dock {
     position: fixed;
-    inset: 0 auto 0 0;
-    z-index: 20;
-    width: min(85vw, 340px);
-    transform: translateX(-100%);
-    transition: transform .2s ease;
-    padding: 16px;
+    left: 50%;
+    right: auto;
+    bottom: 0;
+    z-index: 22;
+    width: 100%;
+    transform: translateX(-50%);
+    transition: height .2s ease;
+  }
+
+  .sidebar.open, .dock.open {
+    height: var(--sheet-h, 50vh);
+    max-height: min(90vh, calc(100dvh - env(safe-area-inset-top, 20px) - 8px));
+    padding: 28px 16px 16px;
+    border-radius: 16px 16px 0 0;
+    box-shadow: var(--shadow-md);
     overflow-y: auto;
   }
 
-  .sidebar.open { transform: translateX(0); }
+  .app.mobile-analisis .dock { display: none; }
+  .app.mobile-hasil .sidebar, .app.mobile-ai .sidebar { display: none; }
 
-  .sidebar-toggle.open { left: min(85vw, 340px); }
+  .sheet-bar {
+    position: fixed;
+    left: 50%;
+    bottom: var(--sheet-h, 50vh);
+    transform: translate(-50%, 50%);
+    z-index: 23;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+  }
+
+  .sheet-empty {
+    display: flex;
+    position: fixed;
+    left: 50%;
+    bottom: 0;
+    transform: translateX(-50%);
+    width: 100%;
+    height: var(--sheet-h, 50vh);
+    max-height: min(90vh, calc(100dvh - env(safe-area-inset-top, 20px) - 8px));
+    z-index: 22;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 32px 24px;
+    background: var(--surface);
+    border-radius: 16px 16px 0 0;
+    box-shadow: var(--shadow-md);
+  }
+
+  .sheet-handle {
+    width: 40px;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--border);
+    margin-bottom: 6px;
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .sheet-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 4px;
+    box-shadow: var(--shadow);
+  }
+
+  .sheet-tab {
+    border: none;
+    background: none;
+    padding: 7px 16px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--text-secondary);
+  }
+
+  .sheet-tab.active { background: var(--primary); color: #fff; }
+}
+
+@media (min-width: 769px) {
+  .sheet-bar, .sheet-empty { display: none; }
 }
 
 .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
@@ -162,6 +247,31 @@ button.secondary.active { background: var(--primary); color: #fff; border-color:
 
 .note { margin: 0; color: var(--text-secondary); }
 
+.loading-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--primary-soft);
+  border: 1px solid var(--primary-soft-border);
+  border-radius: 8px;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  border: 2px solid var(--primary-soft-border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.loading-text { display: flex; flex-direction: column; gap: 2px; }
+.loading-text b { color: var(--primary-dark); font-size: 12px; }
+
 .summary {
   margin: 0;
   padding: 10px;
@@ -220,7 +330,46 @@ button.secondary.active { background: var(--primary); color: #fff; border-color:
   transition: width .2s ease;
 }
 
-.dock.open { width: 380px; padding: 16px; display: flex; flex-direction: column; box-shadow: var(--shadow); }
+/* padding-top 56px reserves room for .dock-view-switch (Hasil/AI pill, desktop only). */
+.dock.open { width: 380px; padding: 56px 16px 16px; display: flex; flex-direction: column; box-shadow: var(--shadow); }
+
+/* Placed after the base rule above so it wins the cascade at equal (.sidebar.open /
+   .dock.open) specificity - without this, the 340px/380px desktop widths (and the 56px
+   top padding meant for the desktop-only switch pill) win on mobile too. */
+@media (max-width: 768px) {
+  .sidebar.open, .dock.open { width: 100%; padding: 28px 16px 16px; }
+}
+
+.dock-view-switch {
+  position: absolute;
+  top: 16px;
+  right: 60px;
+  z-index: 30;
+  display: flex;
+  gap: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px;
+  box-shadow: var(--shadow);
+}
+
+.dock-view-switch button {
+  border: none;
+  background: none;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+
+.dock-view-switch button.active { background: var(--primary); color: #fff; }
+
+@media (max-width: 768px) {
+  .dock-view-switch { display: none; }
+}
 
 .dock-toggle {
   position: absolute;
@@ -479,18 +628,215 @@ button.secondary.active { background: var(--primary); color: #fff; border-color:
 .chat-input { display: flex; gap: 6px; padding: 10px; border-top: 1px solid var(--border); }
 .chat-input input { flex: 1; padding: 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; }
 
-@media (max-width: 900px) {
-  .dock {
-    position: fixed;
-    inset: 0 0 0 auto;
-    z-index: 20;
-    width: min(85vw, 380px);
-    transform: translateX(100%);
-    transition: transform .2s ease;
-    padding: 16px;
+@media (max-width: 768px) {
+  .filterbar { left: 16px; right: 16px; transform: none; max-width: none; }
+}
+
+/* Landing role picker - full screen, shown before persona/use-case is chosen. */
+/* Two-column on wide screens (illustration + content) so a big desktop viewport doesn't
+   read as mostly empty space; stacks to one column on mobile (see media query below). */
+.role-select {
+  min-height: 100dvh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 48px;
+  background: var(--bg);
+  padding: 24px;
+}
+
+.role-illustration-pane {
+  flex: 1 1 420px;
+  max-width: 460px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.role-illustration { width: 100%; height: auto; max-height: 420px; }
+
+.role-select-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 32px;
+  width: 100%;
+  max-width: 420px;
+}
+
+.role-brand { text-align: center; }
+
+.role-brand-mark {
+  display: inline-block;
+  width: 44px;
+  height: 48px;
+  margin-bottom: 12px;
+}
+
+.role-brand h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+  background: linear-gradient(90deg, var(--primary), var(--accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.role-brand p { margin: 4px 0 0; color: var(--text-secondary); font-size: 13px; }
+.role-brand-sub { font-weight: 600; color: var(--text) !important; margin-top: 2px !important; }
+
+.role-cards { display: flex; flex-direction: column; gap: 12px; width: min(100%, 420px); }
+
+/* Glassmorphism tile, not a boxed form field - frosted over the dark backdrop, icon
+   floats free with no chip/padding box around it. */
+.role-card {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  text-align: left;
+  transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+}
+
+/* Same solid-fill "active" treatment as .tab.active / .sheet-tab.active elsewhere. */
+.role-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary);
+  background: var(--primary);
+}
+
+.role-card:hover .role-card-text b { color: #fff; }
+.role-card:hover .role-card-text span { color: rgba(255, 255, 255, .8); }
+.role-card:hover .role-icon,
+.role-card:hover .role-arrow { color: #fff; }
+
+/* Shine sweep on hover (desktop/mouse only - :hover rarely fires from touch taps). */
+.role-card::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -60%;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(115deg, transparent, rgba(255, 255, 255, .55), transparent);
+  transform: skewX(-20deg);
+  transition: left .55s ease;
+  pointer-events: none;
+}
+
+.role-card:hover::after { left: 130%; }
+
+.role-icon {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary);
+}
+
+.role-icon svg { width: 30px; height: 30px; }
+
+.role-card-text { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.role-card-text b { font-size: 15px; color: var(--text); }
+.role-card-text span { font-size: 12px; color: var(--text-secondary); line-height: 1.4; }
+
+.role-arrow { color: var(--primary); font-size: 18px; flex: none; }
+
+.role-dots { display: none; gap: 6px; }
+
+/* Floats over the panel's own top-left corner, stacked below sidebar-toggle - a
+   separate element from .sidebar, not embedded in its scrolling content. */
+.panel-back {
+  position: absolute;
+  bottom: 16px;
+  top: auto;
+  left: 16px;
+  z-index: 30;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  box-shadow: var(--shadow);
+  color: var(--text);
+}
+
+.panel-back:hover { background: var(--primary-soft); color: var(--primary-dark); border-color: var(--primary-soft-border); }
+
+/* Placed after the base rule above so it wins the cascade (same specificity, later
+   wins) - the desktop top:60/left:16 is meaningless on mobile, where the panel is a
+   bottom sheet, not a left-side panel. Anchored to the sheet's own top edge instead so
+   it moves with it as sheetSnap/--sheet-h changes. */
+@media (max-width: 768px) {
+  .panel-back {
+    top: auto;
+    left: 16px;
+    bottom: var(--sheet-h, 50vh);
+    transform: translateY(50%);
+  }
+}
+
+@media (max-width: 768px) {
+  /* Swipeable horizontal carousel instead of a stacked list - native scroll-snap, no
+     gesture library needed. */
+  .role-cards {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    gap: 16px;
+    padding: 4px 12vw 8px;
+    scrollbar-width: none;
   }
 
-  .dock.open { transform: translateX(0); display: flex; }
-  .dock-toggle.open { right: min(85vw, 380px); }
-  .filterbar { left: 16px; right: 16px; transform: none; max-width: none; }
+  .role-cards::-webkit-scrollbar { display: none; }
+
+  .role-card {
+    flex: 0 0 76vw;
+    scroll-snap-align: center;
+    flex-direction: column;
+    text-align: center;
+    padding: 28px 20px;
+    gap: 12px;
+  }
+
+  .role-icon svg { width: 44px; height: 44px; }
+  .role-card-text { align-items: center; }
+  .role-card-text b { font-size: 17px; }
+  .role-arrow { display: none; }
+
+  .role-dots { display: flex; justify-content: center; }
+
+  .role-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    border: none;
+    background: var(--border);
+    padding: 0;
+    cursor: pointer;
+  }
+
+  .role-dot.active { background: var(--primary); width: 20px; border-radius: 4px; }
+}
+
+@media (max-width: 900px) {
+  .role-select { flex-direction: column; gap: 8px; padding: 16px; }
+  .role-illustration-pane { flex: none; max-width: 280px; margin-bottom: -8px; }
+  .role-illustration { max-height: 200px; }
 }

@@ -10,9 +10,21 @@ const ramp = (field, stops) => [
 const SCORE_STOPS = [[0, "#f7f7f7"], [0.25, "#c6dbef"], [0.5, "#6baed6"], [0.75, "#2171b5"], [1, "#08306b"]]
 
 export const PERSONAS = [
-  { id: "komuter", label: "Masyarakat" },
-  { id: "usaha", label: "Pelaku Usaha" },
-  { id: "kebijakan", label: "Pemangku Kebijakan" },
+  {
+    id: "komuter", label: "Masyarakat",
+    tagline: "Navigasi jalan kaki, transfer, dan kenyamanan dari stasiun",
+    icon: "walker",
+  },
+  {
+    id: "usaha", label: "Pelaku Usaha",
+    tagline: "Site selection, kompetitor, dan anchor demand sekitar stasiun",
+    icon: "storefront",
+  },
+  {
+    id: "kebijakan", label: "Pemangku Kebijakan",
+    tagline: "Indeks TOD dan ketahanan iklim kawasan stasiun",
+    icon: "landmark",
+  },
 ]
 
 export const USE_CASES = [
@@ -21,6 +33,7 @@ export const USE_CASES = [
     persona: "komuter",
     title: "Navigasi Transit & Akses Jalan Kaki",
     description: "Skor akses jalan kaki per grid 250 m dan isochrone jalan kaki dari stasiun.",
+    expectedWait: "10-20 detik (OSM + GTFS + OpenAQ)",
     extras: "walk",
     methodology: {
       data: [
@@ -173,6 +186,7 @@ export const USE_CASES = [
     persona: "komuter",
     title: "Basic Needs untuk Komuter",
     description: "Ketersediaan pangan, pusat perbelanjaan/pasar, keuangan, retail, dan kesehatan dalam jangkauan jalan kaki dari stasiun (MAPID Data Catalogue).",
+    expectedWait: "5-15 detik",
     extras: "equity",
     methodology: {
       data: [
@@ -247,6 +261,7 @@ export const USE_CASES = [
     persona: "usaha",
     title: "Site Selection & Market Gap",
     description: "Pilih tipe bisnis, lihat kompetitor setipe (MAPID Data Catalogue) dan anchor demand di sekitar stasiun - layer terpisah, tanpa skor gabungan.",
+    expectedWait: "5-15 detik",
     extras: "site",
     methodology: {
       data: [
@@ -331,6 +346,7 @@ export const USE_CASES = [
     persona: "kebijakan",
     title: "Indeks TOD & Prioritas Pengembangan",
     description: "Station Composite Index, ranking stasiun, dan tipologi rekomendasi pengembangan.",
+    expectedWait: "30-90 detik (scan semua stasiun dalam cakupan)",
     // Scores every station at once, so App drives it through the dashboard instead of `run`.
     dashboard: true,
     methodology: {
@@ -378,6 +394,7 @@ export const USE_CASES = [
     persona: "kebijakan",
     title: "Climate & Environmental Resilience",
     description: "Risiko banjir/longsor per koridor (BNPB InaRISK) dan konteks UHI/ekologi/curah hujan (MAPID) - layer terpisah, tanpa skor gabungan.",
+    expectedWait: "20-40 detik dengan InaRISK live, 5-10 detik mode MAPID saja",
     methodology: {
       data: [
         {
@@ -387,6 +404,10 @@ export const USE_CASES = [
         { source: "MAPID Data Catalogue - URBAN HEAT ISLAND", year: 2022, detail: "kelas zona panas per kabupaten/kota" },
         { source: "MAPID Data Catalogue - INDEKS EKOLOGI", year: 2024, detail: "indeks per grid (turunan RSEI)" },
         { source: "MAPID Data Catalogue - Curah Hujan (Presipitasi)", year: 2020, detail: "kelas & intensitas per provinsi" },
+        {
+          source: "MAPID Data Catalogue - Wilayah Risiko Banjir/Longsor", detail:
+            "BELUM TERSEDIA - belum didownload. Mode \"MAPID saja\" saat ini banjir/longsor-nya kosong (null), cuma UHI/Ekologi/Curah Hujan yang tampil. Menyusul kalau datanya sudah ada.",
+        },
         { source: "OSM (Overpass API)", detail: "Jaringan jalan buat koridor & rute detour" },
       ],
       processing: [
@@ -403,6 +424,7 @@ export const USE_CASES = [
         { step: "Tidak ada skor gabungan", detail: "Versi lama nge-blend proxy tutupan hijau (panas) + jarak sungai (banjir) jadi \"vulnerability\" 0.5/0.5 - keduanya proxy buatan sendiri. Sudah dihapus." },
       ],
     },
+    extras: "resilience",
     options: {
       dataSource: [
         { id: true, label: "InaRISK (real-time, bisa lambat)" },

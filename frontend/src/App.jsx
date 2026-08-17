@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import MapView from "./MapView"
+import AiDock from "./components/AiDock"
 import Chatbot from "./components/Chatbot"
 import EquityDock from "./components/EquityDock"
 import FilterBar from "./components/FilterBar"
 import MethodologyInfo from "./components/MethodologyInfo"
 import RightDock from "./components/RightDock"
+import ResilienceDock from "./components/ResilienceDock"
+import RoleSelect from "./components/RoleSelect"
 import SiteDock from "./components/SiteDock"
 import WalkDock from "./components/WalkDock"
 import { api } from "./api"
 import * as equity from "./equity"
 import * as tod from "./tod"
-import { PERSONAS, USE_CASES } from "./usecases"
+import { USE_CASES } from "./usecases"
 
 const TOD_GROUPS = [
   { key: "modes", label: "Moda", options: tod.MODES },
@@ -19,6 +22,7 @@ const TOD_GROUPS = [
 ]
 
 export default function App() {
+  const [roleChosen, setRoleChosen] = useState(false)
   const [styles, setStyles] = useState([])
   const [styleUrl, setStyleUrl] = useState(null)
   const [stations, setStations] = useState([])
@@ -33,7 +37,17 @@ export default function App() {
   const [result, setResult] = useState(null)
   const [insight, setInsight] = useState("")
   const [status, setStatus] = useState("")
-  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768)
+  const [loading, setLoading] = useState(false)
+  const [loadingSeconds, setLoadingSeconds] = useState(0)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  // Mobile: a Gojek-style bottom sheet with three switchable sections instead of the
+  // desktop's separate side sidebar + side dock. "analisis" reuses .sidebar, "hasil"/"ai"
+  // both reuse .dock (real per-use-case dock vs AiDock, mutually exclusive) - same
+  // components, just repositioned/resized by CSS at the mobile breakpoint. Desktop reuses
+  // this same state to pick Hasil vs AI inside the dock (sidebar stays independently
+  // toggleable there via sidebarOpen).
+  const [resultView, setResultView] = useState("analisis")
+  const [sheetSnap, setSheetSnap] = useState("half") // "peek" | "half" | "full"
 
   // TOD dashboard (K-UC1)
   const [scopeMode, setScopeMode] = useState("KRL")
@@ -64,6 +78,15 @@ export default function App() {
     api.stations().then(setStations)
   }, [])
 
+  // Loading feedback (Shneiderman: informative feedback) - ticks every second while an
+  // analysis runs so the wait isn't a silent freeze, alongside expectedWait per use case.
+  useEffect(() => {
+    if (!loading) return
+    setLoadingSeconds(0)
+    const id = setInterval(() => setLoadingSeconds((s) => s + 1), 1000)
+    return () => clearInterval(id)
+  }, [loading])
+
   // U-UC1: some business types (MAKANAN DAN MINUMAN, PERDAGANGAN DAN RETAIL) have a
   // TIPE_2 subcategory in MAPID's data - fetch it whenever the category changes so the
   // subtype dropdown only shows options that actually exist for this category.
@@ -79,6 +102,13 @@ export default function App() {
   const personaUseCases = USE_CASES.filter((u) => u.persona === persona)
 
   const visibleRows = useMemo(() => tod.applyFilters(todRows, filters), [todRows, filters])
+
+  // Stable reference (not recreated every render) - AiPanel resets its chat whenever
+  // this changes, so a fresh object each render would wipe the conversation constantly.
+  const aiDashboardResult = useMemo(
+    () => (todRows.length ? { stations: todRows.slice(0, 30) } : null),
+    [todRows],
+  )
 
   // On the dashboard the map is fed from the scored rows, not from a per-station analysis run.
   const dashboardResult = useMemo(() => {
@@ -124,7 +154,8 @@ export default function App() {
   }, [useCase, result, poiCategoryFilter, routeResult])
 
   async function run() {
-    setStatus("Menjalankan analisis…")
+    setStatus("")
+    setLoading(true)
     setInsight("")
     try {
       if (useCase.dashboard) {
@@ -133,9 +164,10 @@ export default function App() {
         setTodRows(rows)
         setTodMeta(metadata)
         setDockOpen(true)
+        setResultView("hasil")
         setWhatIf(null)
       } else {
-        if (!station) return setStatus("Pilih stasiun dulu.")
+        if (!station) { setLoading(false); return setStatus("Pilih stasiun dulu.") }
         setResult(null)
         setPoiCategoryFilter([])
         setFocusPoint(null)
@@ -143,12 +175,15 @@ export default function App() {
         setRouteStats(null)
         setPicking(false)
         setResult(await useCase.run(station, { category, businessType: category, subtype, radius, useInarisk }))
-        if (["equity", "walk", "site"].includes(useCase.extras)) { setDockTab("ringkasan"); setDockOpen(true) }
+        if (["equity", "walk", "site", "resilience"].includes(useCase.extras)) {
+          setDockTab("ringkasan"); setDockOpen(true); setResultView("hasil")
+        }
       }
       setStatus("")
     } catch (e) {
       setStatus(`Gagal: ${e.message}`)
     }
+    setLoading(false)
   }
 
   async function explain() {
@@ -192,6 +227,12 @@ export default function App() {
     setFocusPoint({ lon, lat })
   }
 
+  function focusPolygon(feature) {
+    const ring = feature.geometry.type === "Polygon" ? feature.geometry.coordinates[0] : feature.geometry.coordinates[0][0]
+    const [lon, lat] = ring[0]
+    setFocusPoint({ lon, lat })
+  }
+
   async function routeToGreenPoi(feature, index) {
     setGreenRoutingId(index)
     const [lon, lat] = feature.geometry.coordinates
@@ -200,12 +241,50 @@ export default function App() {
     setDockTab("rute")
   }
 
+  // Mobile bottom sheet drag: --sheet-h lives on the root element so both .sidebar and
+  // .dock (siblings, not nested) can read it - only one is "open" at a time per
+  // resultView, so there's never a conflict over whose height it's driving.
+  // "full" caps at 90vh, not 100 - leaves a gap at the top so the sheet never covers a
+  // notch/dynamic island. "peek" is the lowest drag-down goes (handle+tabs stay visible
+  // and grabbable, can't collapse to 0 or there'd be nothing left to drag back up with).
+  const SHEET_SNAP_VH = { peek: 10, half: 50, full: 90 }
+
+  function startSheetDrag(e) {
+    const startY = e.touches ? e.touches[0].clientY : e.clientY
+    const startVh = SHEET_SNAP_VH[sheetSnap]
+    const root = document.documentElement
+
+    function move(ev) {
+      const y = ev.touches ? ev.touches[0].clientY : ev.clientY
+      const vh = Math.min(90, Math.max(8, startVh + ((startY - y) / window.innerHeight) * 100))
+      root.style.setProperty("--sheet-h", `${vh}vh`)
+    }
+    function end(ev) {
+      const y = ev.changedTouches ? ev.changedTouches[0].clientY : ev.clientY
+      const vh = startVh + ((startY - y) / window.innerHeight) * 100
+      const nearest = Object.entries(SHEET_SNAP_VH).reduce(
+        (best, [k, v]) => (Math.abs(v - vh) < Math.abs(SHEET_SNAP_VH[best] - vh) ? k : best), "half",
+      )
+      setSheetSnap(nearest)
+      root.style.removeProperty("--sheet-h")
+      document.removeEventListener("mousemove", move)
+      document.removeEventListener("mouseup", end)
+      document.removeEventListener("touchmove", move)
+      document.removeEventListener("touchend", end)
+    }
+    document.addEventListener("mousemove", move)
+    document.addEventListener("mouseup", end)
+    document.addEventListener("touchmove", move, { passive: true })
+    document.addEventListener("touchend", end)
+  }
+
   // Stable identity: MapView rebuilds its result layers whenever this callback changes.
   const selectStation = useCallback((id) => {
     setStationId(id)
     if (isDashboard) {
       setDockTab("detail")
       setDockOpen(true)
+      setResultView("hasil")
     }
   }, [isDashboard])
 
@@ -214,8 +293,21 @@ export default function App() {
     setWhatIf(await api.todWhatIf(id, overrides))
   }
 
+  if (!roleChosen) {
+    return (
+      <RoleSelect
+        onSelect={(id) => {
+          setPersona(id)
+          setUseCaseId(USE_CASES.find((u) => u.persona === id).id)
+          setResult(null)
+          setRoleChosen(true)
+        }}
+      />
+    )
+  }
+
   return (
-    <div className="app">
+    <div className={`app mobile-${resultView}`}>
       <button
         className={sidebarOpen ? "sidebar-toggle open" : "sidebar-toggle"}
         onClick={() => setSidebarOpen((v) => !v)}
@@ -223,27 +315,35 @@ export default function App() {
         {sidebarOpen ? "‹" : "›"}
       </button>
 
-      <aside className={sidebarOpen ? "sidebar open" : "sidebar"}>
-        <header className="brand">
-          <h1>SuperMaps</h1>
-          <p>Transit Intelligence Jabodetabek</p>
-        </header>
+      <button className="panel-back" onClick={() => setRoleChosen(false)} title="Kembali" aria-label="Kembali">
+        ←
+      </button>
 
-        <div className="tabs">
-          {PERSONAS.map((p) => (
-            <button
-              key={p.id}
-              className={p.id === persona ? "tab active" : "tab"}
-              onClick={() => {
-                const u = USE_CASES.find((c) => c.persona === p.id)
-                setPersona(p.id); setUseCaseId(u.id); setResult(null)
-                setMapMode(u.layers?.find((l) => l.mode)?.mode || "isochrone")
-              }}
-            >
-              {p.label}
-            </button>
-          ))}
+      <div className="sheet-bar">
+        <div className="sheet-handle" onMouseDown={startSheetDrag} onTouchStart={startSheetDrag} />
+        <div className="sheet-tabs">
+          <button
+            className={resultView === "analisis" ? "sheet-tab active" : "sheet-tab"}
+            onClick={() => { setResultView("analisis"); setSidebarOpen(true) }}
+          >
+            Analisis
+          </button>
+          <button
+            className={resultView === "hasil" ? "sheet-tab active" : "sheet-tab"}
+            onClick={() => { setResultView("hasil"); setDockOpen(true) }}
+          >
+            Hasil
+          </button>
+          <button
+            className={resultView === "ai" ? "sheet-tab active" : "sheet-tab"}
+            onClick={() => { setResultView("ai"); setDockOpen(true) }}
+          >
+            AI
+          </button>
         </div>
+      </div>
+
+      <aside className={sidebarOpen ? "sidebar open" : "sidebar"}>
 
         <div className="section">
           <label>Use case</label>
@@ -348,19 +448,28 @@ export default function App() {
               )}
             </>
           )}
-          <button className="primary" onClick={run}>Jalankan analisis</button>
-          {status && <p className="note">{status}</p>}
+          <button className="primary" onClick={run} disabled={loading}>Jalankan analisis</button>
+          {loading && (
+            <div className="loading-status">
+              <span className="spinner" />
+              <span className="loading-text">
+                <b>Menjalankan analisis… {loadingSeconds}s</b>
+                {useCase.expectedWait && <span className="note">Perkiraan: {useCase.expectedWait}</span>}
+              </span>
+            </div>
+          )}
+          {!loading && status && <p className="note">{status}</p>}
         </div>
 
         {useCase.dashboard && todRows.length > 0 && (
           <div className="section">
             <label>Ringkasan</label>
             <p className="note">{todRows.length} stasiun terhitung.</p>
-            <button className="secondary" onClick={() => setDockOpen(true)}>Buka dashboard</button>
+            <button className="secondary" onClick={() => { setDockOpen(true); setResultView("hasil") }}>Buka dashboard</button>
           </div>
         )}
 
-        {!useCase.dashboard && !["equity", "walk", "site"].includes(useCase.extras) && result?.summary && (
+        {!useCase.dashboard && !["equity", "walk", "site", "resilience"].includes(useCase.extras) && result?.summary && (
           <div className="section">
             <label>Ringkasan</label>
             <pre className="summary">{JSON.stringify(result.summary, null, 2)}</pre>
@@ -369,9 +478,9 @@ export default function App() {
           </div>
         )}
 
-        {["equity", "walk", "site"].includes(useCase.extras) && result && (
+        {["equity", "walk", "site", "resilience"].includes(useCase.extras) && result && (
           <div className="section">
-            <button className="secondary" onClick={() => setDockOpen(true)}>Buka panel detail</button>
+            <button className="secondary" onClick={() => { setDockOpen(true); setResultView("hasil") }}>Buka panel detail</button>
           </div>
         )}
 
@@ -441,7 +550,14 @@ export default function App() {
         )}
       </main>
 
-      {useCase.dashboard && (
+      {dockOpen && (useCase.dashboard ? todRows.length > 0 : result) && (
+        <div className="dock-view-switch">
+          <button className={resultView === "hasil" ? "active" : ""} onClick={() => setResultView("hasil")}>Hasil</button>
+          <button className={resultView === "ai" ? "active" : ""} onClick={() => setResultView("ai")}>AI</button>
+        </div>
+      )}
+
+      {useCase.dashboard && resultView === "hasil" && (
         <RightDock
           open={dockOpen}
           onToggle={() => setDockOpen((v) => !v)}
@@ -457,7 +573,7 @@ export default function App() {
         />
       )}
 
-      {useCase.extras === "equity" && result && station && (
+      {useCase.extras === "equity" && result && station && resultView === "hasil" && (
         <EquityDock
           open={dockOpen}
           onToggle={() => setDockOpen((v) => !v)}
@@ -477,7 +593,7 @@ export default function App() {
         />
       )}
 
-      {useCase.extras === "walk" && result && station && (
+      {useCase.extras === "walk" && result && station && resultView === "hasil" && (
         <WalkDock
           open={dockOpen}
           onToggle={() => setDockOpen((v) => !v)}
@@ -499,7 +615,7 @@ export default function App() {
         />
       )}
 
-      {useCase.extras === "site" && result && station && (
+      {useCase.extras === "site" && result && station && resultView === "hasil" && (
         <SiteDock
           open={dockOpen}
           onToggle={() => setDockOpen((v) => !v)}
@@ -510,6 +626,38 @@ export default function App() {
           mapMode={mapMode}
           onMapMode={setMapMode}
         />
+      )}
+
+      {useCase.extras === "resilience" && result && station && resultView === "hasil" && (
+        <ResilienceDock
+          open={dockOpen}
+          onToggle={() => setDockOpen((v) => !v)}
+          tab={dockTab}
+          onTab={setDockTab}
+          result={result}
+          onFocus={focusPolygon}
+          mapMode={mapMode}
+          onMapMode={setMapMode}
+        />
+      )}
+
+      {resultView === "ai" && (useCase.dashboard ? todRows.length > 0 : result) && (
+        <AiDock
+          open={dockOpen}
+          onToggle={() => setDockOpen((v) => !v)}
+          useCaseId={useCaseId}
+          label={useCase.title}
+          persona={persona}
+          result={useCase.dashboard ? aiDashboardResult : result}
+        />
+      )}
+
+      {(resultView === "hasil" || resultView === "ai") && !loading && !(useCase.dashboard ? todRows.length > 0 : result) && (
+        <div className="sheet-empty">
+          <p className="note">
+            Belum ada hasil. Buka tab "Analisis", pilih stasiun, lalu jalankan analisis dulu.
+          </p>
+        </div>
       )}
     </div>
   )

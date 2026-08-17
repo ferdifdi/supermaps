@@ -41,6 +41,8 @@ export const api = {
   todMetadata: () => get("/api/analysis/tod-metadata"),
   todWhatIf: (stationId, overrides) => post("/api/analysis/tod-whatif", { station_id: stationId, overrides }),
   chat: (messages) => post("/api/ai/chat", { messages }),
+  askAi: async (useCaseId, label, messages, result, model) =>
+    (await post("/api/ai/ask", { use_case_id: useCaseId, label, messages, result, model })).answer,
   insight: async (useCase, audience, summary) =>
     (await post("/api/ai/insight", { use_case: useCase, audience, summary })).text,
 }
