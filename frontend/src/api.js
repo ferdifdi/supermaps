@@ -28,8 +28,8 @@ async function post(path, body) {
 export const api = {
   base: API,
   styles: () => get("/api/basemap/styles"),
-  stations: () => get("/api/stations"),
-  walkAccess: (id, minutes) => get(`/api/analysis/walk-access?station_id=${id}&minutes=${minutes}`),
+  stations: (mode) => get(mode ? `/api/stations?mode=${mode}` : "/api/stations"),
+  walkAccess: (id, radiusM) => get(`/api/analysis/walk-access?station_id=${id}&radius_m=${radiusM}`),
   amenityEquity: (id, radius) => get(`/api/analysis/amenity-equity?station_id=${id}&radius=${radius}`),
   route: (id, lon, lat, preference) => get(`/api/analysis/route?station_id=${id}&lon=${lon}&lat=${lat}&preference=${preference}`),
   siteSelection: (id, businessType, subtype) =>

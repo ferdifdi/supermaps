@@ -52,7 +52,8 @@ export const USE_CASES = [
         { step: "UHI / Indeks ekologi / Curah hujan", detail: "Ditampilkan apa adanya dari MAPID Data Catalogue, tanpa dihitung ulang atau digabung jadi skor" },
       ],
     },
-    run: (station) => api.walkAccess(station.id, 10),
+    options: { radius: [400, 800] },
+    run: (station, opts) => api.walkAccess(station.id, opts.radius || 800),
     layers: [
       // All walk-related layers are gated to mode "isochrone" so toggling to "udara"
       // shows air quality alone, not layered on top of the walk map.
@@ -197,14 +198,14 @@ export const USE_CASES = [
         { source: "OSM (Overpass API)", detail: "Jaringan jalan buat isochrone & rute jalan kaki" },
       ],
       processing: [
-        { step: "Isochrone", detail: "Buffer jalan kaki dari stasiun, radius pilihan 100-500m" },
+        { step: "Isochrone", detail: "Buffer jalan kaki dari stasiun, radius pilihan 400 atau 800m" },
         { step: "Overlay POI", detail: "Tiap POI basic-need dicek reachable/tidak dalam isochrone, per kategori" },
         { step: "Heatmap POI", detail: "Grid choropleth 250m: jumlah POI per sel" },
         { step: "Skor", detail: "Tidak ada equity_score komposit - cuma raw count/rasio per kategori (sengaja dihindari, gak ada dasar buat bobot antar kategori)" },
       ],
     },
-    options: { radius: [100, 200, 300, 400, 500] },
-    run: (station, opts) => api.amenityEquity(station.id, opts.radius || 500),
+    options: { radius: [400, 800] },
+    run: (station, opts) => api.amenityEquity(station.id, opts.radius || 800),
     // "mode" layers only render when App's map-mode toggle matches; layers without a
     // mode (POI dots, route, isochrone outline) always render regardless of which mode
     // is active - the outline in particular needs to stay visible in heatmap modes too,
