@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from . import ai, analysis, mapid, mapid_data, osm
+from . import ai, analysis, gtfs, mapid, mapid_data, osm
 from .config import MAPID_BASEMAP_KEY, MAPID_BASEMAP_URL, PUBLIC_BASE_URL, catalogue_layers
 from .geo import buffer_deg
 
@@ -25,9 +25,23 @@ STYLES = ["street-v2.0", "satellite-v2.0", "dark-v2.0", "light-v2.0"]
 _stations: dict[str, dict] = {}
 
 
+def _tj_stations() -> list[dict]:
+    """TJ halte from GTFS (transjakarta.zip), not OSM - OSM's public_transport=station+
+    bus=yes catch-all pulled in other operators' terminals mislabeled as TJ (see osm.py's
+    mode_label() docstring), while GTFS is TransJakarta's own published stop list."""
+    gtfs._load()
+    return [
+        {"id": f"gtfs:{sid}", "name": s["name"], "mode_label": "TJ",
+         "operator": "TransJakarta", "lon": s["lon"], "lat": s["lat"]}
+        for sid, s in gtfs._stops.items()
+    ]
+
+
 async def get_station(station_id: str) -> dict:
     if not _stations:
         for s in await osm.stations():
+            _stations[s["id"]] = s
+        for s in _tj_stations():
             _stations[s["id"]] = s
     if station_id not in _stations:
         raise HTTPException(404, "station not found")
@@ -57,8 +71,13 @@ async def basemap_proxy(path: str):
 # --- stations ----------------------------------------------------------------
 
 @app.get("/api/stations")
-async def list_stations():
-    return await osm.stations()
+async def list_stations(mode: str | None = None):
+    if mode and mode.upper() == "TJ":
+        return _tj_stations()
+    stations = [s for s in await osm.stations() if s["mode_label"] != "TJ"]
+    if mode:
+        stations = [s for s in stations if s["mode_label"] == mode.upper()]
+    return stations
 
 
 # --- MAPID data --------------------------------------------------------------
@@ -108,8 +127,8 @@ async def catalogue_layer(name: str):
 # --- analysis ----------------------------------------------------------------
 
 @app.get("/api/analysis/walk-access")
-async def walk_access(station_id: str, minutes: float = 10.0):
-    return await analysis.walk_access(await get_station(station_id), minutes)
+async def walk_access(station_id: str, radius_m: int = 800):
+    return await analysis.walk_access(await get_station(station_id), radius_m)
 
 
 @app.get("/api/analysis/route")
