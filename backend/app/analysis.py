@@ -12,7 +12,7 @@ from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import unary_union
 from shapely.strtree import STRtree
 
-from . import airquality, gtfs, inarisk, mapid_data, mapid_environment, network, osm
+from . import airquality, gtfs, inarisk, mapid_data, mapid_environment, network, osm, static_transit
 from .geo import fc, feature, grid, hex_grid, intersections, normalize, to_deg, to_m
 
 WALK_BUFFER = 500
@@ -94,13 +94,23 @@ INDICATOR_CRITERION = {
 TOTAL_WEIGHT = sum(c["weight"] for c in CRITERIA.values())
 
 
+async def _roads_for(station: dict, radius: int) -> list[dict]:
+    """Precomputed 800m static network first (output/isochrone_*.py, no Overpass call at
+    all) - falls back to a live osm.roads() fetch when the station's mode has no static
+    file yet or radius exceeds what was precomputed (see static_transit.STATIC_RADIUS_M)."""
+    roads = static_transit.roads_near(station.get("mode_label", ""), station["lon"], station["lat"], radius)
+    if roads is not None:
+        return roads
+    return await osm.roads(station["lon"], station["lat"], radius)
+
+
 async def _context(station: dict, radius: int):
     """Road graph, POIs and the station buffer, all in metric CRS.
 
     Sequential, not gathered - public Overpass instances block IPs that fire too
     many concurrent requests (this project has been blocklisted before).
     """
-    roads = await osm.roads(station["lon"], station["lat"], radius)
+    roads = await _roads_for(station, radius)
     pois = await osm.pois(station["lon"], station["lat"], radius)
     graph = network.build(roads)
     origin = to_m(Point(station["lon"], station["lat"]))
@@ -264,8 +274,13 @@ def _air_quality_grid(buffer_m, aq_stations: list[dict]) -> dict:
     return fc(features)
 
 
-async def walk_access(station: dict, minutes: float = 10.0):
-    roads, pois, graph, origin, buffer_m, lines, aq, raw_trees = await _walk_graph(station, WALK_BUFFER)
+async def walk_access(station: dict, radius_m: int = 800):
+    """radius_m: 400 or 800 - selects both how far roads/POIs are pulled (static network
+    covers up to static_transit.STATIC_RADIUS_M=800) and the isochrone cutoff itself, so
+    the two always agree - a bigger isochrone than the fetched network would just clip
+    silently at the fetch edge."""
+    roads, pois, graph, origin, buffer_m, lines, aq, raw_trees = await _walk_graph(station, radius_m)
+    minutes = radius_m / network.WALK_SPEED / 60
     cells = grid(buffer_m, CELL)
     parts = _walk_score_grid(
         cells, lines, intersections(lines),
@@ -282,7 +297,7 @@ async def walk_access(station: dict, minutes: float = 10.0):
     ]
     iso_fast = network.isochrone(graph, origin, minutes, "length")
     iso_accessible = network.isochrone(graph, origin, minutes, "accessible")
-    transfer = _transfer_points(station, pois, WALK_BUFFER)
+    transfer = _transfer_points(station, pois, radius_m)
     aq_stations = await airquality.nearby_stations(station["lon"], station["lat"])
     air_quality_grid = _air_quality_grid(buffer_m, aq_stations)
 
@@ -315,8 +330,8 @@ async def walk_access(station: dict, minutes: float = 10.0):
     return {
         "grid": fc(features),
         "isochrone": fc([
-            feature(iso_fast, {"kind": "fastest", "minutes": minutes}),
-            feature(iso_accessible, {"kind": "accessible", "minutes": minutes}),
+            feature(iso_fast, {"kind": "fastest", "minutes": minutes, "radius_m": radius_m}),
+            feature(iso_accessible, {"kind": "accessible", "minutes": minutes, "radius_m": radius_m}),
         ]),
         "transfer_points": transfer,
         "air_quality_grid": air_quality_grid,
@@ -362,7 +377,7 @@ async def amenity_equity(station: dict, radius: int = WALK_BUFFER):
     highway between the station and a POI means it isn't actually reachable on foot,
     even if it's geometrically within `radius`.
     """
-    roads = await osm.roads(station["lon"], station["lat"], radius)
+    roads = await _roads_for(station, radius)
     graph = network.build(roads)
     origin = to_m(Point(station["lon"], station["lat"]))
     minutes = radius / network.WALK_SPEED / 60
