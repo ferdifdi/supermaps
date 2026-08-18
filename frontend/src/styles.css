@@ -415,6 +415,40 @@ button.secondary.active { background: var(--primary); color: #fff; border-color:
   margin: 6px 0 4px;
 }
 
+.station-picker { position: relative; display: flex; flex-direction: column; gap: 4px; }
+.station-picker select { width: 100%; }
+
+.station-picker-list {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.station-picker-item {
+  padding: 7px 9px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.station-picker-item span { color: var(--text-secondary); }
+.station-picker-item.active, .station-picker-item:hover { background: var(--primary-soft); }
+.station-picker-item.selected { font-weight: 600; }
+
+.station-picker-empty {
+  padding: 8px 9px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
 .dock-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .dock-table th { text-align: left; color: var(--text-secondary); font-weight: 500; padding: 6px 4px; border-bottom: 1px solid var(--border); }
 .dock-table td { padding: 6px 4px; border-bottom: 1px solid var(--border); }

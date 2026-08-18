@@ -9,6 +9,7 @@ import RightDock from "./components/RightDock"
 import ResilienceDock from "./components/ResilienceDock"
 import RoleSelect from "./components/RoleSelect"
 import SiteDock from "./components/SiteDock"
+import StationPicker from "./components/StationPicker"
 import WalkDock from "./components/WalkDock"
 import { api } from "./api"
 import * as equity from "./equity"
@@ -32,7 +33,7 @@ export default function App() {
   const [category, setCategory] = useState("APOTEK")
   const [subtype, setSubtype] = useState("")
   const [subtypeOptions, setSubtypeOptions] = useState([])
-  const [radius, setRadius] = useState(500)
+  const [radius, setRadius] = useState(800)
   const [useInarisk, setUseInarisk] = useState(true)
   const [result, setResult] = useState(null)
   const [insight, setInsight] = useState("")
@@ -393,12 +394,7 @@ export default function App() {
           ) : (
             <>
               <label>Stasiun</label>
-              <select value={stationId} onChange={(e) => setStationId(e.target.value)}>
-                <option value="">— pilih stasiun —</option>
-                {stations.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name} ({s.mode_label})</option>
-                ))}
-              </select>
+              <StationPicker stations={stations} value={stationId} onChange={setStationId} />
               {useCase.options?.businessType && (
                 <>
                   <label>Tipe bisnis yang mau dibangun</label>
