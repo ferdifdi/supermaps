@@ -11,3 +11,10 @@ dist/
 .claude/
 
 .vercel
+
+# output/isochrone_*.py generate large geo data locally (geojson/shp/checkpoint) -
+# only the scripts themselves are source; backend/data/static/ has the curated copy
+# that actually ships.
+output/*
+!output/*.py
+!output/requirements.txt
