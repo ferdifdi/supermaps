@@ -93,9 +93,10 @@ TOTAL_WEIGHT = sum(c["weight"] for c in CRITERIA.values())
 
 
 async def _roads_for(station: dict, radius: int) -> list[dict]:
-    """Precomputed 800m static network first (output/isochrone_*.py, no Overpass call at
-    all) - falls back to a live osm.roads() fetch when the station's mode has no static
-    file yet or radius exceeds what was precomputed (see static_transit.STATIC_RADIUS_M)."""
+    """Precomputed static network first (output/isochrone_*.py, no Overpass call at all)
+    - falls back to a live osm.roads() fetch when the station's mode has no static file
+    yet or radius exceeds what was precomputed for that mode (see
+    static_transit.MODE_RADIUS_M - 800m for MRT/KRL/LRT, 400m for TJ)."""
     roads = static_transit.roads_near(station.get("mode_label", ""), station["lon"], station["lat"], radius)
     if roads is not None:
         return roads
@@ -274,9 +275,9 @@ def _air_quality_grid(buffer_m, aq_stations: list[dict]) -> dict:
 
 async def walk_access(station: dict, radius_m: int = 800):
     """radius_m: 400 or 800 - selects both how far roads/POIs are pulled (static network
-    covers up to static_transit.STATIC_RADIUS_M=800) and the isochrone cutoff itself, so
-    the two always agree - a bigger isochrone than the fetched network would just clip
-    silently at the fetch edge."""
+    covers up to static_transit.MODE_RADIUS_M per mode - 800m for MRT/KRL/LRT, 400m for
+    TJ) and the isochrone cutoff itself, so the two always agree - a bigger isochrone
+    than the fetched network would just clip silently at the fetch edge."""
     roads, pois, graph, origin, buffer_m, lines, aq, raw_trees = await _walk_graph(station, radius_m)
     minutes = radius_m / network.WALK_SPEED / 60
     cells = grid(buffer_m, CELL)

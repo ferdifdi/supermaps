@@ -1,4 +1,4 @@
-"""Isochrone jalan kaki 800m + rute + jaringan jalan untuk SEMUA halte TransJakarta
+"""Isochrone jalan kaki 400m + rute + jaringan jalan untuk SEMUA halte TransJakarta
 (~8091 halte, dari GTFS resmi transjakarta.zip - bukan dari OSM, soalnya klasifikasi TJ
 di OSM banyak salah/ketuker sama terminal bus lain).
 
@@ -11,20 +11,31 @@ sebagai data statis, gak usah panggil Overpass lagi tiap generate use case):
   1. isochrone_tj_stations[.shp|.geojson]        (Point)    - titik tiap halte TJ
   2. isochrone_tj_routes[.shp|.geojson]          (PolyLine) - jalur busway (GTFS shapes.txt,
                                                     satu garis per route_id + direction_id)
-  3. isochrone_tj_isochrone_800m[.shp|.geojson]  (Polygon)  - jangkauan jalan kaki 800m/halte
-  4. isochrone_tj_roads_800m[.shp|.geojson]      (PolyLine) - ruas jalan di dalam jangkauan
-                                                    800m itu (jaringan jalan yang dipakai
+  3. isochrone_tj_isochrone_400m[.shp|.geojson]  (Polygon)  - jangkauan jalan kaki 400m/halte
+  4. isochrone_tj_roads_400m[.shp|.geojson]      (PolyLine) - ruas jalan di dalam jangkauan
+                                                    400m itu (jaringan jalan yang dipakai
                                                     buat hitung isochrone-nya)
 Shapefile set (.shp/.shx/.dbf/.prj, WGS84) lengkap dan bisa langsung dibuka di QGIS/ArcGIS.
 GeoJSON WGS84 juga, siap dipakai backend/frontend tanpa konversi.
 
-PERINGATAN: ini job BESAR - 8091 halte x 1 panggilan Overpass API per halte. Bisa makan
-waktu berjam-jam, dan Overpass API terkenal suka lambat/dibatasi. Progress disimpan
-checkpoint di isochrone_tj_work.json (working file internal, bukan deliverable - jangan
-dihapus sebelum semua halte selesai). Kalau ke-stop/mati di tengah jalan, tinggal
-jalankan ulang `python isochrone_tj.py` - otomatis lanjut dari halte yang belum selesai,
-gak mulai dari nol, lalu tulis ulang ke-4 shapefile dari data terbaru. Rute (shapes.txt)
-dari GTFS lokal, gak butuh Overpass, jadi selalu diambil ulang tiap run.
+CUTOFF 400m (bukan 800m kayak MRT/KRL/LRT) khusus buat TJ - halte-nya jauh lebih rapat
+(sering 300-500m antar-halte), jadi 400m udah representatif dan bikin job ini jauh lebih
+ringan dibanding kalau dipaksa 800m.
+
+Road-fetch DI-CACHE SPASIAL (lihat _RoadCache) - kalau halte baru masih dalam jangkauan
+fetch OSM yang udah diambil buat halte sebelumnya, gak fetch ulang ke Overpass, langsung
+pakai data yang udah ada. Ini krusial buat TJ: banyak halte cuma 300-500m dari halte
+lain, jadi jaringan jalan yang sama kepake berkali-kali kalau di-fetch satu-satu.
+
+PERINGATAN: meski udah di-cache, ini tetap job BESAR (8091 halte) dan bisa makan waktu
+lama, apalagi Overpass API terkenal suka lambat/dibatasi. Progress disimpan checkpoint di
+isochrone_tj_work.json (working file internal, bukan deliverable - jangan dihapus sebelum
+semua halte selesai). Kalau ke-stop/mati di tengah jalan, tinggal jalankan ulang
+`python isochrone_tj.py` - otomatis lanjut dari halte yang belum selesai, gak mulai dari
+nol, lalu tulis ulang ke-4 shapefile dari data terbaru (cache road-fetch TIDAK ikut
+disimpan di checkpoint - resume tetap fetch ulang dari nol untuk sisa halte, cuma
+prosesnya sendiri tetap kena optimasi cache yang sama). Rute (shapes.txt) dari GTFS
+lokal, gak butuh Overpass, jadi selalu diambil ulang tiap run.
 """
 
 import asyncio
@@ -49,19 +60,22 @@ try:
 except ImportError:
     sys.exit("Butuh pyshp - jalankan dulu: pip install -r requirements.txt")
 
-CUTOFF_M = 800
-RADIUS_QUERY = 1000  # radius fetch OSM - harus lebih besar dari CUTOFF_M biar graf gak kepotong pas di tepi
+CUTOFF_M = 400
+RADIUS_QUERY = 1000  # sengaja jauh lebih besar dari CUTOFF_M - fetch yang lebih lebar
+# berarti lebih banyak halte tetangga yang bisa reuse hasil fetch yang sama (lihat
+# _RoadCache), jadi walau tiap fetch individual agak lebih berat, TOTAL panggilan
+# Overpass jauh lebih sedikit.
 OUT_DIR = Path(__file__).resolve().parent
 WORK_FILE = OUT_DIR / "isochrone_tj_work.json"
-FAILED_FILE = OUT_DIR / "isochrone_tj_800m_failed.txt"
+FAILED_FILE = OUT_DIR / "isochrone_tj_400m_failed.txt"
 STATIONS_SHP = OUT_DIR / "isochrone_tj_stations"
 ROUTES_SHP = OUT_DIR / "isochrone_tj_routes"
-ISOCHRONE_SHP = OUT_DIR / "isochrone_tj_isochrone_800m"
-ROADS_SHP = OUT_DIR / "isochrone_tj_roads_800m"
+ISOCHRONE_SHP = OUT_DIR / "isochrone_tj_isochrone_400m"
+ROADS_SHP = OUT_DIR / "isochrone_tj_roads_400m"
 STATIONS_GEOJSON = OUT_DIR / "isochrone_tj_stations.geojson"
 ROUTES_GEOJSON = OUT_DIR / "isochrone_tj_routes.geojson"
-ISOCHRONE_GEOJSON = OUT_DIR / "isochrone_tj_isochrone_800m.geojson"
-ROADS_GEOJSON = OUT_DIR / "isochrone_tj_roads_800m.geojson"
+ISOCHRONE_GEOJSON = OUT_DIR / "isochrone_tj_isochrone_400m.geojson"
+ROADS_GEOJSON = OUT_DIR / "isochrone_tj_roads_400m.geojson"
 CHECKPOINT_EVERY = 100
 
 WGS84_WKT = (
@@ -71,14 +85,45 @@ WGS84_WKT = (
 )
 
 
+class _RoadCache:
+    """Reuses a previous osm.roads() fetch for a new station if that station's own
+    CUTOFF_M reach is fully contained inside the earlier fetch's radius - i.e. within
+    (RADIUS_QUERY - CUTOFF_M) of the earlier fetch's center. TJ halte are frequently
+    300-500m apart, well inside that margin at RADIUS_QUERY=1000/CUTOFF_M=400 (600m
+    margin), so most halte end up reusing a neighbor's fetch instead of hitting Overpass
+    again. A plain list + linear scan is fine here - entries stay in the low thousands at
+    worst (bounded by how many non-overlapping RADIUS_QUERY circles fit in Jabodetabek),
+    scanned a few thousand times total, which is trivial next to the Overpass calls this
+    is avoiding."""
+
+    def __init__(self):
+        self.entries: list[tuple[Point, list[dict]]] = []
+
+    def get(self, point_m: Point):
+        margin = RADIUS_QUERY - CUTOFF_M
+        for center, roads in self.entries:
+            if center.distance(point_m) <= margin:
+                return roads
+        return None
+
+    def put(self, point_m: Point, roads: list[dict]):
+        self.entries.append((point_m, roads))
+
+
+_road_cache = _RoadCache()
+
+
 async def station_isochrone(lon: float, lat: float):
     """Returns (isochrone polygon in degrees, list of road-segment coords that fall
     inside the isochrone) or (None, []) if unreachable."""
-    roads = await osm.roads(lon, lat, RADIUS_QUERY)
+    origin_m = to_m(Point(lon, lat))
+    roads = _road_cache.get(origin_m)
+    if roads is None:
+        roads = await osm.roads(lon, lat, RADIUS_QUERY)
+        _road_cache.put(origin_m, roads)
     if not roads:
         return None, []
     g = network.build(roads)
-    origin_m = to_m(Point(lon, lat))
     try:
         node = network.nearest_node(g, origin_m)
     except ValueError:
