@@ -36,8 +36,6 @@ ROLES = {
     "ATM": "basic_need",
     "PERDAGANGAN DAN RETAIL": "retail",  # also basic_need, see BASIC_NEED_CATEGORY_BY_PREFIX
     "KANTOR": "office",
-    "HALTE": "transit",
-    "STASIUN": "transit",
 }
 
 # M-UC2's five daily-need categories, one per source file (RESTORAN stays excluded -
@@ -59,11 +57,10 @@ BASIC_NEED_CATEGORY_BY_PREFIX = {
 BASIC_NEED_CATEGORIES = ("pangan", "pusat_perbelanjaan_pasar", "keuangan", "perdagangan_retail", "kesehatan")
 
 # U-UC1 business-type competitor search (see analysis.site_selection) - the exact MAPID
-# prefixes a business owner can pick as "what am I opening", excluding transit (HALTE/
-# STASIUN aren't a business type). Real MAPID Data Catalogue POIs, not MAPID Missions -
-# Missions (StrukGo/MenuGo/PropertiGo) was dropped for U-UC1, coverage was too sparse to
-# be usable (see docs).
-BUSINESS_TYPES = [p for p in ROLES if p not in ("HALTE", "STASIUN")]
+# prefixes a business owner can pick as "what am I opening". Real MAPID Data Catalogue
+# POIs, not MAPID Missions - Missions (StrukGo/MenuGo/PropertiGo) was dropped for U-UC1,
+# coverage was too sparse to be usable (see docs).
+BUSINESS_TYPES = list(ROLES)
 
 _points: list[Point] = []
 _roles: list[list[str]] = []
@@ -150,8 +147,3 @@ def basic_needs(lon: float, lat: float, radius: int) -> list[dict]:
     PASAR, PASAR MODERN, BANK, ATM, PERDAGANGAN DAN RETAIL. Each item's `category` field
     is one of BASIC_NEED_CATEGORIES."""
     return _near(lon, lat, radius, "basic_need")
-
-
-def transit_stops(lon: float, lat: float, radius: int) -> list[dict]:
-    """HALTE, STASIUN."""
-    return _near(lon, lat, radius, "transit")

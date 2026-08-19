@@ -203,16 +203,16 @@ def tod_metadata():
 
 
 @app.get("/api/analysis/resilience")
-async def resilience(station_id: str, use_inarisk: bool = True):
-    result = await analysis.resilience(await get_station(station_id), use_inarisk)
+async def resilience(station_id: str):
+    result = await analysis.resilience(await get_station(station_id))
     result.pop("graph")
     result.pop("origin")
     return result
 
 
 @app.get("/api/analysis/detour")
-async def detour(station_id: str, lon: float, lat: float, use_inarisk: bool = True):
-    result = await analysis.resilience(await get_station(station_id), use_inarisk)
+async def detour(station_id: str, lon: float, lat: float):
+    result = await analysis.resilience(await get_station(station_id))
     return analysis.detour(result["graph"], result["origin"], lon, lat)
 
 

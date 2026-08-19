@@ -4,15 +4,13 @@ Weights follow the proposal (Siburian et al., 2020).
 Proxies used where a free national dataset is not available are marked PROXY.
 """
 
-import asyncio
-
 import numpy as np
 from scipy.spatial import Voronoi
 from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import unary_union
 from shapely.strtree import STRtree
 
-from . import airquality, gtfs, inarisk, mapid_data, mapid_environment, network, osm, static_transit
+from . import airquality, gtfs, mapid_data, mapid_environment, network, osm, static_transit
 from .geo import fc, feature, grid, hex_grid, intersections, normalize, to_deg, to_m
 
 WALK_BUFFER = 500
@@ -54,7 +52,7 @@ SOURCES = {
     "business_density": "MAPID",  # KANTOR
     "accessible_buildings": "OSM",
     "branching": "OSM",
-    "alt_transport": "MAPID",  # HALTE + STASIUN
+    "alt_transport": "MIXED",  # OSM stations + GTFS TJ halte
     "car_parking": "OSM", "motorcycle_parking": "OSM",
     # No free ridership feed: MAPID office/all-day-activity density stands in for passenger load.
     "passengers_peak": "PROXY", "passengers_offpeak": "PROXY",
@@ -458,13 +456,26 @@ def _voronoi_polygons(points: list[Point], clip: Polygon):
 SITE_ANCHOR_RADIUS = WALK_BUFFER * 2
 
 
-def _site_anchors(lon: float, lat: float) -> list[dict]:
-    """MAPID Data Catalogue traffic generators near the station - office workers,
-    daily-need POIs, transit riders."""
+async def _transit_points_near(lon: float, lat: float, radius: int) -> list[dict]:
+    """KRL/MRT/LRT stations (OSM) + TJ halte (GTFS) within `radius` - replaces the old
+    MAPID HALTE/STASIUN download, no longer pulled (superseded by live OSM + GTFS, see
+    osm.py's mode_label() fix and data/README.md)."""
+    origin_m = to_m(Point(lon, lat))
+    near = [
+        s for s in await osm.stations()
+        if to_m(Point(s["lon"], s["lat"])).distance(origin_m) <= radius
+    ]
+    near += gtfs.nearby_stops(lon, lat, radius)
+    return near
+
+
+async def _site_anchors(lon: float, lat: float) -> list[dict]:
+    """Traffic generators near the station - office workers (MAPID), daily-need POIs
+    (MAPID), transit riders (OSM + GTFS)."""
     return (
         [{**a, "anchor_type": "kantor"} for a in mapid_data.offices(lon, lat, SITE_ANCHOR_RADIUS)]
         + [{**a, "anchor_type": "kebutuhan_dasar"} for a in mapid_data.basic_needs(lon, lat, SITE_ANCHOR_RADIUS)]
-        + [{**a, "anchor_type": "transit"} for a in mapid_data.transit_stops(lon, lat, SITE_ANCHOR_RADIUS)]
+        + [{**a, "anchor_type": "transit"} for a in await _transit_points_near(lon, lat, SITE_ANCHOR_RADIUS)]
     )
 
 
@@ -486,7 +497,7 @@ async def site_selection(station: dict, business_type: str, subtype: str | None 
     cells = grid(buffer_m, CELL)
     competitors_raw = mapid_data.by_prefix(station["lon"], station["lat"], radius, business_type, subtype)
     comp = [to_m(Point(c["lon"], c["lat"])) for c in competitors_raw]
-    anchors_raw = _site_anchors(station["lon"], station["lat"])
+    anchors_raw = await _site_anchors(station["lon"], station["lat"])
     anchors = {
         t: [to_m(Point(a["lon"], a["lat"])) for a in anchors_raw if a["anchor_type"] == t]
         for t in ("kantor", "kebutuhan_dasar", "transit")
@@ -619,18 +630,20 @@ async def station_indicators(station: dict):
     that fire too many concurrent requests.
     """
     context = await _context(station, TOD_BUFFER)
-    branching = await osm.routes(station["lon"], station["lat"], TOD_BUFFER)
+    branching = static_transit.routes_near(station["lon"], station["lat"], TOD_BUFFER)
+    if branching is None:  # no static route file for any mode yet - fall back live
+        branching = await osm.routes(station["lon"], station["lat"], TOD_BUFFER)
     _, pois, graph, origin, buffer_m, lines = context
     area_ha = buffer_m.area / 10000
 
     # MAPID replaces OSM for categories it covers (see data/README.md); OSM stays the
     # only source for what MAPID hasn't got (residential, green, parking, road network).
     # Read directly from MAPID's own categories - no OSM classifier involved, so this
-    # doesn't touch Overpass at all for retail/office/basic-need/transit.
+    # doesn't touch Overpass at all for retail/office/basic-need.
     retail_pois = mapid_data.retail(station["lon"], station["lat"], TOD_BUFFER)
     office_pois = mapid_data.offices(station["lon"], station["lat"], TOD_BUFFER)
     basic_need_pois = mapid_data.basic_needs(station["lon"], station["lat"], TOD_BUFFER)
-    transit_pois = mapid_data.transit_stops(station["lon"], station["lat"], TOD_BUFFER)
+    transit_pois = await _transit_points_near(station["lon"], station["lat"], TOD_BUFFER)
 
     residential = sum(1 for p in pois if osm.is_residential(p))
     non_residential = sum(1 for p in pois if not osm.is_residential(p))
@@ -805,74 +818,42 @@ def what_if(rows: list[dict], station_id: str, overrides: dict[str, float]) -> d
 
 # --- K-UC2: climate & environmental resilience -------------------------------
 
-HAZARD_SAMPLE_SIZE = 120  # meters, center-to-vertex - coarser than AQ_HEX_SIZE on purpose,
-# each cell is a live InaRISK HTTP call (~4-5s), so this trades resolution for speed.
+BANJIR_BLOCK_KELAS = {"Tinggi", "Cukup Tinggi"}
 
 
-async def resilience(station: dict, use_inarisk: bool = True):
+async def resilience(station: dict):
     """No composite "vulnerability" score - the old version blended a green-cover heat
     proxy with a waterway-distance flood proxy into one number (0.5/0.5), which was two
     stand-ins invented for this project multiplied together. Replaced with real published
-    hazard data: BNPB InaRISK's flood/landslide index (Jabodetabek-scoped, live, no auth
-    - see inarisk.py) per corridor, plus MAPID Data Catalogue's UHI/rainfall/ecology-index
-    layers for the buffer (already downloaded for M-UC1's Kenyamanan tab, shown as-is here
-    too - see mapid_environment.py). Every layer stands alone; nothing is fused.
+    hazard data per corridor: MAPID's static flood-risk zoning for banjir (see
+    mapid_environment.flood_class_at - exact point-in-polygon, no live call, no auth,
+    never down). Plus MAPID's UHI/rainfall/ecology-index layers for the buffer (already
+    downloaded for M-UC1's Kenyamanan tab, shown as-is here too - see
+    mapid_environment.py). Every layer stands alone; nothing is fused.
 
-    use_inarisk: InaRISK is a live government server, not this project's, and each
-    "identify" call measured ~4-5s - a 500m buffer can have 500+ road segments, and
-    querying every one individually took over 10 minutes end to end. So instead it's
-    sampled on a coarse hex grid (~20-40 cells) and each corridor just takes its nearest
-    sample's value - same real government data, resampled for practical speed, not
-    invented. When False, corridors skip flood/landslide entirely and only the
-    pre-downloaded MAPID layers (UHI/rainfall/ecology-index - static files, no external
-    request) are returned, trading the flood/landslide layer for speed and reliability.
+    Landslide (longsor) was dropped entirely - BNPB InaRISK covered it live, but that's
+    a slow (~4-5s/call) external government server this project doesn't control, and
+    landslide risk in Jabodetabek is concentrated in a small hilly slice of Kabupaten
+    Bogor, not something this project's use cases need citywide. Only banjir remains.
     """
     roads, _pois, graph, origin, buffer_m, lines = await _context(station, WALK_BUFFER)
 
-    inarisk_unavailable = False
-    if use_inarisk:
-        sample_cells = hex_grid(buffer_m, HAZARD_SAMPLE_SIZE)
-        sem = asyncio.Semaphore(8)
-        errors = 0
-
-        async def _sample_hazard(cell):
-            nonlocal errors
-            pt = to_deg(cell.centroid)
-            async with sem:
-                try:
-                    return await inarisk.hazard(pt.x, pt.y)
-                except inarisk.InaRiskUnavailable:
-                    errors += 1
-                    return {"banjir": None, "longsor": None}
-
-        sample_hazards = await asyncio.gather(*(_sample_hazard(c) for c in sample_cells))
-        # If every sample failed, BNPB's server itself is down/unreachable right now -
-        # every corridor coming back with no data means "unknown", not "no hazard here".
-        inarisk_unavailable = bool(sample_cells) and errors == len(sample_cells)
-        sample_points = [c.centroid for c in sample_cells]
-        sample_tree = STRtree(sample_points)
-
-        def _hazard_near(point_m):
-            idx = sample_tree.nearest(point_m)
-            return sample_hazards[idx]
-    else:
-        def _hazard_near(point_m):
-            return {"banjir": None, "longsor": None}
+    def _banjir_kelas(point_m):
+        lon, lat = to_deg(point_m).coords[0]
+        return mapid_environment.flood_class_at(lon, lat)
 
     corridors = [
         {
             "poly": line.buffer(CORRIDOR_BUFFER), "index": i, "highway": road["highway"],
-            **{k: v for k, v in _hazard_near(line.centroid).items()},
+            "banjir_kelas": _banjir_kelas(line.centroid),
         }
         for i, (road, line) in enumerate(zip(roads, lines))
     ]
 
     # Hard avoidance, not a blended score - same pattern as M-UC1's wheelchair=no routing:
-    # BNPB's own "tinggi" classification flags a corridor, routing steers around it.
-    risky_polys = [
-        c["poly"] for c in corridors
-        if (c["banjir"] and c["banjir"]["class"] == "tinggi") or (c["longsor"] and c["longsor"]["class"] == "tinggi")
-    ]
+    # a corridor MAPID classifies "Tinggi"/"Cukup Tinggi" banjir gets routing steered
+    # around it.
+    risky_polys = [c["poly"] for c in corridors if c["banjir_kelas"] in BANJIR_BLOCK_KELAS]
     risky = unary_union(risky_polys) if risky_polys else None
     for u, v, data in graph.edges(data=True):
         mid = Point((u[0] + v[0]) / 2, (u[1] + v[1]) / 2)
@@ -881,11 +862,7 @@ async def resilience(station: dict, use_inarisk: bool = True):
 
     features = [
         feature(c["poly"], {
-            "corridor_id": c["index"], "highway": c["highway"],
-            "banjir_value": c["banjir"]["value"] if c["banjir"] else None,
-            "banjir_class": c["banjir"]["class"] if c["banjir"] else None,
-            "longsor_value": c["longsor"]["value"] if c["longsor"] else None,
-            "longsor_class": c["longsor"]["class"] if c["longsor"] else None,
+            "corridor_id": c["index"], "highway": c["highway"], "banjir_kelas": c["banjir_kelas"],
         })
         for c in corridors
     ]
@@ -894,21 +871,22 @@ async def resilience(station: dict, use_inarisk: bool = True):
     uhi = mapid_environment.uhi(buffer_wgs84)
     ecology_index = mapid_environment.ecology_index(buffer_wgs84)
     rainfall = mapid_environment.rainfall(buffer_wgs84)
+    # Same MAPID flood data as corridors' banjir_kelas above, here as the raw zone
+    # polygons (broader area context, like uhi/ecology_index/rainfall) rather than
+    # clipped to road corridors.
+    flood_risk_mapid = mapid_environment.flood_risk(buffer_wgs84)
 
     return {
         "corridors": fc(features),
         "uhi": uhi,
         "ecology_index": ecology_index,
         "rainfall": rainfall,
+        "flood_risk_mapid": flood_risk_mapid,
         "summary": {
             "station": station["name"],
             "corridors": len(corridors),
-            "use_inarisk": use_inarisk,
-            "inarisk_unavailable": inarisk_unavailable,
-            "banjir_known": sum(1 for c in corridors if c["banjir"]),
-            "banjir_tinggi": sum(1 for c in corridors if c["banjir"] and c["banjir"]["class"] == "tinggi"),
-            "longsor_known": sum(1 for c in corridors if c["longsor"]),
-            "longsor_tinggi": sum(1 for c in corridors if c["longsor"] and c["longsor"]["class"] == "tinggi"),
+            "banjir_known": sum(1 for c in corridors if c["banjir_kelas"]),
+            "banjir_tinggi": sum(1 for c in corridors if c["banjir_kelas"] in BANJIR_BLOCK_KELAS),
         },
         "graph": graph,
         "origin": origin,

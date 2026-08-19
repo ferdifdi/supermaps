@@ -10,7 +10,7 @@ precomputed just isn't served here; callers fall back to live osm.roads() in tha
 import json
 from pathlib import Path
 
-from shapely.geometry import LineString, Point
+from shapely.geometry import LineString, Point, shape
 from shapely.strtree import STRtree
 
 from .geo import to_m
@@ -77,3 +77,41 @@ def roads_near(mode_label: str, lon: float, lat: float, radius: int) -> list[dic
     lines = _lines_m[mode]
     idxs = tree.query(circle)
     return [roads[i] for i in idxs if lines[i].intersects(circle)]
+
+
+_route_geoms_m: dict[str, list] = {}
+_route_trees: dict[str, STRtree] = {}
+_routes_loaded = False
+
+
+def _load_routes():
+    global _routes_loaded
+    if _routes_loaded:
+        return
+    for mode in _MODES:
+        path = STATIC_DIR / f"isochrone_{mode}_routes.geojson"
+        geoms: list = []
+        if path.exists():
+            data = json.loads(path.read_text(encoding="utf-8"))
+            geoms = [to_m(shape(f["geometry"])) for f in data["features"]]
+        _route_geoms_m[mode] = geoms
+        _route_trees[mode] = STRtree(geoms) if geoms else STRtree([])
+    _routes_loaded = True
+
+
+def routes_near(lon: float, lat: float, radius: int) -> int | None:
+    """Count of transit route relations (any mode with static coverage) passing within
+    `radius` of (lon, lat) - mirrors osm.routes()'s old live Overpass count, but reads
+    output/isochrone_*.py's precomputed routes.geojson instead. None if no mode has any
+    static route file yet, so the caller can fall back to a live osm.routes() call."""
+    _load_routes()
+    if not any(_route_geoms_m.values()):
+        return None
+    origin_m = to_m(Point(lon, lat))
+    circle = origin_m.buffer(radius)
+    count = 0
+    for mode in _MODES:
+        geoms = _route_geoms_m[mode]
+        idxs = _route_trees[mode].query(circle)
+        count += sum(1 for i in idxs if geoms[i].intersects(circle))
+    return count

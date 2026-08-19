@@ -20,7 +20,7 @@ from .geo import to_m
 # single tag, so this doesn't try to.
 WHEELCHAIR_BLOCK_FACTOR = 1000.0
 
-# Same hard-avoidance pattern for K-UC2: BNPB InaRISK's own "tinggi" hazard classification
+# Same hard-avoidance pattern for K-UC2: MAPID's own flood-risk Kelas classification
 # (not a score this project derived) marks a corridor, resilience() sets edge["safe"] to
 # this multiple of length on it. See analysis.py resilience().
 HAZARD_BLOCK_FACTOR = 1000.0
