@@ -1,22 +1,19 @@
-"""POI ruang hijau (buat isi celah "OSM live, belum ada static-nya" - lihat
-docs/m-uc1-gaps.md / obrolan soal data gap): pohon individual, taman/kebun/hutan kota,
-tempat berteduh (shelter) - dalam 800m dari SEMUA stasiun/halte (KRL+MRT+LRT+TJ digabung
-satu list, dedup global), biar backend gak perlu manggil osm.trees()/osm.pois() live tiap
-kali M-UC1 "Kenyamanan" tab dibuka.
+"""POI ruang hijau buat stasiun KRL: pohon individual, taman/kebun/hutan kota, tempat
+berteduh (shelter) - dalam 800m dari tiap stasiun KRL, biar backend gak perlu manggil
+osm.trees()/osm.pois() live tiap kali M-UC1 "Kenyamanan" tab dibuka.
 
-Install dulu (sekali saja): pip install -r requirements.txt   (isinya cuma pyshp - dipakai
-script lain, poi_*.py ini geojson doang, tapi requirements.txt sama)
+Install dulu (sekali saja): pip install -r requirements.txt
 
-Jalankan: python poi_green.py
-Output: poi_green_800m.geojson (folder yang sama dengan script ini)
+Jalankan: python poi_green_krl.py
+Output: poi_green_krl_800m.geojson (folder yang sama dengan script ini)
 
 Tiap fitur punya properti "kind": "tree" (titik pohon), "green_area" (park/garden/forest/
 leisure hijau lainnya - polygon atau titik tergantung cara OSM-nya digambar), "shelter"
 (tempat berteduh beratap).
 
 Butuh koneksi internet (Overpass API). Progress disimpan checkpoint di
-poi_green_work.json - kalau ke-stop/gagal di tengah jalan, jalankan lagi
-`python poi_green.py`, otomatis lanjut dari stasiun yang belum selesai.
+poi_green_krl_work.json - kalau ke-stop/gagal di tengah jalan, jalankan lagi
+`python poi_green_krl.py`, otomatis lanjut dari stasiun yang belum selesai.
 """
 
 import asyncio
@@ -32,13 +29,13 @@ sys.path.insert(0, str(BACKEND_DIR))
 from app import gtfs, osm  # noqa: E402
 from app.geo import to_m  # noqa: E402
 
+MODE = "KRL"
 RADIUS_M = 800
 OUT_DIR = Path(__file__).resolve().parent
-WORK_FILE = OUT_DIR / "poi_green_work.json"
-OUTPUT_FILE = OUT_DIR / "poi_green_800m.geojson"
-FAILED_FILE = OUT_DIR / "poi_green_800m_failed.txt"
+WORK_FILE = OUT_DIR / "poi_green_krl_work.json"
+OUTPUT_FILE = OUT_DIR / "poi_green_krl_800m.geojson"
+FAILED_FILE = OUT_DIR / "poi_green_krl_800m_failed.txt"
 CHECKPOINT_EVERY = 30
-
 
 THIN_CELL_M = 500  # < RADIUS_M so a dropped station's 800m circle is still ~fully
 # covered by the kept representative's circle (worst-case corner-to-corner gap in a
@@ -47,10 +44,11 @@ THIN_CELL_M = 500  # < RADIUS_M so a dropped station's 800m circle is still ~ful
 
 def thin_stations(stations: list[dict]) -> list[dict]:
     """Keeps at most one station per THIN_CELL_M x THIN_CELL_M metric grid cell. Matters
-    a LOT for TJ specifically - ~8091 halte, often 300-500m apart along a corridor, so
-    querying every single one individually is mostly re-fetching the same buildings/
-    trees/parking over and over. Dropped stations' walk-shed is still covered by a kept
-    neighbor's circle, so this doesn't lose meaningful coverage, just redundant queries."""
+    most for TJ (own script, ~8091 halte often 300-500m apart along a corridor) but kept
+    uniform across every mode's script - harmless no-op when stations are already spaced
+    out (MRT/KRL/LRT), real savings where they aren't. Dropped stations' walk-shed is
+    still covered by a kept neighbor's circle, so this doesn't lose meaningful coverage,
+    just redundant queries."""
     seen_cells = set()
     kept = []
     for s in stations:
@@ -63,17 +61,18 @@ def thin_stations(stations: list[dict]) -> list[dict]:
     return kept
 
 
-async def all_target_stations() -> list[dict]:
-    """KRL/MRT/LRT (OSM) + TJ (GTFS) - the same combined set used everywhere else
-    stations are enumerated, so every mode's walk-shed gets covered once. Thinned (see
-    thin_stations) before being returned - TJ's ~8091 halte would otherwise dominate the
-    query count for almost no extra coverage."""
-    stations = list(await osm.stations())
-    gtfs._load()
-    stations += [
-        {"id": f"gtfs:{sid}", "name": s["name"], "lon": s["lon"], "lat": s["lat"]}
-        for sid, s in gtfs._stops.items()
-    ]
+async def target_stations() -> list[dict]:
+    """KRL stations (OSM) - TJ (this project's poi_green_tj.py) is the only mode sourced
+    from GTFS instead, since OSM's TJ-tagged nodes are unreliable (see osm.py's
+    mode_label() docstring)."""
+    if MODE == "TJ":
+        gtfs._load()
+        stations = [
+            {"id": f"gtfs:{sid}", "name": s["name"], "lon": s["lon"], "lat": s["lat"]}
+            for sid, s in gtfs._stops.items()
+        ]
+    else:
+        stations = [s for s in await osm.stations() if s["mode_label"] == MODE]
     return thin_stations(stations)
 
 
@@ -140,8 +139,8 @@ def write_geojson(points_by_key):
 
 
 async def main():
-    stations = await all_target_stations()
-    print(f"{len(stations)} titik query setelah thinning (grid {THIN_CELL_M}m) - KRL+MRT+LRT+TJ digabung, TJ-nya sendiri ~8091 halte sebelum di-thin.")
+    stations = await target_stations()
+    print(f"{len(stations)} stasiun {MODE} (setelah thinning grid {THIN_CELL_M}m).")
 
     points_by_key, done_ids = load_checkpoint()
     remaining = [s for s in stations if s["id"] not in done_ids]

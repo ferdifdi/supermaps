@@ -1,19 +1,24 @@
-"""POI parkir (mobil + motor) - MAPID gak punya kategori parkir, jadi ini tetap OSM,
-tapi didownload sekali jadi static dalam 800m dari SEMUA stasiun/halte (KRL+MRT+LRT+TJ
-digabung satu list, dedup global) - biar backend gak perlu manggil osm.pois() live tiap
-kali `car_parking`/`motorcycle_parking` (K-UC1) dihitung.
+"""POI ruang hijau buat halte TJ: pohon individual, taman/kebun/hutan kota, tempat
+berteduh (shelter) - dalam 800m dari tiap halte TJ, biar backend gak perlu manggil
+osm.trees()/osm.pois() live tiap kali M-UC1 "Kenyamanan" tab dibuka.
+
+PERINGATAN: TJ punya ~8091 halte mentah dari GTFS - di-thin dulu (grid 500m) sebelum
+diproses, jadi jumlah titik query jauh lebih kecil dari itu, tapi tetap job PALING BESAR
+dari ke-4 script poi_green_*.py (MRT/KRL/LRT jauh lebih sedikit stasiunnya). Wajar makan
+waktu paling lama.
 
 Install dulu (sekali saja): pip install -r requirements.txt
 
-Jalankan: python poi_parking.py
-Output: poi_parking_800m.geojson (folder yang sama dengan script ini)
+Jalankan: python poi_green_tj.py
+Output: poi_green_tj_800m.geojson (folder yang sama dengan script ini)
 
-Tiap fitur punya properti "kind": "car" (amenity=parking) atau "motorcycle"
-(amenity=motorcycle_parking).
+Tiap fitur punya properti "kind": "tree" (titik pohon), "green_area" (park/garden/forest/
+leisure hijau lainnya - polygon atau titik tergantung cara OSM-nya digambar), "shelter"
+(tempat berteduh beratap).
 
 Butuh koneksi internet (Overpass API). Progress disimpan checkpoint di
-poi_parking_work.json - kalau ke-stop/gagal di tengah jalan, jalankan lagi
-`python poi_parking.py`, otomatis lanjut dari stasiun yang belum selesai.
+poi_green_tj_work.json - kalau ke-stop/gagal di tengah jalan, jalankan lagi
+`python poi_green_tj.py`, otomatis lanjut dari stasiun yang belum selesai.
 """
 
 import asyncio
@@ -21,21 +26,21 @@ import json
 import sys
 from pathlib import Path
 
+from shapely.geometry import Point
+
 BACKEND_DIR = Path(__file__).resolve().parent.parent / "backend"
 sys.path.insert(0, str(BACKEND_DIR))
-
-from shapely.geometry import Point  # noqa: E402
 
 from app import gtfs, osm  # noqa: E402
 from app.geo import to_m  # noqa: E402
 
+MODE = "TJ"
 RADIUS_M = 800
 OUT_DIR = Path(__file__).resolve().parent
-WORK_FILE = OUT_DIR / "poi_parking_work.json"
-OUTPUT_FILE = OUT_DIR / "poi_parking_800m.geojson"
-FAILED_FILE = OUT_DIR / "poi_parking_800m_failed.txt"
+WORK_FILE = OUT_DIR / "poi_green_tj_work.json"
+OUTPUT_FILE = OUT_DIR / "poi_green_tj_800m.geojson"
+FAILED_FILE = OUT_DIR / "poi_green_tj_800m_failed.txt"
 CHECKPOINT_EVERY = 30
-
 
 THIN_CELL_M = 500  # < RADIUS_M so a dropped station's 800m circle is still ~fully
 # covered by the kept representative's circle (worst-case corner-to-corner gap in a
@@ -44,10 +49,11 @@ THIN_CELL_M = 500  # < RADIUS_M so a dropped station's 800m circle is still ~ful
 
 def thin_stations(stations: list[dict]) -> list[dict]:
     """Keeps at most one station per THIN_CELL_M x THIN_CELL_M metric grid cell. Matters
-    a LOT for TJ specifically - ~8091 halte, often 300-500m apart along a corridor, so
-    querying every single one individually is mostly re-fetching the same parking spots
-    over and over. Dropped stations' walk-shed is still covered by a kept neighbor's
-    circle, so this doesn't lose meaningful coverage, just redundant queries."""
+    most for TJ (own script, ~8091 halte often 300-500m apart along a corridor) but kept
+    uniform across every mode's script - harmless no-op when stations are already spaced
+    out (MRT/KRL/LRT), real savings where they aren't. Dropped stations' walk-shed is
+    still covered by a kept neighbor's circle, so this doesn't lose meaningful coverage,
+    just redundant queries."""
     seen_cells = set()
     kept = []
     for s in stations:
@@ -60,28 +66,33 @@ def thin_stations(stations: list[dict]) -> list[dict]:
     return kept
 
 
-async def all_target_stations() -> list[dict]:
-    """KRL/MRT/LRT (OSM) + TJ (GTFS) - the same combined set used everywhere else
-    stations are enumerated, so every mode's walk-shed gets covered once. Thinned (see
-    thin_stations) before being returned - TJ's ~8091 halte would otherwise dominate the
-    query count for almost no extra coverage."""
-    stations = list(await osm.stations())
-    gtfs._load()
-    stations += [
-        {"id": f"gtfs:{sid}", "name": s["name"], "lon": s["lon"], "lat": s["lat"]}
-        for sid, s in gtfs._stops.items()
-    ]
+async def target_stations() -> list[dict]:
+    """TJ halte from GTFS (transjakarta.zip) - OSM's TJ-tagged nodes are unreliable (see
+    osm.py's mode_label() docstring), so TJ is the one mode NOT sourced from
+    osm.stations() the way KRL/MRT/LRT are."""
+    if MODE == "TJ":
+        gtfs._load()
+        stations = [
+            {"id": f"gtfs:{sid}", "name": s["name"], "lon": s["lon"], "lat": s["lat"]}
+            for sid, s in gtfs._stops.items()
+        ]
+    else:
+        stations = [s for s in await osm.stations() if s["mode_label"] == MODE]
     return thin_stations(stations)
 
 
-async def fetch_parking(lon: float, lat: float, radius: int) -> list[dict]:
+async def fetch_green(lon: float, lat: float, radius: int) -> list[dict]:
+    """Pohon individual, area hijau (taman/kebun/hutan kota/rekreasi), dan tempat
+    berteduh - satu query gabungan biar hemat panggilan Overpass per stasiun."""
     q = f"""
     [out:json][timeout:25];
     (
-      node["amenity"="parking"](around:{radius},{lat},{lon});
-      way["amenity"="parking"](around:{radius},{lat},{lon});
-      node["amenity"="motorcycle_parking"](around:{radius},{lat},{lon});
-      way["amenity"="motorcycle_parking"](around:{radius},{lat},{lon});
+      node["natural"="tree"](around:{radius},{lat},{lon});
+      way["leisure"~"park|garden|nature_reserve"](around:{radius},{lat},{lon});
+      way["landuse"~"forest|grass|meadow|recreation_ground"](around:{radius},{lat},{lon});
+      node["leisure"~"park|garden|nature_reserve"](around:{radius},{lat},{lon});
+      node["amenity"="shelter"](around:{radius},{lat},{lon});
+      way["amenity"="shelter"](around:{radius},{lat},{lon});
     );
     out center tags;
     """
@@ -93,7 +104,12 @@ async def fetch_parking(lon: float, lat: float, radius: int) -> list[dict]:
         lat_ = el.get("lat") if el["type"] == "node" else el.get("center", {}).get("lat")
         if lon_ is None or lat_ is None:
             continue
-        kind = "motorcycle" if tags.get("amenity") == "motorcycle_parking" else "car"
+        if tags.get("natural") == "tree":
+            kind = "tree"
+        elif tags.get("amenity") == "shelter":
+            kind = "shelter"
+        else:
+            kind = "green_area"
         out.append({
             "id": f"{el['type']}/{el['id']}", "kind": kind,
             "name": tags.get("name", ""), "lon": lon_, "lat": lat_,
@@ -128,8 +144,8 @@ def write_geojson(points_by_key):
 
 
 async def main():
-    stations = await all_target_stations()
-    print(f"{len(stations)} titik query setelah thinning (grid {THIN_CELL_M}m) - KRL+MRT+LRT+TJ digabung, TJ-nya sendiri ~8091 halte sebelum di-thin.")
+    stations = await target_stations()
+    print(f"{len(stations)} stasiun {MODE} (setelah thinning grid {THIN_CELL_M}m).")
 
     points_by_key, done_ids = load_checkpoint()
     remaining = [s for s in stations if s["id"] not in done_ids]
@@ -138,7 +154,7 @@ async def main():
     failed = []
     for i, s in enumerate(remaining):
         try:
-            found = await fetch_parking(s["lon"], s["lat"], RADIUS_M)
+            found = await fetch_green(s["lon"], s["lat"], RADIUS_M)
             for p in found:
                 points_by_key[p["id"]] = p
             done_ids.add(s["id"])
@@ -159,7 +175,7 @@ async def main():
     elif FAILED_FILE.exists():
         FAILED_FILE.unlink()
 
-    print(f"\nSELESAI. {len(points_by_key)} titik parkir ditulis ke {OUTPUT_FILE}")
+    print(f"\nSELESAI. {len(points_by_key)} titik ruang hijau ditulis ke {OUTPUT_FILE}")
     if failed:
         print(f"{len(failed)} stasiun gagal, lihat {FAILED_FILE.name} - jalankan lagi script ini buat retry.")
 
