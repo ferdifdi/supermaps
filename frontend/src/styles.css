@@ -659,6 +659,16 @@ button.secondary.active { background: var(--primary); color: #fff; border-color:
 .bubble.user { align-self: flex-end; background: var(--primary); color: #fff; }
 .bubble.assistant { align-self: flex-start; background: var(--bg); border: 1px solid var(--border); }
 
+.bubble.assistant p { margin: 0 0 6px; }
+.bubble.assistant p:last-child { margin-bottom: 0; }
+.bubble.assistant ul, .bubble.assistant ol { margin: 0 0 6px; padding-left: 18px; }
+.bubble.assistant li { margin-bottom: 2px; }
+.bubble.assistant hr { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
+.bubble.assistant code {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 4px;
+  padding: 1px 4px; font-size: 12px;
+}
+
 .chat-input { display: flex; gap: 6px; padding: 10px; border-top: 1px solid var(--border); }
 .chat-input input { flex: 1; padding: 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; }
 
