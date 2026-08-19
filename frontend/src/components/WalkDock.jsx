@@ -33,14 +33,14 @@ function countBy(features, key, colors) {
 const TOPICS = [
   {
     id: "isochrone", label: "Peta jalan",
-    rows: (result) => result.summary.walk_score_components && [
-      { label: "Jaringan jalan", value: result.summary.walk_score_components.road_network, color: "#5b4bdb" },
-      { label: "Ped-shed", value: result.summary.walk_score_components.ped_shed, color: "#4a90e2" },
-      { label: "Persimpangan", value: result.summary.walk_score_components.intersection, color: "#b87cf6" },
-      { label: "Campuran hunian", value: result.summary.walk_score_components.residential_mix, color: "#f06fae" },
+    rows: (result) => result.summary.access_by_walking_components && [
+      { label: "Jaringan jalan", value: result.summary.access_by_walking_components.road_network, color: "#5b4bdb" },
+      { label: "Ped-shed", value: result.summary.access_by_walking_components.ped_shed, color: "#4a90e2" },
+      { label: "Persimpangan", value: result.summary.access_by_walking_components.intersection, color: "#b87cf6" },
+      { label: "Keragaman hunian", value: result.summary.access_by_walking_components.residential_mix, color: "#f06fae" },
     ],
     format: "percent",
-    note: (s) => `Rata-rata walk_score ${s.mean_walk_score} dari ${s.cells} grid 250m (Siburian et al. 2020). ${s.isochrone_area_ha} ha terjangkau jarak, ${s.accessible_area_ha} ha ramah kursi roda.`,
+    note: (s) => `Access by Walking rata-rata ${s.mean_access_by_walking} dari ${s.cells} sel 250m (Siburian et al. 2020, Tabel 1). ${s.isochrone_area_ha} ha terjangkau jarak, ${s.accessible_area_ha} ha ramah kursi roda.`,
   },
   {
     id: "udara", label: "Kualitas udara",

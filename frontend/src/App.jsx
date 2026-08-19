@@ -518,10 +518,11 @@ export default function App() {
 
         {(useCase.dashboard ? dashboardResult : result) && (() => {
           const activeLegend = useCase.legends ? useCase.legends[mapMode] : useCase.legend
+          if (!activeLegend) return null
           return (
             <div className="legend">
               <b>{activeLegend.title}</b>
-              {activeLegend.stops.map(([value, color]) => (
+              {activeLegend.stops?.map(([value, color]) => (
                 <div key={value} className="legend-row">
                   <span className="swatch" style={{ background: color }} />
                   {value}

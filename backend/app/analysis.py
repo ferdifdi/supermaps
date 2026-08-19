@@ -280,21 +280,34 @@ async def walk_access(station: dict, radius_m: int = 800):
     than the fetched network would just clip silently at the fetch edge."""
     roads, pois, graph, origin, buffer_m, lines, aq, raw_trees = await _walk_graph(station, radius_m)
     minutes = radius_m / network.WALK_SPEED / 60
+
+    # Access by Walking (Siburian et al. 2020, Table 1 weights: Road Network 40%,
+    # Ped-Shed 30%, Intersection 20%, Residential Diversity 10%) as one heatmap, min-max
+    # standardised per 250m cell within this buffer - a spatial stand-in for the paper's
+    # own cross-station standardisation (formula 3), which needs a comparison set that
+    # doesn't exist for a single commuter looking at one station. K-UC1's tod_index()
+    # does the literal station-vs-station version.
     cells = grid(buffer_m, CELL)
     parts = _walk_score_grid(
         cells, lines, intersections(lines),
         _poi_points(pois, osm.is_residential), _poi_points(pois, osm.is_commercial),
     )
-    score = sum(parts[k] * w for k, w in WALK_WEIGHTS.items())
-
-    features = [
+    access_score = sum(parts[k] * w for k, w in WALK_WEIGHTS.items())
+    access_features = [
         feature(c, {
-            "walk_score": round(float(score[i]), 3),
+            "access_by_walking": round(float(access_score[i]), 3),
             **{k: round(float(parts[k][i]), 3) for k in WALK_WEIGHTS},
         })
         for i, c in enumerate(cells)
     ]
-    iso_fast = network.isochrone(graph, origin, minutes, "length")
+
+    # Precomputed entrance-aware polygon first (output/isochrone_*.py walked from every
+    # real OSM entrance/exit found for the station, not just its center point) - only a
+    # hit when radius_m matches that mode's precomputed cutoff exactly. No static
+    # equivalent exists for the wheelchair-aware variant, that's always computed live.
+    static_station_id = station["id"].removeprefix("gtfs:")
+    iso_fast_static = static_transit.isochrone_for(station.get("mode_label", ""), static_station_id, radius_m)
+    iso_fast = iso_fast_static if iso_fast_static is not None else network.isochrone(graph, origin, minutes, "length")
     iso_accessible = network.isochrone(graph, origin, minutes, "accessible")
     transfer = _transfer_points(station, pois, radius_m)
     aq_stations = await airquality.nearby_stations(station["lon"], station["lat"])
@@ -327,7 +340,7 @@ async def walk_access(station: dict, radius_m: int = 800):
     rainfall = mapid_environment.rainfall(buffer_deg)
 
     return {
-        "grid": fc(features),
+        "grid": fc(access_features),
         "isochrone": fc([
             feature(iso_fast, {"kind": "fastest", "minutes": minutes, "radius_m": radius_m}),
             feature(iso_accessible, {"kind": "accessible", "minutes": minutes, "radius_m": radius_m}),
@@ -346,9 +359,9 @@ async def walk_access(station: dict, radius_m: int = 800):
             "transfer_points_proxy": sum(1 for t in transfer["features"] if t["properties"]["is_proxy"]),
             "air_quality": aq,
             "station": station["name"],
-            "mean_walk_score": round(float(score.mean()), 3),
-            "walk_score_components": {k: round(float(parts[k].mean()), 3) for k in WALK_WEIGHTS},
             "cells": len(cells),
+            "mean_access_by_walking": round(float(access_score.mean()), 3),
+            "access_by_walking_components": {k: round(float(parts[k].mean()), 3) for k in WALK_WEIGHTS},
             "isochrone_area_ha": round(iso_fast.area / 10000, 1),
             "accessible_area_ha": round(iso_accessible.area / 10000, 1),
             "tree_count": len(raw_trees),

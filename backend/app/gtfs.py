@@ -20,6 +20,16 @@ from .geo import to_m
 
 GTFS_ZIP = Path(__file__).resolve().parent.parent / "data" / "gtfs" / "transjakarta.zip"
 
+# routes.txt's route_desc splits TJ's 240 routes into 7 categories (checked 2026-08-19):
+# Mikrotrans (98 routes/~5820 halte, JakLingko feeder minibus), Angkutan Umum Integrasi
+# (63/~2250, other integrated public transport), BRT (31/~535, the actual busway
+# corridors), Transjabodetabek (18/~511, intercity express), Rusun (17/~395, low-cost
+# housing shuttle), Royaltrans (10/~102, premium/express), Bus Wisata (3/~26, tourism).
+# Only these 3 are in scope for this project - Mikrotrans alone would dominate every
+# station/POI list by sheer halte count without adding much to the "mass transit near an
+# MRT/KRL/LRT station" picture this project is about.
+INCLUDED_ROUTE_CATEGORIES = {"Angkutan Umum Integrasi", "BRT", "Transjabodetabek"}
+
 _stops: dict[str, dict] = {}
 _stop_trip_ids: dict[str, set[str]] = {}
 _trip_headway: dict[str, list[tuple[str, str, int]]] = {}
@@ -41,19 +51,35 @@ def _load():
         _tree = STRtree([])
         return
     with zipfile.ZipFile(GTFS_ZIP) as z:
+        route_desc_by_id = {row["route_id"]: row.get("route_desc", "") for row in _read(z, "routes.txt")}
+        included_trip_ids = {
+            row["trip_id"] for row in _read(z, "trips.txt")
+            if route_desc_by_id.get(row["route_id"]) in INCLUDED_ROUTE_CATEGORIES
+        }
+
+        all_stops = {}
         for row in _read(z, "stops.txt"):
-            _stops[row["stop_id"]] = {
+            all_stops[row["stop_id"]] = {
                 "name": row["stop_name"],
                 "lon": float(row["stop_lon"]),
                 "lat": float(row["stop_lat"]),
                 "wheelchair": row.get("wheelchair_boarding", ""),
             }
         for row in _read(z, "stop_times.txt"):
+            if row["trip_id"] not in included_trip_ids:
+                continue
             _stop_trip_ids.setdefault(row["stop_id"], set()).add(row["trip_id"])
         for row in _read(z, "frequencies.txt"):
+            if row["trip_id"] not in included_trip_ids:
+                continue
             _trip_headway.setdefault(row["trip_id"], []).append(
                 (row["start_time"], row["end_time"], int(row["headway_secs"]))
             )
+
+        # A halte only makes the cut if at least one of its trips belongs to
+        # INCLUDED_ROUTE_CATEGORIES - _stop_trip_ids is already filtered to those trips.
+        for stop_id in _stop_trip_ids:
+            _stops[stop_id] = all_stops[stop_id]
 
     for stop_id, s in _stops.items():
         _points.append(to_m(Point(s["lon"], s["lat"])))

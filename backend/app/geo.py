@@ -26,8 +26,16 @@ def buffer_deg(lon: float, lat: float, meters: float):
 
 
 def grid(poly_m, cell: float = 250.0):
-    """Square grid cells (in metric CRS) covering a metric polygon."""
+    """Square grid cells (in metric CRS) covering a metric polygon - anchored to a fixed
+    global lattice (snapped to multiples of `cell`), not the polygon's own bounding box.
+    Without this, the same real-world spot lands in a differently-shaped cell depending
+    on the buffer's size (a bigger/smaller radius shifts poly_m.bounds, so an unanchored
+    tiling drifts with it) - anchoring makes a given location's cell boundaries identical
+    whether it came from a 400m or 800m buffer around the same station.
+    """
     minx, miny, maxx, maxy = poly_m.bounds
+    minx = math.floor(minx / cell) * cell
+    miny = math.floor(miny / cell) * cell
     cells = []
     for x in np.arange(minx, maxx, cell):
         for y in np.arange(miny, maxy, cell):

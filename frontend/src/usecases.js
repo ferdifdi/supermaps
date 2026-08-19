@@ -32,7 +32,7 @@ export const USE_CASES = [
     id: "M-UC1",
     persona: "komuter",
     title: "Navigasi Transit & Akses Jalan Kaki",
-    description: "Skor akses jalan kaki per grid 250 m dan isochrone jalan kaki dari stasiun.",
+    description: "Access by Walking (Siburian et al. 2020) per grid 250m dan isochrone jalan kaki dari stasiun.",
     expectedWait: "10-20 detik (OSM + GTFS + OpenAQ)",
     extras: "walk",
     methodology: {
@@ -45,7 +45,10 @@ export const USE_CASES = [
         { source: "MAPID Data Catalogue - Curah Hujan (Presipitasi)", year: 2020, detail: "kelas & intensitas per provinsi" },
       ],
       processing: [
-        { step: "Skor akses jalan kaki", detail: "Weighted sum (Siburian et al. 2020): 40% jaringan jalan + 30% ped-shed + 20% persimpangan + 10% campuran hunian, per grid 250m" },
+        {
+          step: "Access by Walking", detail:
+            "Weighted sum Tabel 1 Siburian et al. (2020): 40% Road Network + 30% Ped-Shed + 20% Intersection + 10% Residential Diversity, per grid 250m. Standardisasi min-max (formula 3) dilakukan antar-sel dalam buffer ini, bukan antar-stasiun seperti versi asli paper (K-UC1) - komuter cuma lihat 1 stasiun, gak ada pembanding stasiun lain.",
+        },
         { step: "Isochrone & rute", detail: "Dijkstra: \"tercepat\" (jarak murni) dan \"ramah kursi roda\" (jarak, ruas wheelchair=no dipenalti berat) - tidak ada formula kenyamanan racikan sendiri" },
         { step: "Transfer efisien", detail: "TransJakarta pakai headway asli dari GTFS; KRL/MRT/LRT/bus lain proxy jarak jalan kaki OSM (ditandai is_proxy di peta)" },
         { step: "Kualitas udara", detail: "Interpolasi IDW ke hex grid dari stasiun OpenAQ terdekat - layer konteks, tidak masuk skor manapun" },
@@ -59,7 +62,6 @@ export const USE_CASES = [
       // shows air quality alone, not layered on top of the walk map.
       { source: "isochrone", type: "fill", mode: "isochrone", paint: { "fill-color": "#f59e0b", "fill-opacity": 0.15 } },
       { source: "isochrone", type: "line", mode: "isochrone", paint: { "line-color": "#f59e0b", "line-width": 2 } },
-      { source: "grid", type: "fill", mode: "isochrone", paint: { "fill-color": ramp("walk_score", SCORE_STOPS), "fill-opacity": 0.7 } },
       {
         // TJ stops (real GTFS headway) vs KRL/MRT/LRT/other-bus points (OSM proxy,
         // distance only) - is_proxy drives a visibly different style so the map itself
@@ -74,6 +76,13 @@ export const USE_CASES = [
         },
       },
       { source: "route", type: "line", mode: "isochrone", paint: { "line-color": "#111827", "line-width": 4 } },
+      {
+        // Access by Walking (Siburian et al. 2020, Table 1 weights) as one heatmap,
+        // standardised per 250m grid cell within this buffer - see analysis.py's
+        // walk_access() docstring for why per-cell (not per-station like K-UC1).
+        source: "grid", type: "fill", mode: "isochrone",
+        paint: { "fill-opacity": 0.7, "fill-color": ramp("access_by_walking", SCORE_STOPS) },
+      },
       {
         // Hex-grid choropleth, IDW-interpolated from real OpenAQ stations - a maplibre
         // "heatmap" layer blurs by screen-pixel radius (visibly shifts color on zoom),
@@ -141,9 +150,9 @@ export const USE_CASES = [
     ],
     legends: {
       isochrone: {
-        title: "Skor akses jalan kaki",
+        title: "Access by Walking per grid 250m (Siburian et al. 2020)",
         stops: SCORE_STOPS,
-        note: "Titik transfer: hijau = headway asli (GTFS TransJakarta), abu-abu = proxy jarak jalan kaki (OSM, KRL/MRT/LRT/bus lain - belum ada data jadwal publik).",
+        note: "Weighted sum Tabel 1 (Road Network 40% + Ped-Shed 30% + Intersection 20% + Residential Diversity 10%), distandardisasi min-max antar-sel dalam buffer ini (bukan antar-stasiun seperti K-UC1 - komuter cuma lihat 1 stasiun, gak ada stasiun lain buat dibandingin). Titik transfer: hijau = headway asli (GTFS TransJakarta), abu-abu = proxy jarak jalan kaki OSM.",
       },
       udara: {
         title: "PM2.5 (µg/m³) - interpolasi dari stasiun OpenAQ terdekat",
@@ -176,7 +185,7 @@ export const USE_CASES = [
         note: "Data MAPID Data Catalogue per provinsi - zona besar, biasanya rata dalam radius 500m stasiun.",
       },
     },
-    popup: ["walk_score", "road_network", "ped_shed", "intersection", "residential_mix",
+    popup: ["access_by_walking", "road_network", "intersection", "ped_shed", "residential_mix",
       "name", "mode", "distance_m", "headway_min_peak", "is_proxy",
       "preference", "length_m", "minutes", "blocked_segments_crossed",
       "pm25", "category", "station", "wheelchair", "sidewalk", "highway",

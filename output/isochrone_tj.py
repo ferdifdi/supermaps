@@ -1,5 +1,5 @@
 """Isochrone jalan kaki 400m + rute + jaringan jalan untuk SEMUA halte TransJakarta
-(~8091 halte, dari GTFS resmi transjakarta.zip - bukan dari OSM, soalnya klasifikasi TJ
+(~2876 halte (3 kategori GTFS: Angkutan Umum Integrasi, BRT, Transjabodetabek - Mikrotrans dkk di luar scope), dari GTFS resmi transjakarta.zip - bukan dari OSM, soalnya klasifikasi TJ
 di OSM banyak salah/ketuker sama terminal bus lain).
 
 Install dulu (sekali saja): pip install -r requirements.txt   (isinya cuma pyshp)
@@ -138,15 +138,25 @@ async def station_isochrone(lon: float, lat: float):
 def fetch_route_lines() -> list[dict]:
     """Jalur busway TJ dari GTFS shapes.txt (bukan jalur jalan kaki). Satu baris per
     (route_id, direction_id) - satu trip representatif per kombinasi itu dipakai buat
-    ambil shape_id-nya, jadi tiap koridor + arah + varian cabang punya jalurnya sendiri."""
+    ambil shape_id-nya, jadi tiap koridor + arah + varian cabang punya jalurnya sendiri.
+
+    Cuma rute dari 3 kategori route_desc di gtfs.INCLUDED_ROUTE_CATEGORIES (Angkutan Umum
+    Integrasi, BRT, Transjabodetabek) - Mikrotrans/Rusun/Royaltrans/Bus Wisata di luar
+    scope proyek ini, sama kayak filter halte-nya di gtfs.py."""
     if not gtfs.GTFS_ZIP.exists():
         return []
 
     with zipfile.ZipFile(gtfs.GTFS_ZIP) as z:
         routes_by_id = {row["route_id"]: row for row in gtfs._read(z, "routes.txt")}
+        included_route_ids = {
+            rid for rid, row in routes_by_id.items()
+            if row.get("route_desc", "") in gtfs.INCLUDED_ROUTE_CATEGORIES
+        }
 
         shape_id_by_key = {}  # (route_id, direction_id) -> shape_id (trip representatif pertama)
         for row in gtfs._read(z, "trips.txt"):
+            if row["route_id"] not in included_route_ids:
+                continue
             key = (row["route_id"], row.get("direction_id", ""))
             shape_id = row.get("shape_id")
             if shape_id and key not in shape_id_by_key:

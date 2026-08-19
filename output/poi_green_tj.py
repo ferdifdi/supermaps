@@ -2,7 +2,7 @@
 berteduh (shelter) - dalam 800m dari tiap halte TJ, biar backend gak perlu manggil
 osm.trees()/osm.pois() live tiap kali M-UC1 "Kenyamanan" tab dibuka.
 
-PERINGATAN: TJ punya ~8091 halte mentah dari GTFS - di-thin dulu (grid 500m) sebelum
+PERINGATAN: TJ punya ~2876 halte (3 kategori GTFS: Angkutan Umum Integrasi, BRT, Transjabodetabek - Mikrotrans dkk di luar scope) mentah dari GTFS - di-thin dulu (grid 500m) sebelum
 diproses, jadi jumlah titik query jauh lebih kecil dari itu, tapi tetap job PALING BESAR
 dari ke-4 script poi_green_*.py (MRT/KRL/LRT jauh lebih sedikit stasiunnya). Wajar makan
 waktu paling lama.
@@ -49,7 +49,7 @@ THIN_CELL_M = 500  # < RADIUS_M so a dropped station's 800m circle is still ~ful
 
 def thin_stations(stations: list[dict]) -> list[dict]:
     """Keeps at most one station per THIN_CELL_M x THIN_CELL_M metric grid cell. Matters
-    most for TJ (own script, ~8091 halte often 300-500m apart along a corridor) but kept
+    most for TJ (own script, ~2876 halte (3 kategori GTFS: Angkutan Umum Integrasi, BRT, Transjabodetabek - Mikrotrans dkk di luar scope) often 300-500m apart along a corridor) but kept
     uniform across every mode's script - harmless no-op when stations are already spaced
     out (MRT/KRL/LRT), real savings where they aren't. Dropped stations' walk-shed is
     still covered by a kept neighbor's circle, so this doesn't lose meaningful coverage,

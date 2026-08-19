@@ -118,3 +118,41 @@ def routes_near(lon: float, lat: float, radius: int) -> int | None:
         idxs = _route_trees[mode].query(circle)
         count += sum(1 for i in idxs if geoms[i].intersects(circle))
     return count
+
+
+_iso_by_mode: dict[str, dict[str, object]] = {}
+_iso_loaded = False
+
+
+def _load_isochrones():
+    global _iso_loaded
+    if _iso_loaded:
+        return
+    for mode in _MODES:
+        path = STATIC_DIR / f"isochrone_{mode}_isochrone_{MODE_RADIUS_M[mode]}m.geojson"
+        key_field = "stop_id" if mode == "tj" else "id"
+        lookup = {}
+        if path.exists():
+            data = json.loads(path.read_text(encoding="utf-8"))
+            for f in data["features"]:
+                sid = f["properties"].get(key_field)
+                if sid:
+                    lookup[sid] = shape(f["geometry"])
+        _iso_by_mode[mode] = lookup
+    _iso_loaded = True
+
+
+def isochrone_for(mode_label: str, station_id: str, radius: int):
+    """The precomputed entrance-aware isochrone polygon (metric, EPSG:32748) for this
+    exact station, or None if not covered. Only ever a hit when `radius` equals that
+    mode's MODE_RADIUS_M - the one cutoff isochrone_*.py actually computed, walking from
+    every real OSM entrance/exit it found for the station (see output/isochrone_*.py's
+    station_isochrone) instead of a single center point. There's no accessible-routing
+    (wheelchair-aware) variant of this precomputed shape - callers still need to compute
+    that one live from the road graph."""
+    _load_isochrones()
+    mode = (mode_label or "").lower()
+    if radius != MODE_RADIUS_M.get(mode):
+        return None
+    poly = _iso_by_mode.get(mode, {}).get(station_id)
+    return to_m(poly) if poly is not None else None
