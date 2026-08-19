@@ -394,60 +394,47 @@ export const USE_CASES = [
     id: "K-UC2",
     persona: "kebijakan",
     title: "Climate & Environmental Resilience",
-    description: "Risiko banjir/longsor per koridor (BNPB InaRISK) dan konteks UHI/ekologi/curah hujan (MAPID) - layer terpisah, tanpa skor gabungan.",
-    expectedWait: "20-40 detik dengan InaRISK live, 5-10 detik mode MAPID saja",
+    description: "Risiko banjir per koridor (MAPID, statis) plus konteks UHI/ekologi/curah hujan (MAPID) - layer terpisah, tanpa skor gabungan.",
+    expectedWait: "3-6 detik (semua layer statis, tidak ada panggilan live)",
     methodology: {
       data: [
         {
-          source: "BNPB InaRISK - Indeks Bahaya Banjir & Tanah Longsor (Jabodetabek-Punjur)",
-          detail: "gis.bnpb.go.id, raster resmi pemerintah, live, gratis, tanpa auth. Diquery per titik lewat operasi \"identify\".",
+          source: "MAPID Data Catalogue - Wilayah Bahaya/Terancam Banjir", detail:
+            "Kelas 5-tingkat (Sangat Rendah..Tinggi) per zona, statis, di-download - satu-satunya sumber hazard di use case ini sekarang.",
         },
         { source: "MAPID Data Catalogue - URBAN HEAT ISLAND", year: 2022, detail: "kelas zona panas per kabupaten/kota" },
         { source: "MAPID Data Catalogue - INDEKS EKOLOGI", year: 2024, detail: "indeks per grid (turunan RSEI)" },
         { source: "MAPID Data Catalogue - Curah Hujan (Presipitasi)", year: 2020, detail: "kelas & intensitas per provinsi" },
-        {
-          source: "MAPID Data Catalogue - Wilayah Risiko Banjir/Longsor", detail:
-            "BELUM TERSEDIA - belum didownload. Mode \"MAPID saja\" saat ini banjir/longsor-nya kosong (null), cuma UHI/Ekologi/Curah Hujan yang tampil. Menyusul kalau datanya sudah ada.",
-        },
         { source: "OSM (Overpass API)", detail: "Jaringan jalan buat koridor & rute detour" },
       ],
       processing: [
         {
-          step: "Sampling InaRISK", detail:
-            "Satu koridor bisa 500+ ruas jalan; query InaRISK per ruas kepanjangan (~4-5 detik/panggilan, pernah 10 menit total). Diganti: sample hex grid kasar (~20-40 sel per radius 500m), tiap koridor pakai nilai sel terdekat - data pemerintah asli, cuma resolusi spasial diturunkan demi kecepatan.",
+          step: "Banjir - lookup statis", detail:
+            "Point-in-polygon langsung ke zona MAPID yang sudah didownload, per koridor - instan, tidak ada panggilan live sama sekali.",
         },
-        { step: "Klasifikasi", detail: "rendah/sedang/tinggi pakai skema klasifikasi InaRISK sendiri (≤0.33/≤0.66/>0.66), bukan buatan project ini" },
+        { step: "Klasifikasi", detail: "Pakai Kelas MAPID sendiri (5-tingkat: Sangat Rendah..Tinggi), bukan buatan project ini" },
         {
           step: "Rute aman (detour)", detail:
-            "Hard avoidance seperti wheelchair=no di M-UC1: ruas yang InaRISK klasifikasikan \"tinggi\" (banjir atau longsor) dipenalti berat di routing, bukan skor gabungan",
+            "Hard avoidance seperti wheelchair=no di M-UC1: ruas yang MAPID klasifikasikan \"Tinggi\"/\"Cukup Tinggi\" dipenalti berat di routing, bukan skor gabungan",
         },
         { step: "UHI/Ekologi/Curah hujan", detail: "Ditampilkan apa adanya dari MAPID Data Catalogue, tanpa dihitung ulang" },
+        {
+          step: "Longsor dihapus", detail:
+            "Sempat pakai BNPB InaRISK live buat longsor, tapi InaRISK lambat (~4-5 detik/panggilan) dan kadang down, dan resiko longsor Jabodetabek cuma signifikan di sebagian kecil Kabupaten Bogor (perbukitan) - bukan kebutuhan citywide use case ini, jadi dihapus sepenuhnya, bukan sekadar dimatikan.",
+        },
         { step: "Tidak ada skor gabungan", detail: "Versi lama nge-blend proxy tutupan hijau (panas) + jarak sungai (banjir) jadi \"vulnerability\" 0.5/0.5 - keduanya proxy buatan sendiri. Sudah dihapus." },
       ],
     },
     extras: "resilience",
-    options: {
-      dataSource: [
-        { id: true, label: "InaRISK (real-time, bisa lambat)" },
-        { id: false, label: "MAPID saja (cepat, tidak real-time)" },
-      ],
-    },
-    run: (station, opts) => api.resilience(station.id, opts.useInarisk ?? true),
+    run: (station) => api.resilience(station.id),
     layers: [
       {
         source: "corridors", type: "fill", mode: "banjir",
         paint: {
           "fill-opacity": 0.65,
-          "fill-color": ["match", ["get", "banjir_class"],
-            "tinggi", "#ef4444", "sedang", "#f59e0b", "rendah", "#22c55e", "#e5e7eb"],
-        },
-      },
-      {
-        source: "corridors", type: "fill", mode: "longsor",
-        paint: {
-          "fill-opacity": 0.65,
-          "fill-color": ["match", ["get", "longsor_class"],
-            "tinggi", "#ef4444", "sedang", "#f59e0b", "rendah", "#22c55e", "#e5e7eb"],
+          "fill-color": ["match", ["get", "banjir_kelas"],
+            "Sangat Rendah", "#22c55e", "Cukup Rendah", "#84cc16", "Sedang", "#f59e0b",
+            "Cukup Tinggi", "#f97316", "Tinggi", "#ef4444", "#e5e7eb"],
         },
       },
       {
@@ -470,6 +457,15 @@ export const USE_CASES = [
             "Hujan normal", "#eff3ff", "Hujan deras", "#6baed6", "Hujan sangat deras", "#08306b", "#9ca3af"],
         },
       },
+      {
+        source: "flood_risk_mapid", type: "fill", mode: "banjir_mapid",
+        paint: {
+          "fill-opacity": 0.6,
+          "fill-color": ["match", ["get", "Kelas"],
+            "Sangat Rendah", "#22c55e", "Cukup Rendah", "#84cc16", "Sedang", "#f59e0b",
+            "Cukup Tinggi", "#f97316", "Tinggi", "#ef4444", "#9ca3af"],
+        },
+      },
     ],
     legends: {
       banjir: {
@@ -485,6 +481,11 @@ export const USE_CASES = [
       uhi: { title: "Urban Heat Island (MAPID, 2022)", stops: [["zona normal", "#22c55e"], ["zona hangat", "#f97316"], ["zona panas", "#ef4444"]] },
       ekologi_index: { title: "Indeks Ekologi per grid (MAPID, 2024)", stops: [["buruk (0)", "#ef4444"], ["sedang (0.3)", "#f59e0b"], ["cukup (0.6)", "#a3e635"], ["baik (1)", "#15803d"]] },
       hujan: { title: "Curah Hujan (MAPID, 2020)", stops: [["normal", "#eff3ff"], ["deras", "#6baed6"], ["sangat deras", "#08306b"]] },
+      banjir_mapid: {
+        title: "Wilayah Bahaya/Terancam Banjir (MAPID)",
+        stops: [["sangat rendah", "#22c55e"], ["cukup rendah", "#84cc16"], ["sedang", "#f59e0b"], ["cukup tinggi", "#f97316"], ["tinggi", "#ef4444"]],
+        note: "Sumber & skema klasifikasi beda dari InaRISK - dua data pemerintah/MAPID berdiri sendiri-sendiri, tidak direkonsiliasi jadi satu angka.",
+      },
     },
     popup: ["highway", "banjir_value", "banjir_class", "longsor_value", "longsor_class",
       "KELAS", "CLASS", "TEMPERATUR", "INDEKS", "STATUS", "Kelas", "Rata-rata Intensitas (mm/hari)"],

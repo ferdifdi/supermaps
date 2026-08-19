@@ -77,6 +77,20 @@ const TOPICS = [
     format: "count",
     note: (s, result) => (result.rainfall?.features?.length ? "Data MAPID Data Catalogue 2020, per provinsi (zona besar)." : "Tidak ada data curah hujan yang mencakup lokasi ini."),
   },
+  {
+    id: "banjir_mapid", label: "Banjir (MAPID)",
+    rows: (result) => {
+      const f = result.flood_risk_mapid?.features || []
+      return f.length && countBy(f, "Kelas", {
+        "Sangat Rendah": "#22c55e", "Cukup Rendah": "#84cc16", "Sedang": "#f59e0b",
+        "Cukup Tinggi": "#f97316", "Tinggi": "#ef4444",
+      })
+    },
+    format: "count",
+    note: (s, result) => (result.flood_risk_mapid?.features?.length
+      ? "Data MAPID \"Wilayah Bahaya/Terancam Banjir\" - sumber & skema klasifikasi beda dari InaRISK di atas, ditampilkan terpisah, bukan digabung jadi satu angka."
+      : "Tidak ada data wilayah banjir MAPID yang mencakup lokasi ini."),
+  },
 ]
 
 function BarChart({ rows }) {

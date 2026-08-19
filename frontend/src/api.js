@@ -36,7 +36,7 @@ export const api = {
     get(`/api/analysis/site-selection?station_id=${id}&business_type=${encodeURIComponent(businessType)}${subtype ? `&subtype=${encodeURIComponent(subtype)}` : ""}`),
   businessTypes: () => get("/api/analysis/business-types"),
   businessSubtypes: (prefix) => get(`/api/analysis/business-subtypes?prefix=${encodeURIComponent(prefix)}`),
-  resilience: (id, useInarisk = true) => get(`/api/analysis/resilience?station_id=${id}&use_inarisk=${useInarisk}`),
+  resilience: (id) => get(`/api/analysis/resilience?station_id=${id}`),
   todDashboard: (modes) => get(`/api/analysis/tod-dashboard?modes=${modes}`),
   todMetadata: () => get("/api/analysis/tod-metadata"),
   todWhatIf: (stationId, overrides) => post("/api/analysis/tod-whatif", { station_id: stationId, overrides }),
