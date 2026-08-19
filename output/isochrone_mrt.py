@@ -16,6 +16,13 @@ sebagai data statis, gak usah panggil Overpass lagi tiap generate use case):
 Shapefile set (.shp/.shx/.dbf/.prj, WGS84) lengkap dan bisa langsung dibuka di QGIS/ArcGIS.
 GeoJSON WGS84 juga, siap dipakai backend/frontend tanpa konversi.
 
+Isochrone dihitung multi-source Dijkstra dari titik pusat stasiun DAN semua pintu masuk/
+keluar asli yang ada datanya di OSM (railway=subway_entrance) - bukan cuma dari 1 titik
+pusat, biar stasiun dengan banyak exit tersebar (umum di MRT bawah tanah) gak underestimate
+jangkauannya. Kalau OSM gak punya data entrance buat suatu stasiun, otomatis fallback ke
+titik pusat aja (properti "entrances_used"/"ENTRIES" di outputnya kasih tau berapa entrance
+yang kepakai per stasiun - 0 berarti fallback).
+
 Butuh koneksi internet (Overpass API).
 
 Progress disimpan checkpoint di isochrone_mrt_work.json (working file internal, bukan
@@ -71,23 +78,69 @@ WGS84_WKT = (
 )
 
 
-async def station_isochrone(lon: float, lat: float):
+async def station_isochrone(lon: float, lat: float, extra_points: list[tuple[float, float]] | None = None):
     """Returns (isochrone polygon in degrees, list of road-segment coords that fall
-    inside the isochrone) or (None, []) if unreachable."""
+    inside the isochrone) or (None, []) if unreachable.
+
+    extra_points: real entrance/exit node coords for this station (OSM
+    railway=subway_entrance, when it exists - see fetch_entrances()). A station with
+    several street exits spread 100m+ apart is understated by walking from just its one
+    center point, so this does a multi-source Dijkstra from the center point AND every
+    known entrance, unioning what's reachable from any of them. Falls back to the center
+    point alone when extra_points is empty (most KRL/many LRT stations have no separate
+    entrance nodes mapped in OSM)."""
     roads = await osm.roads(lon, lat, RADIUS_QUERY)
     if not roads:
         return None, []
     g = network.build(roads)
-    origin_m = to_m(Point(lon, lat))
-    try:
-        node = network.nearest_node(g, origin_m)
-    except ValueError:
+    origins_m = [to_m(Point(lon, lat))] + [to_m(Point(elon, elat)) for elon, elat in (extra_points or [])]
+    source_nodes = set()
+    for om in origins_m:
+        try:
+            source_nodes.add(network.nearest_node(g, om))
+        except ValueError:
+            continue
+    if not source_nodes:
         return None, []
-    reached = nx.single_source_dijkstra_path_length(g, node, cutoff=CUTOFF_M, weight="length")
-    poly_m = unary_union([Point(n).buffer(60) for n in reached]) if reached else origin_m.buffer(50)
+    reached = nx.multi_source_dijkstra_path_length(g, source_nodes, cutoff=CUTOFF_M, weight="length")
+    poly_m = unary_union([Point(n).buffer(60) for n in reached]) if reached else origins_m[0].buffer(50)
     poly = to_deg(poly_m)
     in_reach = [r for r in roads if LineString(r["coords"]).intersects(poly)]
     return poly, in_reach
+
+
+async def fetch_entrances() -> list[tuple[float, float]]:
+    """railway=subway_entrance nodes across the whole bbox - OSM coverage is uneven (MRT's
+    underground stations are well-mapped, LRT partially, KRL not at all as of this
+    writing) - fetched once and matched to the nearest station below, shared by every
+    station instead of one query each."""
+    q = f"""
+    [out:json][timeout:60];
+    node["railway"="subway_entrance"]({osm._bbox()});
+    out;
+    """
+    data = await osm.overpass(q)
+    return [(el["lon"], el["lat"]) for el in data["elements"]]
+
+
+ENTRANCE_MATCH_RADIUS_M = 300  # beyond this, an entrance more plausibly belongs to a
+# different nearby station than to this one
+
+
+def match_entrances(stations: list[dict], entrances: list[tuple[float, float]]) -> dict[str, list[tuple[float, float]]]:
+    """Assigns each entrance node to its single nearest station, only if within
+    ENTRANCE_MATCH_RADIUS_M - avoids attributing an entrance to a station it doesn't
+    actually belong to just because it's also nearby."""
+    by_station: dict[str, list[tuple[float, float]]] = {}
+    if not entrances or not stations:
+        return by_station
+    station_pts = [(s["id"], to_m(Point(s["lon"], s["lat"]))) for s in stations]
+    for elon, elat in entrances:
+        ept = to_m(Point(elon, elat))
+        sid, d = min(((sid, ept.distance(spt)) for sid, spt in station_pts), key=lambda t: t[1])
+        if d <= ENTRANCE_MATCH_RADIUS_M:
+            by_station.setdefault(sid, []).append((elon, elat))
+    return by_station
 
 
 async def fetch_route_lines(route_tag: str) -> list[dict]:
@@ -181,6 +234,7 @@ def write_isochrone_shp(stations_done):
     w.field("MODE", "C", 10)
     w.field("OPERATOR", "C", 60)
     w.field("ISO_M", "N", 6)
+    w.field("ENTRIES", "N", 3)
     for s in stations_done:
         geom = shape(s["poly"])
         polys = list(geom.geoms) if geom.geom_type == "MultiPolygon" else [geom]
@@ -191,7 +245,7 @@ def write_isochrone_shp(stations_done):
             for interior in p.interiors:
                 parts.append(list(interior.coords))
         w.poly(parts)
-        w.record(s["id"], s["name"], s["mode_label"], s.get("operator", ""), CUTOFF_M)
+        w.record(s["id"], s["name"], s["mode_label"], s.get("operator", ""), CUTOFF_M, s.get("entrances_used", 0))
     w.close()
     _write_prj(ISOCHRONE_SHP)
 
@@ -249,6 +303,7 @@ def write_isochrone_geojson(stations_done):
         "properties": {
             "id": s["id"], "name": s["name"], "mode_label": s["mode_label"],
             "operator": s.get("operator", ""), "isochrone_m": CUTOFF_M,
+            "entrances_used": s.get("entrances_used", 0),
         },
     } for s in stations_done]
     ISOCHRONE_GEOJSON.write_text(json.dumps(_fc(features), ensure_ascii=False), encoding="utf-8")
@@ -295,6 +350,16 @@ async def main():
         route_features = []
         print(f"Gagal ambil rute: {e}")
 
+    print("Mengambil data pintu masuk/keluar (OSM subway_entrance)...", flush=True)
+    try:
+        entrances = await fetch_entrances()
+        entrance_map = match_entrances(all_stations, entrances)
+        print(f"{len(entrances)} entrance ditemukan, {len(entrance_map)} stasiun ke-match "
+              f"(radius {ENTRANCE_MATCH_RADIUS_M}m) - sisanya pakai titik pusat stasiun aja.")
+    except Exception as e:
+        entrance_map = {}
+        print(f"Gagal ambil data entrance, semua stasiun pakai titik pusat aja: {e}")
+
     def checkpoint_and_write():
         save_checkpoint(stations_done, roads_by_key)
         write_all(stations_done, roads_by_key, route_features)
@@ -302,14 +367,15 @@ async def main():
     failed = []
     for i, s in enumerate(remaining):
         try:
-            poly, in_reach_roads = await station_isochrone(s["lon"], s["lat"])
+            extra_points = entrance_map.get(s["id"], [])
+            poly, in_reach_roads = await station_isochrone(s["lon"], s["lat"], extra_points)
             if poly is None:
                 failed.append(s["name"])
             else:
                 stations_done.append({
                     "id": s["id"], "name": s["name"], "mode_label": s["mode_label"],
                     "operator": s["operator"], "lon": s["lon"], "lat": s["lat"],
-                    "poly": mapping(poly),
+                    "poly": mapping(poly), "entrances_used": len(extra_points),
                 })
                 for r in in_reach_roads:
                     key = json.dumps(r["coords"])
