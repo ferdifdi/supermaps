@@ -4,10 +4,11 @@ import "maplibre-gl/dist/maplibre-gl.css"
 
 const JAKARTA = [106.8271129, -6.1754398]
 
-export default function MapView({ styleUrl, stations, activeStation, focusPoint, result, useCase, mapMode, onPickStation, picking, onMapPick }) {
+export default function MapView({ styleUrl, stations, activeStation, focusPoint, result, useCase, mapMode, layerToggles, onPickStation, picking, onMapPick }) {
   const container = useRef(null)
   const map = useRef(null)
   const loaded = useRef(false)
+  const activePopup = useRef(null)
 
   useEffect(() => {
     if (!styleUrl || map.current) return
@@ -57,6 +58,7 @@ export default function MapView({ styleUrl, stations, activeStation, focusPoint,
     const ids = []
     useCase.layers.forEach((layer, i) => {
       if (layer.mode && layer.mode !== mapMode) return
+      if (layer.toggle && layerToggles?.[layer.toggle] === false) return
       const data = result?.[layer.source]
       if (!data) return
       const sourceId = `res-${layer.source}`
@@ -65,14 +67,25 @@ export default function MapView({ styleUrl, stations, activeStation, focusPoint,
       if (!m.getSource(sourceId)) m.addSource(sourceId, { type: "geojson", data })
       else m.getSource(sourceId).setData(data)
       m.addLayer({ id: layerId, type: layer.type, source: sourceId, paint: layer.paint }, "stations")
-      if (layer.type !== "heatmap") {
+      // noPopup: layers whose properties are constant across the whole feature (e.g. the
+      // isochrone fill/line's "minutes" - same number everywhere inside one polygon) don't
+      // get a click popup - it looked like a bug ("kenapa menitnya sama terus") since it's
+      // not location-specific info, and now that isochrone/grid/etc overlap by default
+      // (independent toggles, not one-at-a-time modes) it fired on almost every click.
+      if (layer.type !== "heatmap" && !layer.noPopup) {
         m.on("click", layerId, (e) => {
+          // Only one popup alive at a time - overlapping layers (isochrone fill + grid
+          // fill + a POI circle can all sit under the same pixel now) used to each spawn
+          // their own maplibregl.Popup() and stack, so closing the top one left others
+          // stuck underneath looking unclosable. Removing the previous one first means a
+          // click always leaves exactly one popup, with a working X.
+          activePopup.current?.remove()
           const props = e.features[0].properties
           const html = useCase.popup
             .filter((k) => props[k] !== undefined)
             .map((k) => `<div><b>${k}</b>: ${props[k]}</div>`)
             .join("")
-          new maplibregl.Popup().setLngLat(e.lngLat).setHTML(html).addTo(m)
+          activePopup.current = new maplibregl.Popup().setLngLat(e.lngLat).setHTML(html).addTo(m)
         })
       }
     })
@@ -89,7 +102,7 @@ export default function MapView({ styleUrl, stations, activeStation, focusPoint,
         if (m.getSource(sourceId)) m.removeSource(sourceId)
       })
     }
-  }, [result, useCase, mapMode, onPickStation])
+  }, [result, useCase, mapMode, layerToggles, onPickStation])
 
   // fly to station
   useEffect(() => {

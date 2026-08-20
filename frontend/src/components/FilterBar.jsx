@@ -1,6 +1,6 @@
 import { useState } from "react"
 
-export default function FilterBar({ groups, emptyFilters, filters, onChange, fromChat, matched, total }) {
+export default function FilterBar({ groups, emptyFilters, filters, onChange, matched, total }) {
   const [open, setOpen] = useState(null)
 
   const toggle = (key, value) => {
@@ -62,7 +62,6 @@ export default function FilterBar({ groups, emptyFilters, filters, onChange, fro
               {value} ×
             </button>
           ))}
-          {fromChat && <span className="chip-note">difilter oleh chat</span>}
         </div>
       )}
     </div>

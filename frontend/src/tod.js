@@ -17,13 +17,6 @@ export const CRITERIA_LABELS = {
   parking: "Ketersediaan parkir",
 }
 
-export const SUGGESTIONS = [
-  "Ringkas indeks TOD semua stasiun",
-  "Stasiun mana yang paling perlu diperbaiki?",
-  "Tunjukkan stasiun KRL dengan klasifikasi rendah",
-  "Stasiun mana yang masuk kuadran quick win?",
-]
-
 export const QUADRANTS = [
   "quick win",
   "dampak tinggi, effort besar",

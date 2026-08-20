@@ -1,4 +1,5 @@
 import asyncio
+import time
 
 import httpx
 from fastapi import FastAPI, HTTPException
@@ -23,6 +24,27 @@ async def overpass_down(request, exc):
 
 STYLES = ["street-v2.0", "satellite-v2.0", "dark-v2.0", "light-v2.0"]
 _stations: dict[str, dict] = {}
+
+# In-process result cache for the analysis endpoints - these recompute the same walk_score
+# grid/road graph/isochrone from scratch on every call even when the inputs (station+radius+
+# data_source+...) are identical to a request made moments ago, which is most repeat clicks
+# (toggling a layer, reopening a station). Keyed on every query param that affects the
+# result, values expire after _CACHE_TTL_S so "live" mode still refreshes periodically and
+# PM2.5 doesn't go stale for too long. First request for a given key is never faster - it
+# still does the full computation - only repeats of that exact key get the shortcut. Process
+# memory only: cleared on restart, not shared across workers if this ever runs with >1.
+_CACHE_TTL_S = 300
+_cache: dict[tuple, tuple[float, object]] = {}
+
+
+async def _cached(key: tuple, factory):
+    now = time.monotonic()
+    hit = _cache.get(key)
+    if hit is not None and now - hit[0] < _CACHE_TTL_S:
+        return hit[1]
+    result = await factory()
+    _cache[key] = (now, result)
+    return result
 
 
 def _tj_stations() -> list[dict]:
@@ -142,24 +164,36 @@ async def catalogue_layer(name: str):
 
 @app.get("/api/analysis/walk-access")
 async def walk_access(station_id: str, radius_m: int = 800, data_source: str = "static"):
-    return await analysis.walk_access(await get_station(station_id), radius_m, data_source)
+    async def factory():
+        return await analysis.walk_access(await get_station(station_id), radius_m, data_source)
+    return await _cached(("walk-access", station_id, radius_m, data_source), factory)
 
 
 @app.get("/api/analysis/route")
 async def route(station_id: str, lon: float, lat: float, preference: str = "fast", data_source: str = "static"):
-    return await analysis.comfortable_route(await get_station(station_id), lon, lat, preference, data_source)
+    async def factory():
+        return await analysis.comfortable_route(await get_station(station_id), lon, lat, preference, data_source)
+    return await _cached(("route", station_id, lon, lat, preference, data_source), factory)
 
 
 @app.get("/api/analysis/amenity-equity")
 async def amenity_equity(station_id: str, radius: int = 500, data_source: str = "static"):
-    return await analysis.amenity_equity(await get_station(station_id), radius, data_source)
+    async def factory():
+        return await analysis.amenity_equity(await get_station(station_id), radius, data_source)
+    return await _cached(("amenity-equity", station_id, radius, data_source), factory)
 
 
 @app.get("/api/analysis/site-selection")
 async def site_selection(station_id: str, business_type: str = "APOTEK", subtype: str | None = None,
-                          subtype2: str | None = None, radius: int = 1000, data_source: str = "static"):
+                          subtype2: str | None = None, radius: int | None = None, data_source: str = "static"):
     station = await get_station(station_id)
-    return await analysis.site_selection(station, business_type, subtype, subtype2, radius, data_source)
+    if radius is None:
+        radius = static_transit.MODE_RADIUS_M.get(station.get("mode_label", "").lower(), analysis.SITE_ANCHOR_RADIUS)
+
+    async def factory():
+        return await analysis.site_selection(station, business_type, subtype, subtype2, radius, data_source)
+    return await _cached(
+        ("site-selection", station_id, business_type, subtype, subtype2, radius, data_source), factory)
 
 
 @app.get("/api/analysis/business-types")
@@ -235,9 +269,19 @@ def tod_metadata():
     return analysis.metadata()
 
 
+async def _resilience_cached(station_id: str, data_source: str) -> dict:
+    """Shared by /resilience and /detour - both used to call analysis.resilience()
+    separately (scans/builds the graph for one station), so opening a station's detour tab
+    right after its resilience tab redid the exact same work. Cached raw (graph/origin
+    included, popped only in the /resilience response) so /detour can reuse it directly."""
+    async def factory():
+        return await analysis.resilience(await get_station(station_id), data_source)
+    return await _cached(("resilience", station_id, data_source), factory)
+
+
 @app.get("/api/analysis/resilience")
 async def resilience(station_id: str, data_source: str = "static"):
-    result = await analysis.resilience(await get_station(station_id), data_source)
+    result = dict(await _resilience_cached(station_id, data_source))
     result.pop("graph")
     result.pop("origin")
     return result
@@ -245,7 +289,7 @@ async def resilience(station_id: str, data_source: str = "static"):
 
 @app.get("/api/analysis/detour")
 async def detour(station_id: str, lon: float, lat: float, data_source: str = "static"):
-    result = await analysis.resilience(await get_station(station_id), data_source)
+    result = await _resilience_cached(station_id, data_source)
     return analysis.detour(result["graph"], result["origin"], lon, lat)
 
 

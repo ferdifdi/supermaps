@@ -59,6 +59,19 @@ function renderInline(text, keyPrefix) {
   return parts
 }
 
+// | a | b | row -> ["a", "b"] - tolerates missing leading/trailing pipes (both are valid
+// GFM table syntax, LLMs emit either).
+function tableCells(line) {
+  return line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim())
+}
+
+// The GFM header-separator row - "---|---|---", "| :--- | ---: |" (alignment colons
+// tolerated but not applied, a chat bubble is too narrow for alignment to matter).
+function isTableSeparator(line) {
+  const cells = tableCells(line)
+  return cells.length > 0 && cells.every((c) => /^:?-{1,}:?$/.test(c))
+}
+
 function renderMarkdown(text) {
   const lines = text.split("\n")
   const blocks = []
@@ -84,11 +97,44 @@ function renderMarkdown(text) {
     }
   }
 
-  for (const raw of lines) {
-    const line = raw.trim()
+  for (let idx = 0; idx < lines.length; idx++) {
+    const line = lines[idx].trim()
     if (!line) {
       flushPara()
       flushList()
+      continue
+    }
+    // A table: this line and the next both look like "| a | b |" rows, and the next one
+    // is specifically the "---|---" separator - that combination is unambiguous, a plain
+    // paragraph never looks like two pipe-delimited lines in a row. Without this check the
+    // old parser fell through to treating every row (including the separator) as a plain
+    // paragraph line, so a table rendered as literal "| --- | --- |" text instead of cells.
+    if (line.includes("|") && idx + 1 < lines.length && isTableSeparator(lines[idx + 1])) {
+      flushPara()
+      flushList()
+      const header = tableCells(line)
+      idx += 2 // skip the header row already read and the separator row
+      const rows = []
+      while (idx < lines.length && lines[idx].trim().includes("|")) {
+        rows.push(tableCells(lines[idx].trim()))
+        idx++
+      }
+      idx-- // the outer for-loop's own idx++ accounts for the last consumed line
+      const key = blocks.length
+      blocks.push(
+        <div key={key} className="bubble-table-wrap">
+          <table>
+            <thead>
+              <tr>{header.map((c, i) => <th key={i}>{renderInline(c, `th${key}-${i}`)}</th>)}</tr>
+            </thead>
+            <tbody>
+              {rows.map((r, ri) => (
+                <tr key={ri}>{r.map((c, ci) => <td key={ci}>{renderInline(c, `td${key}-${ri}-${ci}`)}</td>)}</tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )
       continue
     }
     const heading = line.match(/^(#{1,6})\s+(.*)/)

@@ -29,50 +29,58 @@ MODE_RADIUS_M = {"mrt": 800, "krl": 800, "lrt": 800, "tj": 400}
 _roads: dict[str, list[dict]] = {}
 _trees: dict[str, STRtree] = {}
 _lines_m: dict[str, list] = {}
-_loaded = False
+_roads_loaded: set[str] = set()
 
 
-def _load():
-    global _loaded
-    if _loaded:
+def _load(mode: str):
+    """One mode's road file only - the old version loaded all 4 modes' roads (TJ alone is
+    ~29MB of geojson) the instant any lookup ran, so the first static-mode request of a
+    process session paid for parsing every mode's network before answering a query about
+    just one of them. Per-mode loading spreads that cost across whichever modes actually
+    get queried; each mode is still only ever read once (cached in _roads_loaded)."""
+    if mode in _roads_loaded:
         return
-    for mode in _MODES:
-        path = STATIC_DIR / f"isochrone_{mode}_roads_{MODE_RADIUS_M[mode]}m.geojson"
-        roads: list[dict] = []
-        lines_m: list = []
-        if path.exists():
-            data = json.loads(path.read_text(encoding="utf-8"))
-            for f in data["features"]:
-                coords = f["geometry"]["coordinates"]
-                props = f["properties"]
-                roads.append({
-                    "coords": coords,
-                    "highway": props.get("highway", ""),
-                    "sidewalk": props.get("sidewalk", ""),
-                    "lit": props.get("lit", ""),
-                    "surface": props.get("surface", ""),
-                    "wheelchair": props.get("wheelchair", ""),
-                })
-                lines_m.append(LineString([to_m(Point(lon, lat)) for lon, lat in coords]))
-        _roads[mode] = roads
-        _lines_m[mode] = lines_m
-        _trees[mode] = STRtree(lines_m) if lines_m else STRtree([])
-    _loaded = True
+    path = STATIC_DIR / f"isochrone_{mode}_roads_{MODE_RADIUS_M[mode]}m.geojson"
+    roads: list[dict] = []
+    lines_m: list = []
+    if path.exists():
+        data = json.loads(path.read_text(encoding="utf-8"))
+        for f in data["features"]:
+            coords = f["geometry"]["coordinates"]
+            props = f["properties"]
+            roads.append({
+                "coords": coords,
+                "highway": props.get("highway", ""),
+                "sidewalk": props.get("sidewalk", ""),
+                "lit": props.get("lit", ""),
+                "surface": props.get("surface", ""),
+                "wheelchair": props.get("wheelchair", ""),
+            })
+            lines_m.append(LineString([to_m(Point(lon, lat)) for lon, lat in coords]))
+    _roads[mode] = roads
+    _lines_m[mode] = lines_m
+    _trees[mode] = STRtree(lines_m) if lines_m else STRtree([])
+    _roads_loaded.add(mode)
 
 
 def has_mode(mode_label: str) -> bool:
-    _load()
-    return bool(_roads.get((mode_label or "").lower()))
+    mode = (mode_label or "").lower()
+    if mode not in _MODES:
+        return False
+    _load(mode)
+    return bool(_roads.get(mode))
 
 
 def roads_near(mode_label: str, lon: float, lat: float, radius: int) -> list[dict] | None:
     """Roads from the precomputed static network within `radius` of (lon, lat), or None
     if this mode has no static data yet or `radius` exceeds that mode's MODE_RADIUS_M -
     the caller should fall back to a live osm.roads() call in either case."""
-    _load()
     mode = (mode_label or "").lower()
+    if mode not in _MODES or radius > MODE_RADIUS_M.get(mode, 0):
+        return None
+    _load(mode)
     roads = _roads.get(mode)
-    if not roads or radius > MODE_RADIUS_M.get(mode, 0):
+    if not roads:
         return None
     origin_m = to_m(Point(lon, lat))
     circle = origin_m.buffer(radius)
@@ -121,25 +129,27 @@ def routes_near(lon: float, lat: float, radius: int) -> int | None:
 
 
 _iso_by_mode: dict[str, dict[str, object]] = {}
-_iso_loaded = False
+_iso_loaded: set[str] = set()
 
 
-def _load_isochrones():
-    global _iso_loaded
-    if _iso_loaded:
+def _load_isochrones(mode: str):
+    """One mode's isochrone file only - isochrone_for() only ever needs the requesting
+    station's own mode, but TJ's file alone is ~60MB (thousands of halte polygons), so
+    loading all 4 modes on the first isochrone lookup of any mode used to tax every
+    session with that regardless of which mode was actually asked for."""
+    if mode in _iso_loaded:
         return
-    for mode in _MODES:
-        path = STATIC_DIR / f"isochrone_{mode}_isochrone_{MODE_RADIUS_M[mode]}m.geojson"
-        key_field = "stop_id" if mode == "tj" else "id"
-        lookup = {}
-        if path.exists():
-            data = json.loads(path.read_text(encoding="utf-8"))
-            for f in data["features"]:
-                sid = f["properties"].get(key_field)
-                if sid:
-                    lookup[sid] = shape(f["geometry"])
-        _iso_by_mode[mode] = lookup
-    _iso_loaded = True
+    path = STATIC_DIR / f"isochrone_{mode}_isochrone_{MODE_RADIUS_M[mode]}m.geojson"
+    key_field = "stop_id" if mode == "tj" else "id"
+    lookup = {}
+    if path.exists():
+        data = json.loads(path.read_text(encoding="utf-8"))
+        for f in data["features"]:
+            sid = f["properties"].get(key_field)
+            if sid:
+                lookup[sid] = shape(f["geometry"])
+    _iso_by_mode[mode] = lookup
+    _iso_loaded.add(mode)
 
 
 _stations: list[dict] | None = None
@@ -175,9 +185,9 @@ def isochrone_for(mode_label: str, station_id: str, radius: int):
     station_isochrone) instead of a single center point. There's no accessible-routing
     (wheelchair-aware) variant of this precomputed shape - callers still need to compute
     that one live from the road graph."""
-    _load_isochrones()
     mode = (mode_label or "").lower()
-    if radius != MODE_RADIUS_M.get(mode):
+    if mode not in _MODES or radius != MODE_RADIUS_M.get(mode):
         return None
+    _load_isochrones(mode)
     poly = _iso_by_mode.get(mode, {}).get(station_id)
     return to_m(poly) if poly is not None else None

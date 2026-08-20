@@ -33,13 +33,13 @@ export const USE_CASES = [
     persona: "komuter",
     title: "Navigasi Transit & Akses Jalan Kaki",
     description: "Access by Walking (Siburian et al. 2020) per grid 250m dan isochrone jalan kaki dari stasiun.",
-    expectedWait: "3-6 detik mode Statis (jalan/isochrone/hunian/hijau/pohon semua dari cache) - cuma POI komersial (buat residential_mix) & PM2.5 yang tetap live",
+    expectedWait: "Statis: 3-6 detik (jalan/isochrone/hunian/hijau/pohon/komersial semua dari cache) - cuma PM2.5 yang tetap live. Live: ~10-25 detik (perkiraan, bukan hasil benchmark - 4 panggilan Overpass sekuensial: jalan, POI, pohon, daftar stasiun rel buat deteksi titik transfer; yang terakhir query se-Jabodetabek tapi di-cache ke disk, jadi cuma berat di panggilan live pertama sesi backend ini, abis itu instan). Query pertama ke moda tertentu (MRT/KRL/LRT/TJ) di mode Statis sesi ini agak lebih lambat sekali (baca+parse file moda itu doang, bukan borong ke-4 moda), query berikutnya instan dari RAM. Query identik (stasiun+radius+mode sama) diulang dalam 5 menit juga instan (result cache).",
     extras: "walk",
     methodology: {
       data: [
         { source: "OSM - jaringan jalan & isochrone", detail: "STATIS, di-download sekali via Overpass lalu disimpan geojson (backend/data/static/) - MRT/KRL: 18 Agu 2026, LRT & TJ: 19 Agu 2026. Kalau stasiun belum ke-cover static (radius beda dari cache), fallback live Overpass." },
         { source: "OSM - POI hunian & pohon/ruang hijau", detail: "STATIS (output/poi_residential_*.py, poi_green_*.py - 19-20 Agu 2026), dipakai buat residential_mix, canopy, dan ecology_poi. Fallback live osm.pois()/osm.trees() kalau mode/radius belum ke-cover." },
-        { source: "OSM - POI komersial (buat residential_mix)", detail: "LIVE tiap analisis dijalankan (osm.pois()) - belum ada static cache buat kategori komersial, cuma hunian/hijau/parkir yang di-precompute." },
+        { source: "MAPID Data Catalogue - POI komersial (PERDAGANGAN DAN RETAIL, buat residential_mix)", detail: "STATIS di mode Statis (mapid_data.retail(), satu file Jabodetabek jadi gak ada gap radius/mode seperti file OSM static lainnya). Mode Live pakai osm.is_commercial dari osm.pois() sebagai gantinya." },
         { source: "OSM - daftar stasiun MRT/KRL/LRT (dropdown pemilih)", detail: "Statis dari cache (output/isochrone_*.py, 18-19 Agu 2026), fallback live Overpass kalau belum ke-cover. TJ dari GTFS lokal, selalu instan." },
         { source: "TransJakarta GTFS", year: 2026, detail: "frequencies.txt (headway asli per trip), stops.txt - file lokal, bukan live" },
         { source: "OpenAQ v3", detail: "PM2.5 real-time dari stasiun pemantau terdekat (perlu API key - kosong kalau belum dikonfigurasi)" },
@@ -53,7 +53,7 @@ export const USE_CASES = [
             "Weighted sum Tabel 1 Siburian et al. (2020): 40% Road Network + 30% Ped-Shed + 20% Intersection + 10% Residential Diversity, per grid 250m. Standardisasi min-max (formula 3) dilakukan antar-sel dalam buffer ini, bukan antar-stasiun seperti versi asli paper (K-UC1) - komuter cuma lihat 1 stasiun, gak ada pembanding stasiun lain.",
         },
         { step: "Isochrone & rute", detail: "Dijkstra: \"tercepat\" (jarak murni) dan \"ramah kursi roda\" (jarak, ruas wheelchair=no dipenalti berat) - tidak ada formula kenyamanan racikan sendiri" },
-        { step: "Transfer efisien", detail: "TransJakarta pakai headway asli dari GTFS; KRL/MRT/LRT/bus lain proxy jarak jalan kaki OSM (ditandai is_proxy di peta)" },
+        { step: "Transfer efisien", detail: "TransJakarta pakai headway asli dari GTFS; KRL/MRT/LRT proxy jarak jalan kaki, mode-nya dari daftar stasiun statis (output/isochrone_*.py, sama kayak dropdown - bukan re-tebak dari tag OSM mentah lagi biar gak salah label kayak dulu) (ditandai is_proxy di peta)" },
         { step: "Kualitas udara", detail: "Interpolasi IDW ke hex grid dari stasiun OpenAQ terdekat - layer konteks, tidak masuk skor manapun" },
         { step: "UHI / Indeks ekologi / Curah hujan", detail: "Ditampilkan apa adanya dari MAPID Data Catalogue, tanpa dihitung ulang atau digabung jadi skor" },
       ],
@@ -63,25 +63,39 @@ export const USE_CASES = [
       dataSource: [
         {
           value: "static", label: "Statis (cepat)",
-          note: "Jaringan jalan & isochrone dari cache statis OSM (MRT/KRL 18 Agu 2026, LRT & TJ 19 Agu 2026). POI hunian & pohon/ruang hijau juga dari cache statis (poi_residential_*.py/poi_green_*.py). Dropdown stasiun statis juga. Tetap live: POI komersial (buat residential_mix, gak ada cache-nya), PM2.5 (OpenAQ v3 real-time). UHI/Ekologi/Curah hujan dari MAPID, statis, di luar toggle ini.",
+          note: "Jaringan jalan & isochrone dari cache statis OSM (MRT/KRL 18 Agu 2026, LRT & TJ 19 Agu 2026). POI hunian & pohon/ruang hijau juga dari cache statis (poi_residential_*.py/poi_green_*.py). POI komersial (buat residential_mix) dari MAPID Data Catalogue - statis, gak ada gap radius/mode. Dropdown stasiun statis juga. Tetap live: PM2.5 (OpenAQ v3 real-time). UHI/Ekologi/Curah hujan dari MAPID, statis, di luar toggle ini.",
         },
         {
           value: "live", label: "Live OSM murni (lambat)",
-          note: "Jaringan jalan, isochrone, POI hunian & pohon/ruang hijau semua dipaksa fetch OSM Overpass tiap run, cache statis diabaikan sepenuhnya. PM2.5 tetap live sama seperti mode Statis; dropdown stasiun tetap pakai cache statis (gak dipengaruhi toggle ini). Paling lambat dari 2 pilihan - kalau Overpass gagal/timeout, pindah ke mode Statis.",
+          note: "Jaringan jalan, isochrone, POI hunian, pohon/ruang hijau, & POI komersial (jadi osm.is_commercial, ganti MAPID) semua dipaksa fetch OSM Overpass tiap run, cache statis & MAPID diabaikan sepenuhnya. PM2.5 tetap live sama seperti mode Statis; dropdown stasiun tetap pakai cache statis (gak dipengaruhi toggle ini). Paling lambat dari 2 pilihan - kalau Overpass gagal/timeout, pindah ke mode Statis.",
         },
       ],
     },
     run: (station, opts) => api.walkAccess(station.id, opts.radius || 800, opts.dataSource || "static"),
     layers: [
-      // All walk-related layers are gated to mode "isochrone" so toggling to "udara"
-      // shows air quality alone, not layered on top of the walk map.
-      { source: "isochrone", type: "fill", mode: "isochrone", paint: { "fill-color": "#f59e0b", "fill-opacity": 0.15 } },
-      { source: "isochrone", type: "line", mode: "isochrone", paint: { "line-color": "#f59e0b", "line-width": 2 } },
+      // Four overlays (isochrone outline, transfer POI, green POI, road skeleton) aren't
+      // mode-gated - each has its own "toggle" key instead, so all four can stay visible
+      // together regardless of which "Tampilan peta" topic pill is picked. Ringkasan/
+      // Transfer/Hijau all expose the same 5 checkboxes (isochrone/poi_transfer/poi_hijau/
+      // jalan/heatmap) for this reason - one consistent overlay set, not per-tab
+      // differences. The per-topic choropleth (grid/air_quality_grid/green_grid/uhi/
+      // ecology_index/rainfall) stays mode-gated - only one shows at a time, following
+      // the topic pill - but all share the "heatmap" toggle so that one (whichever is
+      // currently active) can be hidden without switching topic. accessibility_roads used
+      // to be one of these (gated to "aksesibilitas") - it's "jalan" now instead, merged
+      // into the base map so the road skeleton shows under the walk-score heatmap too, not
+      // only when that one topic is picked.
+      // noPopup: "minutes"/"radius_m"/"kind" are constant across the whole polygon (same
+      // number everywhere inside it), not location-specific - a click popup for it just
+      // showed the same value no matter where you clicked, which read as a bug.
+      { source: "isochrone", type: "fill", toggle: "isochrone", noPopup: true, paint: { "fill-color": "#f59e0b", "fill-opacity": 0.15 } },
+      { source: "isochrone", type: "line", toggle: "isochrone", noPopup: true, paint: { "line-color": "#f59e0b", "line-width": 2 } },
+      { source: "route", type: "line", paint: { "line-color": "#111827", "line-width": 4 } },
       {
-        // TJ stops (real GTFS headway) vs KRL/MRT/LRT/other-bus points (OSM proxy,
-        // distance only) - is_proxy drives a visibly different style so the map itself
-        // signals which numbers are real, per the "harus dikasih tau kalau proxy" requirement.
-        source: "transfer_points", type: "circle", mode: "isochrone",
+        // TJ stops (real GTFS headway) vs KRL/MRT/LRT points (mode from the static
+        // station list, see analysis._transfer_points) - is_proxy drives a visibly
+        // different style so the map itself signals which numbers are real.
+        source: "transfer_points", type: "circle", toggle: "poi_transfer",
         paint: {
           "circle-radius": 6,
           "circle-color": ["case", ["get", "is_proxy"], "#9ca3af", "#22c55e"],
@@ -90,43 +104,49 @@ export const USE_CASES = [
           "circle-opacity": 0.9,
         },
       },
-      { source: "route", type: "line", mode: "isochrone", paint: { "line-color": "#111827", "line-width": 4 } },
+      {
+        // Individual markers (trees excluded - too dense to click one by one, they only
+        // feed green_grid's count below) - click targets for GreenSearch's "Rute"/focus
+        // buttons.
+        source: "ecology_poi", type: "circle", toggle: "poi_hijau",
+        paint: { "circle-radius": 5, "circle-color": "#22c55e", "circle-stroke-width": 1, "circle-stroke-color": "#fff" },
+      },
       {
         // Access by Walking (Siburian et al. 2020, Table 1 weights) as one heatmap,
         // standardised per 250m grid cell within this buffer - see analysis.py's
         // walk_access() docstring for why per-cell (not per-station like K-UC1).
-        source: "grid", type: "fill", mode: "isochrone",
+        source: "grid", type: "fill", mode: "isochrone", toggle: "heatmap",
         paint: { "fill-opacity": 0.7, "fill-color": ramp("access_by_walking", SCORE_STOPS) },
       },
       {
         // Hex-grid choropleth, IDW-interpolated from real OpenAQ stations - a maplibre
         // "heatmap" layer blurs by screen-pixel radius (visibly shifts color on zoom),
         // this doesn't since it's a plain data-driven fill like uhi/ecology_index/rainfall.
-        source: "air_quality_grid", type: "fill", mode: "udara",
+        source: "air_quality_grid", type: "fill", mode: "udara", toggle: "heatmap",
         paint: {
           "fill-opacity": 0.65,
           "fill-color": ramp("pm25", [[0, "#22c55e"], [12, "#84cc16"], [35.4, "#f59e0b"], [55.4, "#f97316"], [150.4, "#ef4444"]]),
         },
       },
       {
-        // Individual OSM street trees, blurred into a density heatmap - a proxy for
-        // canopy/shade coverage, not a validated vegetation index.
-        source: "canopy", type: "heatmap", mode: "vegetasi",
+        // Trees + green_area/shelter combined, counted per 250m cell (same grid as
+        // access_by_walking) - a count-based choropleth like M-UC2's POI heatmap, not a
+        // blur-radius kernel that shifts density with zoom. Empty cells stay untinted so
+        // "0 hijau" reads as empty, not as "low but present".
+        source: "green_grid", type: "fill", mode: "vegetasi", toggle: "heatmap",
         paint: {
-          "heatmap-radius": 25, "heatmap-opacity": 0.7,
-          "heatmap-color": [
-            "interpolate", ["linear"], ["heatmap-density"],
-            0, "rgba(34,197,94,0)", 0.5, "#86efac", 1, "#15803d",
-          ],
+          "fill-color": ["case", ["==", ["get", "green_count"], 0], "rgba(0,0,0,0)",
+            ramp("green_count", [[0, "#f0fdf4"], [3, "#bbf7d0"], [8, "#4ade80"], [15, "#16a34a"], [25, "#14532d"]])],
+          "fill-opacity": 0.7,
+          "fill-outline-color": "rgba(255,255,255,0.4)",
         },
       },
       {
-        source: "ecology_poi", type: "circle", mode: "vegetasi",
-        paint: { "circle-radius": 5, "circle-color": "#22c55e", "circle-stroke-width": 1, "circle-stroke-color": "#fff" },
-      },
-      {
         // Raw wheelchair tag per road segment - no invented weighting, just the OSM fact.
-        source: "accessibility_roads", type: "line", mode: "aksesibilitas",
+        // Not mode-gated (unlike before) - merged into the base map via its own "jalan"
+        // toggle, so the road skeleton shows together with the walk-score heatmap (or any
+        // other topic) instead of only appearing under the separate "Aksesibilitas" pick.
+        source: "accessibility_roads", type: "line", toggle: "jalan",
         paint: {
           "line-width": 4,
           "line-color": [
@@ -138,7 +158,7 @@ export const USE_CASES = [
       },
       {
         // MAPID Data Catalogue, published as-is - one zone per kabupaten/kota (coarse).
-        source: "uhi", type: "fill", mode: "uhi",
+        source: "uhi", type: "fill", mode: "uhi", toggle: "heatmap",
         paint: {
           "fill-opacity": 0.5,
           "fill-color": ["match", ["get", "CLASS"],
@@ -147,7 +167,7 @@ export const USE_CASES = [
       },
       {
         // MAPID Data Catalogue - INDEKS (0-1) per grid cell, published value, no rescoring.
-        source: "ecology_index", type: "fill", mode: "ekologi_index",
+        source: "ecology_index", type: "fill", mode: "ekologi_index", toggle: "heatmap",
         paint: {
           "fill-opacity": 0.65,
           "fill-color": ramp("INDEKS", [[0, "#ef4444"], [0.3, "#f59e0b"], [0.6, "#a3e635"], [1, "#15803d"]]),
@@ -155,7 +175,7 @@ export const USE_CASES = [
       },
       {
         // MAPID Data Catalogue - rainfall zone per province (coarse), published as-is.
-        source: "rainfall", type: "fill", mode: "hujan",
+        source: "rainfall", type: "fill", mode: "hujan", toggle: "heatmap",
         paint: {
           "fill-opacity": 0.5,
           "fill-color": ["match", ["get", "Kelas"],
@@ -167,7 +187,6 @@ export const USE_CASES = [
       isochrone: {
         title: "Access by Walking per grid 250m (Siburian et al. 2020)",
         stops: SCORE_STOPS,
-        note: "Weighted sum Tabel 1 (Road Network 40% + Ped-Shed 30% + Intersection 20% + Residential Diversity 10%), distandardisasi min-max antar-sel dalam buffer ini (bukan antar-stasiun seperti K-UC1 - komuter cuma lihat 1 stasiun, gak ada stasiun lain buat dibandingin). Titik transfer: hijau = headway asli (GTFS TransJakarta), abu-abu = proxy jarak jalan kaki OSM.",
       },
       udara: {
         title: "PM2.5 (µg/m³) - interpolasi dari stasiun OpenAQ terdekat",
@@ -175,14 +194,9 @@ export const USE_CASES = [
         note: "Diinterpolasi (inverse-distance) dari stasiun OpenAQ nyata di sekitar - bukan pengukuran per titik, stasiun aslinya jarang (bisa berjarak beberapa km).",
       },
       vegetasi: {
-        title: "Kanopi & ruang hijau (OSM)",
-        stops: [["kepadatan pohon", "#22c55e"], ["taman/RTH", "#22c55e"]],
-        note: "Titik pohon individual (density heatmap) + taman/RTH dari tag OSM. Bukan indeks vegetasi tervalidasi (NDVI dsb).",
-      },
-      aksesibilitas: {
-        title: "Tag kursi roda per ruas jalan (OSM)",
-        stops: [["ramah (yes)", "#22c55e"], ["terbatas (limited)", "#f59e0b"], ["tidak ramah (no)", "#ef4444"], ["tidak ditandai", "#9ca3af"]],
-        note: "Tag wheelchair= mentah per ruas jalan, bukan skor gabungan.",
+        title: "Kepadatan hijau per grid 250m (pohon + taman/RTH)",
+        stops: [[0, "#f0fdf4"], [3, "#bbf7d0"], [8, "#4ade80"], [15, "#16a34a"], ["25+", "#14532d"]],
+        note: "Jumlah titik pohon + taman/RTH (tag OSM) per sel 250m, grid choropleth sama seperti Access by Walking - bukan blur heatmap, bukan indeks vegetasi tervalidasi (NDVI dsb).",
       },
       uhi: {
         title: "Urban Heat Island (MAPID, 2022)",
@@ -203,7 +217,7 @@ export const USE_CASES = [
     popup: ["access_by_walking", "road_network", "intersection", "ped_shed", "residential_mix",
       "name", "mode", "distance_m", "headway_min_peak", "is_proxy",
       "preference", "length_m", "minutes", "blocked_segments_crossed",
-      "pm25", "category", "station", "wheelchair", "sidewalk", "highway", "kind", "leisure", "landuse",
+      "pm25", "category", "station", "wheelchair", "sidewalk", "highway", "kind", "leisure", "landuse", "green_count",
       "KELAS", "CLASS", "TEMPERATUR", "INDEKS", "STATUS", "Kelas", "Rata-rata Intensitas (mm/hari)"],
   },
   {
@@ -211,7 +225,7 @@ export const USE_CASES = [
     persona: "komuter",
     title: "Basic Needs untuk Komuter",
     description: "Ketersediaan pangan, pusat perbelanjaan/pasar, keuangan, retail, dan kesehatan dalam jangkauan jalan kaki dari stasiun (MAPID Data Catalogue).",
-    expectedWait: "5-15 detik mode Statis (POI MAPID, jalan & dropdown stasiun dari cache) - mode Live lebih lambat, POI ganti tag OSM + jalan live Overpass",
+    expectedWait: "Statis: 5-15 detik (POI MAPID, jalan & dropdown stasiun dari cache). Live: ~5-12 detik (perkiraan - 2 panggilan Overpass sekuensial: jalan + POI, hasilnya jauh lebih sedikit POI drpd MAPID krn tagging basic-need OSM di Indonesia jarang). Query pertama ke satu kategori POI MAPID (APOTEK/BANK/dst) di mode Statis sesi ini agak lebih lambat sekali (baca+parse file kategori itu doang, bukan borong 12 kategori), kategori yang udah kepakai jadi instan buat query berikutnya.",
     extras: "equity",
     methodology: {
       data: [
@@ -299,7 +313,7 @@ export const USE_CASES = [
     persona: "usaha",
     title: "Site Selection & Market Gap",
     description: "Pilih tipe bisnis, lihat kompetitor setipe (MAPID Data Catalogue) dan anchor demand di sekitar stasiun - layer terpisah, tanpa skor gabungan.",
-    expectedWait: "5-15 detik (MAPID statis, dropdown stasiun statis) - jaringan jalan/POI hunian buat walk_score tetap live di kedua mode krn radius default (1000m) di luar cakupan cache statis (maks 800m)",
+    expectedWait: "Statis: 5-15 detik (MAPID statis, dropdown stasiun statis, jaringan jalan/POI hunian/komersial buat walk_score juga statis - radius default sekarang ikut mode stasiun: 800m MRT/KRL/LRT, 400m TJ, pas sama cakupan cache). Live: ~10-20 detik (perkiraan - jalan + POI kantor/kebutuhan-dasar (2x panggilan terpisah) + daftar stasiun rel sekuensial; daftar stasiun di-cache abis panggilan live pertama sesi ini). Query pertama ke moda/kategori bisnis tertentu di mode Statis sesi ini agak lebih lambat sekali (load per moda/kategori, bukan borong semua), setelahnya instan.",
     extras: "site",
     methodology: {
       data: [
@@ -313,7 +327,11 @@ export const USE_CASES = [
         },
         {
           source: "OSM - jaringan jalan & POI hunian (walk_score)", detail:
-            "Cache statis-nya cuma nyampe 800m (MRT/KRL/LRT) / 400m (TJ) - radius default use case ini 1000m buat catchment anchor bisnis, jadi di mode Statis pun ini PRAKTIS SELALU fallback live Overpass, cache-nya jarang kepakai kecuali radius dikecilin manual lewat API.",
+            "Radius default use case ini sekarang ikut mode stasiun (800m MRT/KRL/LRT, 400m TJ) - pas sama cakupan cache statis-nya, jadi di mode Statis ini kepakai statis, bukan selalu fallback live. Radius custom lewat API tetap bisa fallback live kalau > cakupan cache.",
+        },
+        {
+          source: "MAPID Data Catalogue - POI komersial (buat walk_score)", detail:
+            "MAPID satu file Jabodetabek, gak ada gap radius kayak file OSM static - selalu statis di mode Statis berapa pun radiusnya.",
         },
         { source: "OSM - daftar stasiun MRT/KRL/LRT (dropdown)", detail: "Statis dari cache, fallback live kalau belum ke-cover. TJ dari GTFS lokal, instan." },
       ],
@@ -337,7 +355,7 @@ export const USE_CASES = [
       dataSource: [
         {
           value: "static", label: "Statis (cepat)",
-          note: "Kompetitor & anchor (kantor/kebutuhan dasar) dari MAPID Data Catalogue (2025, statis). Anchor transit dari cache statis + GTFS, dropdown stasiun juga statis. Jaringan jalan & POI hunian (walk_score) TETAP live - radius default 1000m di luar cakupan cache statis (maks 800m MRT/KRL/LRT, 400m TJ).",
+          note: "Kompetitor & anchor (kantor/kebutuhan dasar) dari MAPID Data Catalogue (2025, statis). Anchor transit dari cache statis + GTFS, dropdown stasiun juga statis. Jaringan jalan & POI hunian (walk_score) dari cache statis juga - radius default sekarang ikut mode stasiun (800m MRT/KRL/LRT, 400m TJ), pas sama cakupan cache. POI komersial (walk_score) dari MAPID, statis di radius berapa pun.",
         },
         {
           value: "live", label: "Live OSM murni (lambat, tanpa MAPID)",
@@ -398,7 +416,7 @@ export const USE_CASES = [
     persona: "kebijakan",
     title: "Indeks TOD & Prioritas Pengembangan",
     description: "Station Composite Index, ranking stasiun, dan tipologi rekomendasi pengembangan.",
-    expectedWait: "10-30 detik - jaringan jalan/POI hunian-hijau-parkir per stasiun sekarang statis, tapi POI komersial (safety/keamanan/transfer) tetap live dikali semua stasiun yang di-scan",
+    expectedWait: "10-30 detik - jaringan jalan/POI hunian-hijau-parkir per stasiun sekarang statis, tapi POI komersial (safety/keamanan/transfer) tetap live dikali semua stasiun yang di-scan. Scan pertama satu moda (MRT/KRL/LRT/TJ) sesi ini kena load sekali per moda itu (bukan borong ke-4 moda), scan ulang moda yang sama abis itu instan dari RAM.",
     // Scores every station at once, so App drives it through the dashboard instead of `run`.
     dashboard: true,
     methodology: {
@@ -461,7 +479,7 @@ export const USE_CASES = [
     persona: "kebijakan",
     title: "Climate & Environmental Resilience",
     description: "Risiko banjir per koridor (MAPID statis, atau BNPB InaRISK live) plus konteks UHI/ekologi/curah hujan (MAPID) - layer terpisah, tanpa skor gabungan.",
-    expectedWait: "3-6 detik mode Statis. Mode Live jauh lebih lambat - InaRISK ~4-5 detik/panggilan (disampel grid heksagon per buffer, bukan per koridor, tapi tetap puluhan panggilan).",
+    expectedWait: "Statis: 3-6 detik. Live: ~20-35 detik (perkiraan - jalan+POI dulu (2 panggilan Overpass), lalu InaRISK ~4-5 detik/panggilan disampel grid heksagon per buffer, puluhan panggilan tapi jalan 8 sekaligus/concurrent, bukan satu-satu - kalau BNPB down, otomatis balik ke mode Statis). Query pertama ke moda tertentu di mode Statis sesi ini agak lebih lambat sekali (load jaringan jalan moda itu doang), berikutnya instan - buka tab Detour abis Resilience juga instan (reuse graph yang sama, gak dihitung ulang).",
     methodology: {
       data: [
         {

@@ -61,16 +61,6 @@ const TOPICS = [
     note: (s) => `${s.tree_count} pohon (OSM natural=tree) dan ${s.green_space_count} taman/RTH terdeteksi dalam radius. Proxy kanopi, bukan indeks vegetasi tervalidasi.`,
   },
   {
-    id: "aksesibilitas", label: "Aksesibilitas",
-    rows: (result) => result.summary.sidewalk_ratio != null && [
-      { label: "Bertrotoar", value: result.summary.sidewalk_ratio, color: "#22c55e" },
-      { label: "Ramah kursi roda", value: result.summary.wheelchair_tagged_ratio, color: "#4a90e2" },
-      { label: "Tidak ramah kursi roda", value: result.summary.wheelchair_no_ratio, color: "#ef4444" },
-    ],
-    format: "percent",
-    note: () => "Rasio panjang jalan per tag OSM mentah (sidewalk=, wheelchair=), bukan skor gabungan.",
-  },
-  {
     id: "uhi", label: "UHI",
     rows: (result) => {
       const f = result.uhi?.features || []
@@ -129,7 +119,37 @@ function BarChart({ rows, format, unit }) {
   )
 }
 
-function Ringkasan({ result, mapMode, onMapMode }) {
+// Identical 4-checkbox group rendered in Ringkasan/Transfer/Hijau - these 4 map overlays
+// are independent of which tab/topic is open (see usecases.js's M-UC1 layer comments), so
+// the control for them shouldn't look different depending on which tab you're on.
+function LayerToggles({
+  showIsochrone, onToggleIsochrone, showPoiTransfer, onTogglePoiTransfer,
+  showPoiHijau, onTogglePoiHijau, showJalan, onToggleJalan, showHeatmap, onToggleHeatmap,
+}) {
+  if (!onToggleIsochrone) return null
+  const items = [
+    { label: "Isochrone", show: showIsochrone, onToggle: onToggleIsochrone },
+    { label: "Titik transfer", show: showPoiTransfer, onToggle: onTogglePoiTransfer },
+    { label: "Titik hijau", show: showPoiHijau, onToggle: onTogglePoiHijau },
+    { label: "Kerangka jalan", show: showJalan, onToggle: onToggleJalan },
+    { label: "Heatmap (ikut topik dipilih)", show: showHeatmap, onToggle: onToggleHeatmap },
+  ]
+  return (
+    <div className="section">
+      <label>Layer di peta</label>
+      <div className="dock-actions" style={{ flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
+        {items.map((it) => (
+          <label key={it.label} className="filter-option" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <input type="checkbox" checked={it.show !== false} onChange={it.onToggle} />
+            {it.label}
+          </label>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function Ringkasan({ result, mapMode, onMapMode, ...toggles }) {
   const topic = TOPICS.find((t) => t.id === mapMode) || TOPICS[0]
   const rows = topic.rows(result)
 
@@ -145,6 +165,7 @@ function Ringkasan({ result, mapMode, onMapMode }) {
           ))}
         </div>
       </div>
+      <LayerToggles {...toggles} />
 
       <div className="section">
         <label>{topic.label}</label>
@@ -155,29 +176,42 @@ function Ringkasan({ result, mapMode, onMapMode }) {
   )
 }
 
-function TransferList({ result, onFocus }) {
+function TransferList({ result, onFocus, onRouteTransfer, routingId, ...toggles }) {
   const points = result.transfer_points?.features || []
   return (
     <div className="section">
       <label>Titik transfer ({points.length})</label>
-      <p className="note">Hijau = headway asli dari GTFS TransJakarta. Abu-abu = proxy jarak jalan kaki OSM (KRL/MRT/LRT/bus lain belum ada jadwal publik).</p>
+      <p className="note">Hijau = headway asli dari GTFS TransJakarta. Abu-abu = proxy jarak jalan kaki OSM (KRL/MRT/LRT belum ada jadwal publik).</p>
+      <LayerToggles {...toggles} />
       <div className="board">
         {points.length === 0 && <p className="note">Tidak ada titik transfer dalam radius.</p>}
         {points.map((f, i) => {
           const p = f.properties
           return (
-            <button key={i} className="board-row" style={{ width: "100%", textAlign: "left", border: "none", background: "none", cursor: "pointer" }}
-              onClick={() => onFocus(f)}>
-              <span className="board-name">
-                <span className="dot" style={{ background: p.is_proxy ? "#9ca3af" : "#22c55e" }} />
-                {p.name} <span className="note">({MODE_LABELS[p.mode] || p.mode})</span>
-              </span>
-              <div className="note">
-                {p.distance_m} m
-                {p.headway_min_peak != null && ` · headway ~${p.headway_min_peak} menit (puncak)`}
-                {p.is_proxy && " · proxy"}
-              </div>
-            </button>
+            <div key={i} className="board-row" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <button
+                style={{ flex: 1, textAlign: "left", border: "none", background: "none", cursor: "pointer", padding: 0 }}
+                onClick={() => onFocus(f)}
+              >
+                <span className="board-name">
+                  <span className="dot" style={{ background: p.is_proxy ? "#9ca3af" : "#22c55e" }} />
+                  {p.name} <span className="note">({MODE_LABELS[p.mode] || p.mode})</span>
+                </span>
+                <div className="note">
+                  {p.distance_m} m
+                  {p.headway_min_peak != null && ` · headway ~${p.headway_min_peak} menit (puncak)`}
+                  {p.is_proxy && " · proxy"}
+                </div>
+              </button>
+              {onRouteTransfer && (
+                <button
+                  className="mini" title="Rute jalan kaki ke titik transfer ini"
+                  onClick={() => onRouteTransfer(f, i)} disabled={routingId === i}
+                >
+                  {routingId === i ? "…" : "🚶→"}
+                </button>
+              )}
+            </div>
           )
         })}
       </div>
@@ -185,7 +219,7 @@ function TransferList({ result, onFocus }) {
   )
 }
 
-function GreenSearch({ result, onFocus, onRouteGreen, routingId }) {
+function GreenSearch({ result, onFocus, onRouteGreen, routingId, ...toggles }) {
   const [q, setQ] = useState("")
   const [expanded, setExpanded] = useState(null)
   const all = result.ecology_poi?.features || []
@@ -197,7 +231,8 @@ function GreenSearch({ result, onFocus, onRouteGreen, routingId }) {
   return (
     <div className="section">
       <label>Cari taman & ruang hijau ({all.length})</label>
-      <p className="note">Dari tag OSM (leisure=park/garden, landuse=grass/forest/recreation_ground) dalam radius jalan kaki.</p>
+      <p className="note">Dari tag OSM (leisure=park/garden, landuse=grass/forest/recreation_ground) dalam radius jalan kaki. Pohon + taman/RTH ditampilkan sebagai heatmap kepadatan per grid 250m (topik "Vegetasi").</p>
+      <LayerToggles {...toggles} />
       <input
         className="search-input"
         value={q}
@@ -264,8 +299,21 @@ export default function WalkDock({
   open, onToggle, tab, onTab, result, stationId,
   picking, onTogglePick, preference, onPreference, routeResult, routeStatus, onFocus,
   onRouteGreen, greenRoutingId,
+  onRouteTransfer, transferRoutingId,
   mapMode, onMapMode,
+  showIsochrone, onToggleIsochrone,
+  showPoiTransfer, onTogglePoiTransfer,
+  showPoiHijau, onTogglePoiHijau,
+  showJalan, onToggleJalan,
+  showHeatmap, onToggleHeatmap,
 }) {
+  const toggles = {
+    showIsochrone, onToggleIsochrone,
+    showPoiTransfer, onTogglePoiTransfer,
+    showPoiHijau, onTogglePoiHijau,
+    showJalan, onToggleJalan,
+    showHeatmap, onToggleHeatmap,
+  }
   return (
     <>
       <button className={open ? "dock-toggle open" : "dock-toggle"} onClick={onToggle}>
@@ -281,9 +329,20 @@ export default function WalkDock({
         </div>
 
         <div className="dock-body">
-          {tab === "ringkasan" && <Ringkasan result={result} mapMode={mapMode} onMapMode={onMapMode} />}
-          {tab === "transfer" && <TransferList result={result} onFocus={onFocus} />}
-          {tab === "hijau" && <GreenSearch result={result} onFocus={onFocus} onRouteGreen={onRouteGreen} routingId={greenRoutingId} />}
+          {tab === "ringkasan" && <Ringkasan result={result} mapMode={mapMode} onMapMode={onMapMode} {...toggles} />}
+          {tab === "transfer" && (
+            <TransferList
+              result={result} onFocus={onFocus}
+              onRouteTransfer={onRouteTransfer} routingId={transferRoutingId}
+              {...toggles}
+            />
+          )}
+          {tab === "hijau" && (
+            <GreenSearch
+              result={result} onFocus={onFocus} onRouteGreen={onRouteGreen} routingId={greenRoutingId}
+              {...toggles}
+            />
+          )}
           {tab === "rute" && (
             <Rute
               stationId={stationId} picking={picking} onTogglePick={onTogglePick}

@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import MapView from "./MapView"
 import AiDock from "./components/AiDock"
-import Chatbot from "./components/Chatbot"
 import EquityDock from "./components/EquityDock"
 import FilterBar from "./components/FilterBar"
 import MethodologyInfo from "./components/MethodologyInfo"
@@ -22,34 +21,74 @@ const TOD_GROUPS = [
   { key: "typologies", label: "Tipologi", options: tod.TYPOLOGIES },
 ]
 
-// Type-to-filter dropdown backed by a native <datalist> - some of these lists (MAPID
-// TIPE_3, e.g. MAKANAN DAN MINUMAN's 34 subcategories) are too long to scan by eye.
-// Free text that doesn't match a listed option is treated the same as "cleared" (empty
-// string) on blur, so it can never silently send a typo as if it were a real selection.
-function SearchableSelect({ id, value, onChange, options, allowEmpty }) {
-  // Local typing buffer, separate from the committed `value` - onChange only fires when
-  // the typed text exactly matches a listed option (selecting a <datalist> suggestion
-  // sets the input to that exact string) or is cleared entirely, so a half-typed search
-  // can never silently overwrite a valid prior selection.
-  const [text, setText] = useState(value || "")
-  useEffect(() => { setText(value || "") }, [value])
+// Type-to-filter dropdown - same custom listbox pattern as StationPicker (search input +
+// its own absolutely-positioned option list, not the browser's native <input list>/
+// <datalist> combo). The native version raced blur against the datalist popup's own click
+// selection (blur fires first in some browsers, so picking an option could get silently
+// reverted a tick later - "susah keluar", reported twice). Picking an option here uses
+// onMouseDown like StationPicker does, which fires before blur, so there's no race to lose.
+function SearchableSelect({ value, onChange, options, allowEmpty }) {
+  const [query, setQuery] = useState("")
+  const [open, setOpen] = useState(false)
+  const [highlight, setHighlight] = useState(0)
+  const rootRef = useRef(null)
+
+  useEffect(() => {
+    function onClickOutside(e) {
+      if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener("mousedown", onClickOutside)
+    return () => document.removeEventListener("mousedown", onClickOutside)
+  }, [])
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    const base = q ? options.filter((o) => o.toLowerCase().includes(q)) : options
+    return allowEmpty ? ["", ...base] : base
+  }, [options, query, allowEmpty])
+
+  function pick(opt) {
+    onChange(opt)
+    setQuery("")
+    setOpen(false)
+  }
+
+  function onKeyDown(e) {
+    if (!open && (e.key === "ArrowDown" || e.key === "Enter")) { setOpen(true); return }
+    if (!open) return
+    if (e.key === "ArrowDown") { e.preventDefault(); setHighlight((h) => Math.min(h + 1, filtered.length - 1)) }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setHighlight((h) => Math.max(h - 1, 0)) }
+    else if (e.key === "Enter") { e.preventDefault(); if (filtered[highlight] !== undefined) pick(filtered[highlight]) }
+    else if (e.key === "Escape") setOpen(false)
+  }
+
   return (
-    <>
+    <div className="station-picker" ref={rootRef}>
       <input
-        list={`${id}-list`}
-        value={text}
+        className="search-input"
+        type="text"
         placeholder={allowEmpty || "Cari…"}
-        onChange={(e) => {
-          setText(e.target.value)
-          if (options.includes(e.target.value)) onChange(e.target.value)
-          else if (allowEmpty && e.target.value === "") onChange("")
-        }}
-        onBlur={() => { if (!options.includes(text) && text !== "") setText(value || "") }}
+        value={open ? query : (value || (allowEmpty ? allowEmpty : ""))}
+        onFocus={() => { setOpen(true); setQuery(""); setHighlight(0) }}
+        onChange={(e) => { setQuery(e.target.value); setHighlight(0) }}
+        onKeyDown={onKeyDown}
       />
-      <datalist id={`${id}-list`}>
-        {options.map((o) => <option key={o} value={o} />)}
-      </datalist>
-    </>
+      {open && (
+        <div className="station-picker-list">
+          {filtered.length === 0 && <div className="station-picker-empty">Tidak ada hasil</div>}
+          {filtered.slice(0, 200).map((o, i) => (
+            <div
+              key={o || "__empty__"}
+              className={`station-picker-item${i === highlight ? " active" : ""}${o === value ? " selected" : ""}`}
+              onMouseDown={() => pick(o)}
+              onMouseEnter={() => setHighlight(i)}
+            >
+              {o || allowEmpty}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -88,7 +127,6 @@ export default function App() {
   const [todRows, setTodRows] = useState([])
   const [todMeta, setTodMeta] = useState(null)
   const [filters, setFilters] = useState(tod.EMPTY_FILTERS)
-  const [filtersFromChat, setFiltersFromChat] = useState(false)
   const [dockOpen, setDockOpen] = useState(false)
   const [dockTab, setDockTab] = useState("ringkasan")
   const [whatIf, setWhatIf] = useState(null)
@@ -106,6 +144,19 @@ export default function App() {
   const [routeStatus, setRouteStatus] = useState("")
   const [routeStats, setRouteStats] = useState(null)
   const [greenRoutingId, setGreenRoutingId] = useState(null)
+  const [transferRoutingId, setTransferRoutingId] = useState(null)
+  // Same 4 checkboxes in Ringkasan/Transfer/Hijau (WalkDock) - isochrone outline, transfer
+  // POI, green POI and "whichever per-topic heatmap is active" are independent overlays
+  // (see usecases.js's M-UC1 layer comments), not tied to which tab is open.
+  const [showIsochrone, setShowIsochrone] = useState(true)
+  const [showPoiTransfer, setShowPoiTransfer] = useState(true)
+  const [showPoiHijau, setShowPoiHijau] = useState(true)
+  const [showJalan, setShowJalan] = useState(true)
+  const [showHeatmap, setShowHeatmap] = useState(true)
+  const layerToggles = useMemo(
+    () => ({ isochrone: showIsochrone, poi_transfer: showPoiTransfer, poi_hijau: showPoiHijau, jalan: showJalan, heatmap: showHeatmap }),
+    [showIsochrone, showPoiTransfer, showPoiHijau, showJalan, showHeatmap],
+  )
 
   useEffect(() => {
     api.styles().then((s) => { setStyles(s); setStyleUrl(s[0].url) })
@@ -129,13 +180,23 @@ export default function App() {
   useEffect(() => {
     setSubtype(""); setSubtype2("")
     if (useCaseId !== "U-UC1" || dataSource === "live") { setSubtypeOptions([]); return }
-    api.businessSubtypes(category).then(setSubtypeOptions)
+    // Guard against out-of-order responses - switching category fires a new fetch before
+    // the previous one's response lands, and network timing doesn't guarantee the earlier
+    // request resolves first. Without this, picking a new category quickly could have the
+    // OLD category's subtype list win the race and stick (e.g. still showing APOTEK's
+    // options - it has none, so this reads as "empty()" winning, but any category with a
+    // slower response than the one after it hits the same bug).
+    let current = true
+    api.businessSubtypes(category).then((opts) => { if (current) setSubtypeOptions(opts) })
+    return () => { current = false }
   }, [category, useCaseId, dataSource])
 
   useEffect(() => {
     setSubtype2("")
     if (useCaseId !== "U-UC1" || dataSource === "live") { setSubtype2Options([]); return }
-    api.businessSubtypes2(category, subtype || undefined).then(setSubtype2Options)
+    let current = true
+    api.businessSubtypes2(category, subtype || undefined).then((opts) => { if (current) setSubtype2Options(opts) })
+    return () => { current = false }
   }, [category, subtype, useCaseId, dataSource])
 
   const useCase = USE_CASES.find((u) => u.id === useCaseId)
@@ -284,6 +345,14 @@ export default function App() {
     const [lon, lat] = feature.geometry.coordinates
     await pickDestination({ lon, lat })
     setGreenRoutingId(null)
+    setDockTab("rute")
+  }
+
+  async function routeToTransferPoint(feature, index) {
+    setTransferRoutingId(index)
+    const [lon, lat] = feature.geometry.coordinates
+    await pickDestination({ lon, lat })
+    setTransferRoutingId(null)
     setDockTab("rute")
   }
 
@@ -563,6 +632,7 @@ export default function App() {
             result={useCase.dashboard ? dashboardResult : mapResult}
             useCase={useCase}
             mapMode={mapMode}
+            layerToggles={layerToggles}
             onPickStation={selectStation}
             picking={picking}
             onMapPick={pickDestination}
@@ -574,8 +644,7 @@ export default function App() {
             groups={TOD_GROUPS}
             emptyFilters={tod.EMPTY_FILTERS}
             filters={filters}
-            onChange={(f) => { setFilters(f); setFiltersFromChat(false) }}
-            fromChat={filtersFromChat}
+            onChange={setFilters}
             matched={visibleRows.length}
             total={todRows.length}
           />
@@ -598,18 +667,6 @@ export default function App() {
           )
         })()}
 
-        {useCase.dashboard && (
-          <Chatbot
-            title="Tanya data TOD"
-            chatFn={api.chat}
-            suggestions={tod.SUGGESTIONS}
-            filterKeys={["modes", "classifications", "typologies"]}
-            notReadyLabel="Jalankan analisis Indeks TOD dulu agar tabel tersedia."
-            ready={todRows.length > 0}
-            onFilters={(f) => { setFilters(f); setFiltersFromChat(true) }}
-            onFocus={selectStation}
-          />
-        )}
       </main>
 
       {dockOpen && (useCase.dashboard ? todRows.length > 0 : result) && (
@@ -672,8 +729,20 @@ export default function App() {
           onFocus={focusTransferPoint}
           onRouteGreen={routeToGreenPoi}
           greenRoutingId={greenRoutingId}
+          onRouteTransfer={routeToTransferPoint}
+          transferRoutingId={transferRoutingId}
           mapMode={mapMode}
           onMapMode={setMapMode}
+          showIsochrone={showIsochrone}
+          onToggleIsochrone={() => setShowIsochrone((v) => !v)}
+          showPoiTransfer={showPoiTransfer}
+          onTogglePoiTransfer={() => setShowPoiTransfer((v) => !v)}
+          showPoiHijau={showPoiHijau}
+          onTogglePoiHijau={() => setShowPoiHijau((v) => !v)}
+          showJalan={showJalan}
+          onToggleJalan={() => setShowJalan((v) => !v)}
+          showHeatmap={showHeatmap}
+          onToggleHeatmap={() => setShowHeatmap((v) => !v)}
         />
       )}
 

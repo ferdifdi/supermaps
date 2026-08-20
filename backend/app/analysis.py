@@ -129,6 +129,13 @@ def _poi_points(pois: list[dict], predicate) -> list[Point]:
     return [to_m(Point(p["lon"], p["lat"])) for p in pois if predicate(p)]
 
 
+def _poi_count_grid(cells, points_m: list[Point]) -> list[int]:
+    """Raw count of `points_m` per cell - same 250m grid as access_by_walking, so the
+    green heatmap reads as a density choropleth (like M-UC2's POI heatmap) instead of a
+    screen-pixel-radius blur that shifts with zoom."""
+    return [sum(1 for p in points_m if c.contains(p)) for c in cells]
+
+
 def _residential_points_for(station: dict, radius: int, data_source: str, pois: list[dict]) -> list[Point]:
     """Residential building points (metric CRS) for walk_score's residential_mix -
     output/poi_residential_*.py's static file first (mode/radius covered, not live mode),
@@ -138,6 +145,18 @@ def _residential_points_for(station: dict, radius: int, data_source: str, pois: 
         if static is not None:
             return [to_m(Point(p["lon"], p["lat"])) for p in static]
     return _poi_points(pois, osm.is_residential)
+
+
+def _commercial_points_for(station: dict, radius: int, data_source: str, pois: list[dict]) -> list[Point]:
+    """Commercial points (metric CRS) for walk_score's residential_mix - MAPID Data
+    Catalogue's PERDAGANGAN DAN RETAIL (same source K-UC1's commercial_density uses)
+    when data_source != "live", else classified from the already-fetched osm.pois()
+    list. MAPID has no radius/mode coverage gate like the static OSM files (it's one
+    Jabodetabek-wide file, not precomputed per station), so this never falls through
+    to OSM in "static" mode the way roads/residential/green do."""
+    if data_source != "live":
+        return [to_m(Point(p["lon"], p["lat"])) for p in mapid_data.retail(station["lon"], station["lat"], radius)]
+    return _poi_points(pois, osm.is_commercial)
 
 
 def _ped_shed_ratio(cell, tree, lines, radius=100.0, grid_n=5):
@@ -188,7 +207,7 @@ ROUTE_WEIGHTS = {"fast": "length", "accessible": "accessible"}
 
 async def _walk_graph(station: dict, radius: int, data_source: str = "static"):
     """Like _context, but also fetches trees and air quality for the "Kenyamanan" tab's
-    raw display layers (canopy, air_quality_grid) - those aren't routing inputs (see
+    display layers (green_grid, air_quality_grid) - those aren't routing inputs (see
     network.py), just shown as-is, so this is the one place both get pulled.
 
     Trees prefer the static green-space file (output/poi_green_*.py, "tree" kind) when
@@ -231,11 +250,18 @@ def _accessibility_summary(roads: list[dict]) -> dict:
     }
 
 
-def _transfer_points(station: dict, pois: list[dict], radius: int) -> dict:
+async def _transfer_points(station: dict, radius: int, data_source: str = "static") -> dict:
     """Transfer-efficiency layer (gap #1). TransJakarta stops get a real average headway
-    from GTFS frequencies.txt (is_proxy=False). KRL/MRT/LRT/other-bus points only have OSM
-    tags, no schedule data exists for them, so they carry walking distance only and
+    from GTFS frequencies.txt (is_proxy=False). KRL/MRT/LRT points only have station
+    identity, no schedule data exists for them, so they carry walking distance only and
     is_proxy=True - the frontend must show that distinction, not present them as equal.
+
+    Rail mode comes from static_transit.stations() (output/isochrone_*.py's precomputed
+    list, mode_label() resolved once at generation time from the full station=*/railway=*/
+    operator tag set - not re-derived here from a bare `railway` tag, which used to
+    mislabel MRT/LRT stations as "KRL" whenever they lacked a station=* subtag, e.g. Blok M
+    BCA). Falls back to a live osm.stations() call when data_source == "live" or no static
+    file exists yet - same pattern as _transit_points_near.
     """
     origin_m = to_m(Point(station["lon"], station["lat"]))
     real = gtfs.nearby_stops(station["lon"], station["lat"], radius)
@@ -246,22 +272,22 @@ def _transfer_points(station: dict, pois: list[dict], radius: int) -> dict:
     } for s in real]
     seen = {(round(s["lon"], 5), round(s["lat"], 5)) for s in real}
 
-    for p in pois:
-        if not (p["railway"] or p["public_transport"] or p["highway"] == "bus_stop"):
+    rail = static_transit.stations() if data_source != "live" else None
+    if rail is None:
+        rail = await osm.stations()
+
+    for st in rail:
+        key = (round(st["lon"], 5), round(st["lat"], 5))
+        if key in seen or not st.get("name"):
             continue
-        key = (round(p["lon"], 5), round(p["lat"], 5))
-        if key in seen or not p["name"]:
-            continue
-        seen.add(key)
-        mode = "KRL" if p["railway"] in ("station", "halt") else \
-            "LRT" if p["railway"] == "tram_stop" else "Bus"
-        dist = to_m(Point(p["lon"], p["lat"])).distance(origin_m)
+        dist = to_m(Point(st["lon"], st["lat"])).distance(origin_m)
         if dist > radius:
             continue
+        seen.add(key)
         points.append({
-            "name": p["name"], "lon": p["lon"], "lat": p["lat"], "mode": mode,
+            "name": st["name"], "lon": st["lon"], "lat": st["lat"], "mode": st.get("mode_label", "KRL"),
             "distance_m": round(dist), "headway_min_peak": None,
-            "wheelchair": p["wheelchair"] or None, "is_proxy": True,
+            "wheelchair": None, "is_proxy": True,
         })
 
     points.sort(key=lambda x: x["distance_m"])
@@ -324,7 +350,7 @@ async def walk_access(station: dict, radius_m: int = 800, data_source: str = "st
     cells = grid(buffer_m, CELL)
     parts = _walk_score_grid(
         cells, lines, intersections(lines),
-        _residential_points_for(station, radius_m, data_source, pois), _poi_points(pois, osm.is_commercial),
+        _residential_points_for(station, radius_m, data_source, pois), _commercial_points_for(station, radius_m, data_source, pois),
     )
     access_score = sum(parts[k] * w for k, w in WALK_WEIGHTS.items())
     access_features = [
@@ -344,18 +370,16 @@ async def walk_access(station: dict, radius_m: int = 800, data_source: str = "st
         static_transit.isochrone_for(station.get("mode_label", ""), static_station_id, radius_m)
     iso_fast = iso_fast_static if iso_fast_static is not None else network.isochrone(graph, origin, minutes, "length")
     iso_accessible = network.isochrone(graph, origin, minutes, "accessible")
-    transfer = _transfer_points(station, pois, radius_m)
+    transfer = await _transfer_points(station, radius_m, data_source)
     aq_stations = await airquality.nearby_stations(station["lon"], station["lat"])
     air_quality_grid = _air_quality_grid(buffer_m, aq_stations)
 
     # "Kenyamanan" tab (comfort context): raw environmental layers only, no composite
-    # score - user explicitly rejected building a comfort index on top of these.
-    canopy = fc([
-        {"type": "Feature", "geometry": {"type": "Point", "coordinates": [t["lon"], t["lat"]]}, "properties": {}}
-        for t in raw_trees
-    ])
+    # score - user explicitly rejected building a comfort index on top of these. Tree
+    # points themselves aren't returned raw anymore (see green_grid below) - only their
+    # count, folded into the 250m green density grid together with green_area/shelter.
     # Static green-space file (output/poi_green_*.py) first, "green_area"/"shelter" kinds
-    # (trees already went into canopy above) - falls back to classifying the live
+    # (trees already counted into green_grid above) - falls back to classifying the live
     # osm.pois() fetch when this station's mode/radius isn't covered or data_source ==
     # "live". Static rows only carry "kind"/"name" (not the original leisure/landuse tag
     # value the live path has), so the two paths' properties differ slightly.
@@ -375,6 +399,16 @@ async def walk_access(station: dict, radius_m: int = 800, data_source: str = "st
              "properties": {"leisure": p["leisure"], "landuse": p["landuse"], "name": p["name"]}}
             for p in green
         ])
+    # Green density per 250m cell (trees + green_area/shelter combined) - same grid as
+    # access_by_walking, count-based choropleth instead of a blur-radius heatmap.
+    green_points_m = [to_m(Point(t["lon"], t["lat"])) for t in raw_trees] + \
+        [to_m(Point(p["lon"], p["lat"])) for p in green]
+    green_counts = _poi_count_grid(cells, green_points_m)
+    green_grid = fc([
+        feature(c, {"green_count": green_counts[i]})
+        for i, c in enumerate(cells)
+    ])
+
     # Raw per-segment wheelchair/sidewalk tags as their own map, not folded into any score.
     accessibility_roads = fc([
         {"type": "Feature", "geometry": {"type": "LineString", "coordinates": r["coords"]},
@@ -398,8 +432,8 @@ async def walk_access(station: dict, radius_m: int = 800, data_source: str = "st
         "transfer_points": transfer,
         "air_quality_grid": air_quality_grid,
         "air_quality_stations": aq_stations,
-        "canopy": canopy,
         "ecology_poi": ecology_poi,
+        "green_grid": green_grid,
         "accessibility_roads": accessibility_roads,
         "uhi": uhi,
         "ecology_index": ecology_index,
@@ -552,22 +586,23 @@ async def _transit_points_near(lon: float, lat: float, radius: int, data_source:
     return near
 
 
-async def _site_anchors(lon: float, lat: float, data_source: str = "static") -> list[dict]:
+async def _site_anchors(lon: float, lat: float, data_source: str = "static",
+                         radius: int = SITE_ANCHOR_RADIUS) -> list[dict]:
     """Traffic generators near the station - office workers, daily-need POIs (MAPID in
     "static" mode, OSM tags in "live" mode - see osm_poi.py), transit riders (static
     station snapshot + GTFS in "static" mode, live osm.stations() + GTFS in "live" mode -
     see _transit_points_near)."""
     if data_source == "live":
-        pois = await osm.pois(lon, lat, SITE_ANCHOR_RADIUS)
+        pois = await osm.pois(lon, lat, radius)
         return (
             [{**a, "anchor_type": "kantor"} for a in osm_poi.offices(pois)]
             + [{**a, "anchor_type": "kebutuhan_dasar"} for a in osm_poi.basic_needs(pois)]
-            + [{**a, "anchor_type": "transit"} for a in await _transit_points_near(lon, lat, SITE_ANCHOR_RADIUS, data_source)]
+            + [{**a, "anchor_type": "transit"} for a in await _transit_points_near(lon, lat, radius, data_source)]
         )
     return (
-        [{**a, "anchor_type": "kantor"} for a in mapid_data.offices(lon, lat, SITE_ANCHOR_RADIUS)]
-        + [{**a, "anchor_type": "kebutuhan_dasar"} for a in mapid_data.basic_needs(lon, lat, SITE_ANCHOR_RADIUS)]
-        + [{**a, "anchor_type": "transit"} for a in await _transit_points_near(lon, lat, SITE_ANCHOR_RADIUS, data_source)]
+        [{**a, "anchor_type": "kantor"} for a in mapid_data.offices(lon, lat, radius)]
+        + [{**a, "anchor_type": "kebutuhan_dasar"} for a in mapid_data.basic_needs(lon, lat, radius)]
+        + [{**a, "anchor_type": "transit"} for a in await _transit_points_near(lon, lat, radius, data_source)]
     )
 
 
@@ -597,14 +632,14 @@ async def site_selection(station: dict, business_type: str, subtype: str | None 
         else mapid_data.by_prefix(station["lon"], station["lat"], radius, business_type, subtype, subtype2)
     )
     comp = [to_m(Point(c["lon"], c["lat"])) for c in competitors_raw]
-    anchors_raw = await _site_anchors(station["lon"], station["lat"], data_source)
+    anchors_raw = await _site_anchors(station["lon"], station["lat"], data_source, radius)
     anchors = {
         t: [to_m(Point(a["lon"], a["lat"])) for a in anchors_raw if a["anchor_type"] == t]
         for t in ("kantor", "kebutuhan_dasar", "transit")
     }
     parts = _walk_score_grid(
         cells, lines, intersections(lines),
-        _residential_points_for(station, radius, data_source, pois), _poi_points(pois, osm.is_commercial),
+        _residential_points_for(station, radius, data_source, pois), _commercial_points_for(station, radius, data_source, pois),
     )
     walk_score = sum(parts[k] * w for k, w in WALK_WEIGHTS.items())
 
