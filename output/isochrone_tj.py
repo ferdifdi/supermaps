@@ -1,6 +1,7 @@
 """Isochrone jalan kaki 400m + rute + jaringan jalan untuk SEMUA halte TransJakarta
-(~2876 halte (3 kategori GTFS: Angkutan Umum Integrasi, BRT, Transjabodetabek - Mikrotrans dkk di luar scope), dari GTFS resmi transjakarta.zip - bukan dari OSM, soalnya klasifikasi TJ
-di OSM banyak salah/ketuker sama terminal bus lain).
+(~2876 halte dari 3 kategori GTFS: Angkutan Umum Integrasi, BRT, Transjabodetabek -
+Mikrotrans dkk di luar scope), dari GTFS resmi transjakarta.zip - bukan dari OSM, soalnya
+klasifikasi TJ di OSM banyak salah/ketuker sama terminal bus lain.
 
 Install dulu (sekali saja): pip install -r requirements.txt   (isinya cuma pyshp)
 
@@ -27,15 +28,20 @@ fetch OSM yang udah diambil buat halte sebelumnya, gak fetch ulang ke Overpass, 
 pakai data yang udah ada. Ini krusial buat TJ: banyak halte cuma 300-500m dari halte
 lain, jadi jaringan jalan yang sama kepake berkali-kali kalau di-fetch satu-satu.
 
-PERINGATAN: meski udah di-cache, ini tetap job BESAR (8091 halte) dan bisa makan waktu
+PERINGATAN: meski udah di-cache, ini tetap job BESAR (~2876 halte) dan bisa makan waktu
 lama, apalagi Overpass API terkenal suka lambat/dibatasi. Progress disimpan checkpoint di
 isochrone_tj_work.json (working file internal, bukan deliverable - jangan dihapus sebelum
-semua halte selesai). Kalau ke-stop/mati di tengah jalan, tinggal jalankan ulang
-`python isochrone_tj.py` - otomatis lanjut dari halte yang belum selesai, gak mulai dari
-nol, lalu tulis ulang ke-4 shapefile dari data terbaru (cache road-fetch TIDAK ikut
-disimpan di checkpoint - resume tetap fetch ulang dari nol untuk sisa halte, cuma
-prosesnya sendiri tetap kena optimasi cache yang sama). Rute (shapes.txt) dari GTFS
-lokal, gak butuh Overpass, jadi selalu diambil ulang tiap run.
+semua halte selesai). Kalau ke-stop/mati di tengah jalan (proses dimatikan paksa dkk),
+tinggal jalankan ulang `python isochrone_tj.py` - otomatis lanjut dari halte yang belum
+selesai, gak mulai dari nol, lalu tulis ulang ke-4 shapefile dari data terbaru (cache
+road-fetch TIDAK ikut disimpan di checkpoint - resume tetap fetch ulang dari nol untuk
+sisa halte, cuma prosesnya sendiri tetap kena optimasi cache yang sama). Halte yang GAGAL
+karena error Overpass (bukan dimatikan paksa) di-retry OTOMATIS di dalam satu run yang
+sama - lihat MAX_RETRY_ROUNDS/RETRY_BACKOFF_S. Halte yang TETAP gagal di >=
+GIVEUP_THRESHOLD run terpisah di-skip permanen mulai run berikutnya - lihat
+isochrone_tj_giveup.json - biar halte yang emang selalu gagal (koordinat rusak dkk) gak
+bikin tiap rerun kejebak ngulang dia mulu. Rute (shapes.txt) dari GTFS lokal, gak butuh
+Overpass, jadi selalu diambil ulang tiap run.
 """
 
 import asyncio
@@ -65,9 +71,40 @@ RADIUS_QUERY = 1000  # sengaja jauh lebih besar dari CUTOFF_M - fetch yang lebih
 # berarti lebih banyak halte tetangga yang bisa reuse hasil fetch yang sama (lihat
 # _RoadCache), jadi walau tiap fetch individual agak lebih berat, TOTAL panggilan
 # Overpass jauh lebih sedikit.
+
+
+# Halte yang GAGAL karena exception (timeout/error Overpass) di-retry OTOMATIS - sekali
+# tiap checkpoint, lalu dalam beberapa ronde setelah semua halte diproses - sampai
+# gak ada yang gagal lagi atau MAX_RETRY_ROUNDS habis. Halte yang poly-nya None (network
+# jalan beneran gak nyampe dari titik itu - hasil geometri yang stabil, bukan gangguan
+# jaringan) TIDAK di-retry, itu bukan kegagalan fetch, coba lagi gak bakal ubah hasilnya.
+MAX_RETRY_ROUNDS = 10
+RETRY_BACKOFF_S = 5  # first round's wait; doubles each round after that (see main()),
+# capped at RETRY_BACKOFF_MAX_S - a burst of "all Overpass mirrors unreachable/rate-
+# limited" errors means the mirrors need real recovery time, not just a few seconds.
+RETRY_BACKOFF_MAX_S = 120
+
+REQUEST_DELAY_S = 1.0  # sleep after every osm.roads() call that actually hits Overpass
+# (skipped when _RoadCache serves a reused fetch instead - no request, no need to pace
+# it), success or fail, main pass and retries alike - firing requests back-to-back with
+# zero pacing is exactly what gets all 3 public mirrors rate-limited/502-ing at once
+# (checked: happened in practice on a ~2876-halte run).
+# A halte that's STILL in `failed` after a whole run's worth of retries (in-run rounds +
+# next-run resume) has its cross-run fail count bumped in GIVEUP_FILE. Once that count
+# hits GIVEUP_THRESHOLD (i.e. it failed every single retry across 3 separate script
+# executions, not just within one run), it's excluded from `remaining` on every future
+# run - permanently-broken halte (bad coordinates, a query Overpass always rejects, etc.)
+# would otherwise eat a full MAX_RETRY_ROUNDS budget on every single rerun forever,
+# forever blocking a clean "0 gagal" finish. Still listed in FAILED_FILE so it's never
+# silently dropped - the user has to notice and decide (fix the data, or accept the gap).
+# Doesn't apply to `unreachable` (poly is None) - that's a stable geometry result, not a
+# fetch failure, never retried in the first place.
+GIVEUP_THRESHOLD = 3
+
 OUT_DIR = Path(__file__).resolve().parent
 WORK_FILE = OUT_DIR / "isochrone_tj_work.json"
 FAILED_FILE = OUT_DIR / "isochrone_tj_400m_failed.txt"
+GIVEUP_FILE = OUT_DIR / "isochrone_tj_giveup.json"
 STATIONS_SHP = OUT_DIR / "isochrone_tj_stations"
 ROUTES_SHP = OUT_DIR / "isochrone_tj_routes"
 ISOCHRONE_SHP = OUT_DIR / "isochrone_tj_isochrone_400m"
@@ -76,7 +113,10 @@ STATIONS_GEOJSON = OUT_DIR / "isochrone_tj_stations.geojson"
 ROUTES_GEOJSON = OUT_DIR / "isochrone_tj_routes.geojson"
 ISOCHRONE_GEOJSON = OUT_DIR / "isochrone_tj_isochrone_400m.geojson"
 ROADS_GEOJSON = OUT_DIR / "isochrone_tj_roads_400m.geojson"
-CHECKPOINT_EVERY = 100
+CHECKPOINT_EVERY = 25  # was 100 - dikecilin biar kalau proses ke-stop di tengah jalan
+# (atau internet putus/mirror down), progress yang hilang dan halte yang harus diulang
+# lebih sedikit. Trade-off: nulis checkpoint + 4 shapefile/geojson lebih sering (agak
+# nambah I/O), tapi itu jauh lebih murah dibanding ngulang puluhan panggilan Overpass.
 
 WGS84_WKT = (
     'GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",'
@@ -119,7 +159,13 @@ async def station_isochrone(lon: float, lat: float):
     origin_m = to_m(Point(lon, lat))
     roads = _road_cache.get(origin_m)
     if roads is None:
-        roads = await osm.roads(lon, lat, RADIUS_QUERY)
+        # Paced (REQUEST_DELAY_S) even on exception, via finally - only when this
+        # actually hits Overpass, not when _RoadCache serves a reused fetch (no request,
+        # nothing to pace). The exception itself still propagates up normally afterwards.
+        try:
+            roads = await osm.roads(lon, lat, RADIUS_QUERY)
+        finally:
+            await asyncio.sleep(REQUEST_DELAY_S)
         _road_cache.put(origin_m, roads)
     if not roads:
         return None, []
@@ -206,6 +252,16 @@ def save_checkpoint(stops_done, roads_by_key):
         json.dumps({"stops": stops_done, "roads": roads_by_key}, ensure_ascii=False),
         encoding="utf-8",
     )
+
+
+def load_giveup() -> dict:
+    if not GIVEUP_FILE.exists():
+        return {}
+    return json.loads(GIVEUP_FILE.read_text(encoding="utf-8"))
+
+
+def save_giveup(giveup: dict):
+    GIVEUP_FILE.write_text(json.dumps(giveup, ensure_ascii=False), encoding="utf-8")
 
 
 def _write_prj(base_path: Path):
@@ -346,6 +402,45 @@ def write_all(stops_done, roads_by_key, route_features):
     write_roads_geojson(roads_by_key)
 
 
+async def _process(s: dict, stops_done: list, roads_by_key: dict, unreachable: list) -> str:
+    """Fetches+builds one halte's isochrone. Returns "error" on exception (Overpass
+    timeout/error - retryable by the caller). Returns "ok" or "unreachable" for the two
+    real outcomes that won't change on retry: a completed isochrone (appended to
+    stops_done) or a genuinely unreachable halte (poly is None - no road network reaches
+    it, a stable geometry result, not a fetch failure - appended to `unreachable`, never
+    retried)."""
+    try:
+        poly, in_reach_roads = await station_isochrone(s["lon"], s["lat"])
+    except Exception as e:
+        print(f"  GAGAL: {s['name']} ({e})", flush=True)
+        return "error"
+    if poly is None:
+        unreachable.append(s["name"])
+        return "unreachable"
+    stops_done.append({
+        "stop_id": s["stop_id"], "name": s["name"],
+        "wheelchair": s.get("wheelchair", ""), "lon": s["lon"], "lat": s["lat"],
+        "poly": mapping(poly),
+    })
+    for r in in_reach_roads:
+        key = json.dumps(r["coords"])
+        roads_by_key[key] = r
+    return "ok"
+
+
+async def _retry_failed(failed: list[dict], stops_done: list, roads_by_key: dict, unreachable: list) -> list[dict]:
+    still_failed = []
+    for s in failed:
+        status = await _process(s, stops_done, roads_by_key, unreachable)
+        if status == "ok":
+            print(f"  BERHASIL (retry): {s['name']}", flush=True)
+        elif status == "unreachable":
+            print(f"  UNREACHABLE (retry): {s['name']}", flush=True)
+        else:
+            still_failed.append(s)
+    return still_failed
+
+
 async def main():
     gtfs._load()
     all_stops = [{"stop_id": sid, **s} for sid, s in gtfs._stops.items()]
@@ -353,8 +448,12 @@ async def main():
 
     stops_done, roads_by_key = load_checkpoint()
     done_ids = {s["stop_id"] for s in stops_done}
-    remaining = [s for s in all_stops if s["stop_id"] not in done_ids]
+    giveup = load_giveup()
+    skip_ids = {sid for sid, c in giveup.items() if c >= GIVEUP_THRESHOLD}
+    remaining = [s for s in all_stops if s["stop_id"] not in done_ids and s["stop_id"] not in skip_ids]
     print(f"{len(done_ids)} sudah selesai sebelumnya (checkpoint), {len(remaining)} sisa diproses.")
+    if skip_ids:
+        print(f"{len(skip_ids)} halte di-skip permanen (gagal terus di >= {GIVEUP_THRESHOLD} run terpisah) - lihat {GIVEUP_FILE.name}.")
 
     print("Mengambil jalur rute (GTFS shapes.txt)...", flush=True)
     route_features = fetch_route_lines()
@@ -364,42 +463,69 @@ async def main():
         save_checkpoint(stops_done, roads_by_key)
         write_all(stops_done, roads_by_key, route_features)
 
-    failed = []
+    unreachable: list[str] = []
+    failed: list[dict] = []
     for i, s in enumerate(remaining):
-        try:
-            poly, in_reach_roads = await station_isochrone(s["lon"], s["lat"])
-            if poly is None:
-                failed.append(s["name"])
-            else:
-                stops_done.append({
-                    "stop_id": s["stop_id"], "name": s["name"],
-                    "wheelchair": s.get("wheelchair", ""), "lon": s["lon"], "lat": s["lat"],
-                    "poly": mapping(poly),
-                })
-                for r in in_reach_roads:
-                    key = json.dumps(r["coords"])
-                    roads_by_key[key] = r
-        except Exception as e:
-            failed.append(f"{s['name']} ({e})")
-
         done_total = len(done_ids) + i + 1
-        print(f"[{done_total}/{len(all_stops)}] {s['name']}", flush=True)
+        status = await _process(s, stops_done, roads_by_key, unreachable)
+        if status == "ok":
+            print(f"[{done_total}/{len(all_stops)}] BERHASIL: {s['name']}", flush=True)
+        elif status == "unreachable":
+            print(f"[{done_total}/{len(all_stops)}] UNREACHABLE: {s['name']}", flush=True)
+        else:
+            failed.append(s)
+            print(f"[{done_total}/{len(all_stops)}] (lihat GAGAL di atas)", flush=True)
 
         if (i + 1) % CHECKPOINT_EVERY == 0:
             checkpoint_and_write()
             print(f"--- checkpoint disimpan + shapefile/geojson ditulis ulang "
-                  f"({len(stops_done)} halte) ---", flush=True)
+                  f"({len(stops_done)} halte, {len(failed)} gagal sejauh ini) ---", flush=True)
+            if failed:
+                print(f"--- retry {len(failed)} yang gagal sebelum lanjut ---", flush=True)
+                failed = await _retry_failed(failed, stops_done, roads_by_key, unreachable)
+                checkpoint_and_write()
 
     checkpoint_and_write()
-    if failed:
-        FAILED_FILE.write_text("\n".join(failed), encoding="utf-8")
+
+    # Backoff doubles each round (5s, 10s, 20s... capped at RETRY_BACKOFF_MAX_S) - a flat
+    # short wait doesn't give a rate-limited/down mirror real time to recover.
+    round_no = 1
+    while failed and round_no <= MAX_RETRY_ROUNDS:
+        backoff = min(RETRY_BACKOFF_S * 2 ** (round_no - 1), RETRY_BACKOFF_MAX_S)
+        print(f"\n--- Retry round {round_no}/{MAX_RETRY_ROUNDS}: {len(failed)} halte gagal, tunggu {backoff}s ---", flush=True)
+        await asyncio.sleep(backoff)
+        failed = await _retry_failed(failed, stops_done, roads_by_key, unreachable)
+        checkpoint_and_write()
+        round_no += 1
+
+    newly_given_up = []
+    for s in failed:
+        giveup[s["stop_id"]] = giveup.get(s["stop_id"], 0) + 1
+        if giveup[s["stop_id"]] >= GIVEUP_THRESHOLD:
+            newly_given_up.append(s)
+    for sid in list(giveup):
+        if sid in done_ids:
+            del giveup[sid]
+    save_giveup(giveup)
+
+    if failed or unreachable:
+        lines = [f"{s['name']} ({s['stop_id']}) - GAGAL setelah retry, {giveup.get(s['stop_id'], '?')}x run terpisah" for s in failed]
+        lines += [f"{name} - unreachable (tidak ada jaringan jalan)" for name in unreachable]
+        FAILED_FILE.write_text("\n".join(lines), encoding="utf-8")
     elif FAILED_FILE.exists():
         FAILED_FILE.unlink()
 
     print(f"\nSELESAI. {len(stops_done)} halte, {len(roads_by_key)} ruas jalan, "
           f"{len(route_features)} jalur rute ditulis ke {OUT_DIR}")
+    if unreachable:
+        print(f"{len(unreachable)} halte unreachable (gak ada jaringan jalan dalam {CUTOFF_M}m) - bukan kegagalan, gak di-retry.")
+    if newly_given_up:
+        print(f"{len(newly_given_up)} halte baru DI-SKIP PERMANEN mulai run berikutnya (gagal {GIVEUP_THRESHOLD}x run terpisah): "
+              + ", ".join(s["name"] for s in newly_given_up))
     if failed:
-        print(f"{len(failed)} gagal, lihat {FAILED_FILE.name} - jalankan lagi script ini buat retry.")
+        print(f"{len(failed)} halte TETAP gagal setelah {MAX_RETRY_ROUNDS}x retry otomatis - lihat {FAILED_FILE.name}, jalankan lagi script ini buat coba lagi.")
+    elif not unreachable:
+        print("Semua halte berhasil diproses, tidak ada yang gagal.")
 
 
 if __name__ == "__main__":

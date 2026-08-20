@@ -79,10 +79,14 @@ async def overpass(query: str) -> dict:
             except httpx.TransportError:  # host unreachable or timed out, try the next mirror
                 r = None
                 continue
-            if r.status_code in (429, 504):  # rate limit / load shedding
+            if r.status_code >= 400:  # rate limit / load shedding / bad gateway / any
+                # server-side error - try the next mirror instead of raising immediately.
+                # Was `in (429, 504)` only - missed 502/503/500 (and any other status),
+                # so a mirror consistently 502ing for one query killed the whole call on
+                # its first attempt without ever falling through to the other 2 mirrors
+                # (checked: happened in practice, same halte failing every single retry).
                 r = None
                 continue
-            r.raise_for_status()
             try:
                 data = r.json()
             except json.JSONDecodeError:  # empty/truncated body, try the next mirror

@@ -142,6 +142,31 @@ def _load_isochrones():
     _iso_loaded = True
 
 
+_stations: list[dict] | None = None
+
+
+def stations() -> list[dict] | None:
+    """MRT/KRL/LRT station list from output/isochrone_*.py's precomputed
+    isochrone_{mode}_stations.geojson (already has id/name/mode_label/operator - those
+    scripts enumerate stations as their first step anyway). TJ is never in here - it's
+    served straight from GTFS instead (see gtfs.py / main.py's _tj_stations()), which is
+    itself a local file, not a live call. None if none of the 3 files exist yet, so the
+    caller falls back to a live osm.stations() Overpass call."""
+    global _stations
+    if _stations is None:
+        out = []
+        for mode in ("mrt", "krl", "lrt"):
+            path = STATIC_DIR / f"isochrone_{mode}_stations.geojson"
+            if not path.exists():
+                continue
+            data = json.loads(path.read_text(encoding="utf-8"))
+            for f in data["features"]:
+                lon, lat = f["geometry"]["coordinates"]
+                out.append({**f["properties"], "lon": lon, "lat": lat})
+        _stations = out
+    return _stations or None
+
+
 def isochrone_for(mode_label: str, station_id: str, radius: int):
     """The precomputed entrance-aware isochrone polygon (metric, EPSG:32748) for this
     exact station, or None if not covered. Only ever a hit when `radius` equals that

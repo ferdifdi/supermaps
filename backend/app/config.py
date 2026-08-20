@@ -16,10 +16,18 @@ PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://localhost:8000")
 
 MAPID_BASEMAP_URL = "https://v2.basemap.mapid.io"
 MAPID_SERVER_URL = "https://server.mapid.io"
+# Public Overpass instances (wiki.openstreetmap.org/wiki/Overpass_API#Public_Overpass_API_instances)
+# - tried in order, first one that responds wins (see osm.py's overpass()). More mirrors
+# = fewer "all mirrors unreachable/rate-limited" failures when one or two happen to be
+# down/rate-limiting at the same time (which does happen - the original 3-mirror list
+# went 0-for-many during a bulk TJ run).
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
     "https://overpass.openstreetmap.ru/api/interpreter",
+    "https://overpass.openstreetmap.fr/api/interpreter",
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter",
 ]
 
 CACHE_DIR = BASE_DIR / "cache"

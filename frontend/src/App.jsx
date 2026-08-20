@@ -22,6 +22,37 @@ const TOD_GROUPS = [
   { key: "typologies", label: "Tipologi", options: tod.TYPOLOGIES },
 ]
 
+// Type-to-filter dropdown backed by a native <datalist> - some of these lists (MAPID
+// TIPE_3, e.g. MAKANAN DAN MINUMAN's 34 subcategories) are too long to scan by eye.
+// Free text that doesn't match a listed option is treated the same as "cleared" (empty
+// string) on blur, so it can never silently send a typo as if it were a real selection.
+function SearchableSelect({ id, value, onChange, options, allowEmpty }) {
+  // Local typing buffer, separate from the committed `value` - onChange only fires when
+  // the typed text exactly matches a listed option (selecting a <datalist> suggestion
+  // sets the input to that exact string) or is cleared entirely, so a half-typed search
+  // can never silently overwrite a valid prior selection.
+  const [text, setText] = useState(value || "")
+  useEffect(() => { setText(value || "") }, [value])
+  return (
+    <>
+      <input
+        list={`${id}-list`}
+        value={text}
+        placeholder={allowEmpty || "Cari…"}
+        onChange={(e) => {
+          setText(e.target.value)
+          if (options.includes(e.target.value)) onChange(e.target.value)
+          else if (allowEmpty && e.target.value === "") onChange("")
+        }}
+        onBlur={() => { if (!options.includes(text) && text !== "") setText(value || "") }}
+      />
+      <datalist id={`${id}-list`}>
+        {options.map((o) => <option key={o} value={o} />)}
+      </datalist>
+    </>
+  )
+}
+
 export default function App() {
   const [roleChosen, setRoleChosen] = useState(false)
   const [styles, setStyles] = useState([])
@@ -33,8 +64,10 @@ export default function App() {
   const [category, setCategory] = useState("APOTEK")
   const [subtype, setSubtype] = useState("")
   const [subtypeOptions, setSubtypeOptions] = useState([])
+  const [subtype2, setSubtype2] = useState("")
+  const [subtype2Options, setSubtype2Options] = useState([])
   const [radius, setRadius] = useState(800)
-  const [useInarisk, setUseInarisk] = useState(true)
+  const [dataSource, setDataSource] = useState("static")
   const [result, setResult] = useState(null)
   const [insight, setInsight] = useState("")
   const [status, setStatus] = useState("")
@@ -88,14 +121,22 @@ export default function App() {
     return () => clearInterval(id)
   }, [loading])
 
-  // U-UC1: some business types (MAKANAN DAN MINUMAN, PERDAGANGAN DAN RETAIL) have a
-  // TIPE_2 subcategory in MAPID's data - fetch it whenever the category changes so the
-  // subtype dropdown only shows options that actually exist for this category.
+  // U-UC1: MAPID's business categories have 2 levels of subcategory - TIPE_2 (coarse,
+  // e.g. MAKANAN DAN MINUMAN -> RESTORAN/MINUMAN/ROTI DAN KUE/BAR) and TIPE_3 (fine, e.g.
+  // RESTORAN -> RESTORAN PADANG/SEAFOOD/... or MINUMAN -> COFFEESHOP/...). Both refetch
+  // whenever their parent selection changes, only in "static" mode - OSM (live mode) has
+  // no equivalent depth, see SearchableSelect's sibling note in the JSX below.
   useEffect(() => {
-    setSubtype("")
-    if (useCaseId !== "U-UC1") return setSubtypeOptions([])
+    setSubtype(""); setSubtype2("")
+    if (useCaseId !== "U-UC1" || dataSource === "live") { setSubtypeOptions([]); return }
     api.businessSubtypes(category).then(setSubtypeOptions)
-  }, [category, useCaseId])
+  }, [category, useCaseId, dataSource])
+
+  useEffect(() => {
+    setSubtype2("")
+    if (useCaseId !== "U-UC1" || dataSource === "live") { setSubtype2Options([]); return }
+    api.businessSubtypes2(category, subtype || undefined).then(setSubtype2Options)
+  }, [category, subtype, useCaseId, dataSource])
 
   const useCase = USE_CASES.find((u) => u.id === useCaseId)
   const isDashboard = Boolean(useCase.dashboard)
@@ -175,14 +216,18 @@ export default function App() {
         setRouteResult(null)
         setRouteStats(null)
         setPicking(false)
-        setResult(await useCase.run(station, { category, businessType: category, subtype, radius, useInarisk }))
+        setResult(await useCase.run(station, { category, businessType: category, subtype, subtype2, radius, dataSource }))
         if (["equity", "walk", "site", "resilience"].includes(useCase.extras)) {
           setDockTab("ringkasan"); setDockOpen(true); setResultView("hasil")
         }
       }
       setStatus("")
     } catch (e) {
-      setStatus(`Gagal: ${e.message}`)
+      // Live OSM (Overpass) is the flaky external dependency here - static mode reads
+      // from a local cache and basically can't fail this way, so on a live-mode error
+      // the fix is almost always "switch back to Statis", not "try again".
+      const hint = dataSource === "live" ? " Coba pindah ke sumber data \"Statis\"." : ""
+      setStatus(`Gagal: ${e.message}${hint}`)
     }
     setLoading(false)
   }
@@ -200,7 +245,7 @@ export default function App() {
     setRoutingId(index)
     try {
       const [lon, lat] = feature.geometry.coordinates
-      const data = await api.route(stationId, lon, lat, "fast")
+      const data = await api.route(stationId, lon, lat, "fast", dataSource)
       setRouteResult(data.route)
     } catch (e) {
       setStatus(`Gagal ambil rute: ${e.message}`)
@@ -214,7 +259,7 @@ export default function App() {
     setRouteResult(null)
     setRouteStats(null)
     try {
-      const data = await api.route(stationId, lon, lat, routePreference)
+      const data = await api.route(stationId, lon, lat, routePreference, dataSource)
       setRouteResult(data.route)
       setRouteStats(data.summary)
       setRouteStatus("")
@@ -365,6 +410,28 @@ export default function App() {
 
         <MethodologyInfo methodology={useCase.methodology} />
 
+        {useCase.options?.dataSource && (
+          <div className="section">
+            <label>Sumber data</label>
+            <div className="mode-toggles">
+              {useCase.options.dataSource.map((opt) => (
+                <label key={opt.value} className="filter-option">
+                  <input
+                    type="radio"
+                    name="data-source"
+                    checked={dataSource === opt.value}
+                    onChange={() => setDataSource(opt.value)}
+                  />
+                  {opt.label}
+                </label>
+              ))}
+            </div>
+            <p className="note">
+              {useCase.options.dataSource.find((o) => o.value === dataSource)?.note}
+            </p>
+          </div>
+        )}
+
         <div className="section">
           {useCase.dashboard ? (
             <>
@@ -398,16 +465,32 @@ export default function App() {
               {useCase.options?.businessType && (
                 <>
                   <label>Tipe bisnis yang mau dibangun</label>
-                  <select value={category} onChange={(e) => setCategory(e.target.value)}>
-                    {useCase.options.businessType.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                  {subtypeOptions.length > 0 && (
+                  <SearchableSelect
+                    id="business-type" value={category} onChange={setCategory}
+                    options={useCase.options.businessType}
+                  />
+                  {dataSource === "live" ? (
+                    <p className="note">Mode Live: kompetitor dari tag OSM, gak ada sub-tipe sedetail MAPID - satu tingkat kategori saja.</p>
+                  ) : (
                     <>
-                      <label>Sub-tipe</label>
-                      <select value={subtype} onChange={(e) => setSubtype(e.target.value)}>
-                        <option value="">— semua sub-tipe —</option>
-                        {subtypeOptions.map((t) => <option key={t} value={t}>{t}</option>)}
-                      </select>
+                      {subtypeOptions.length > 0 && (
+                        <>
+                          <label>Sub-tipe (TIPE_2)</label>
+                          <SearchableSelect
+                            id="subtype" value={subtype} onChange={setSubtype}
+                            options={subtypeOptions} allowEmpty="— semua sub-tipe —"
+                          />
+                        </>
+                      )}
+                      {subtype2Options.length > 0 && (
+                        <>
+                          <label>Sub-tipe detail (TIPE_3)</label>
+                          <SearchableSelect
+                            id="subtype2" value={subtype2} onChange={setSubtype2}
+                            options={subtype2Options} allowEmpty="— semua sub-tipe detail —"
+                          />
+                        </>
+                      )}
                     </>
                   )}
                 </>
@@ -420,24 +503,6 @@ export default function App() {
                       <button key={r} className={r === radius ? "mini active" : "mini"} onClick={() => setRadius(r)}>
                         {r} m
                       </button>
-                    ))}
-                  </div>
-                </>
-              )}
-              {useCase.options?.dataSource && (
-                <>
-                  <label>Sumber data risiko</label>
-                  <div className="mode-toggles">
-                    {useCase.options.dataSource.map((opt) => (
-                      <label key={String(opt.id)} className="filter-option">
-                        <input
-                          type="radio"
-                          name="data-source"
-                          checked={useInarisk === opt.id}
-                          onChange={() => setUseInarisk(opt.id)}
-                        />
-                        {opt.label}
-                      </label>
                     ))}
                   </div>
                 </>

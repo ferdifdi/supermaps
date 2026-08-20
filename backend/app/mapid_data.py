@@ -106,11 +106,16 @@ def _near(lon: float, lat: float, radius: int, role: str) -> list[dict]:
     return [_props[i] for i in idx if role in _roles[i] and _points[i].distance(origin) <= radius]
 
 
-def by_prefix(lon: float, lat: float, radius: int, prefix: str, subtype: str | None = None) -> list[dict]:
+def by_prefix(lon: float, lat: float, radius: int, prefix: str,
+              subtype: str | None = None, subtype2: str | None = None) -> list[dict]:
     """Points from exactly one MAPID category (e.g. "APOTEK") - not the broader role
     bucket _near() uses, for when the caller needs one specific business type, not a
-    whole group of them (competitor search in U-UC1). `subtype` further filters to one
-    TIPE_2 value (e.g. prefix="MAKANAN DAN MINUMAN", subtype="RESTORAN") - see subtypes()."""
+    whole group of them (competitor search in U-UC1). `subtype` filters to one TIPE_2
+    value (e.g. prefix="MAKANAN DAN MINUMAN", subtype="RESTORAN" - see subtypes()).
+    `subtype2` further filters to one TIPE_3 value (e.g. subtype2="COFFEESHOP" - see
+    subtypes2()) - MAPID's actual fine-grained category, TIPE_2 alone is coarse (only
+    4 buckets for all of MAKANAN DAN MINUMAN; COFFEESHOP/SEAFOOD/RESTORAN PADANG/etc are
+    TIPE_3, one level deeper)."""
     _load()
     if not _points or prefix not in ROLES:
         return []
@@ -118,7 +123,9 @@ def by_prefix(lon: float, lat: float, radius: int, prefix: str, subtype: str | N
     idx = _tree.query(origin.buffer(radius))
     return [
         _props[i] for i in idx
-        if _prefixes[i] == prefix and (subtype is None or _props[i]["tipe_2"] == subtype)
+        if _prefixes[i] == prefix
+        and (subtype is None or _props[i]["tipe_2"] == subtype)
+        and (subtype2 is None or _props[i]["tipe_3"] == subtype2)
         and _points[i].distance(origin) <= radius
     ]
 
@@ -129,6 +136,21 @@ def subtypes(prefix: str) -> list[str]:
     Empty list if the category has no TIPE_2 data (most only have one level)."""
     _load()
     values = {_props[i]["tipe_2"] for i in range(len(_props)) if _prefixes[i] == prefix and _props[i]["tipe_2"]}
+    return sorted(values)
+
+
+def subtypes2(prefix: str, subtype: str | None = None) -> list[str]:
+    """Distinct TIPE_3 values MAPID recorded for one category, optionally narrowed to one
+    TIPE_2 value first (e.g. prefix="MAKANAN DAN MINUMAN", subtype="RESTORAN" ->
+    RESTORAN PADANG/SEAFOOD/RESTORAN JEPANG/.../COFFEESHOP is under MINUMAN, not
+    RESTORAN). Excludes MAPID's own placeholder values ("-", "LAINNYA") - those aren't
+    real subcategories, they're MAPID's "none of the above" bucket."""
+    _load()
+    values = {
+        _props[i]["tipe_3"] for i in range(len(_props))
+        if _prefixes[i] == prefix and _props[i]["tipe_3"] and _props[i]["tipe_3"] not in ("-", "LAINNYA")
+        and (subtype is None or _props[i]["tipe_2"] == subtype)
+    }
     return sorted(values)
 
 

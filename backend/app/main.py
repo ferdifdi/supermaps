@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from . import ai, analysis, gtfs, mapid, mapid_data, osm
+from . import ai, analysis, gtfs, mapid, mapid_data, osm, static_transit
 from .config import MAPID_BASEMAP_KEY, MAPID_BASEMAP_URL, PUBLIC_BASE_URL, catalogue_layers
 from .geo import buffer_deg
 
@@ -37,9 +37,23 @@ def _tj_stations() -> list[dict]:
     ]
 
 
+async def _rail_stations(data_source: str = "static") -> list[dict]:
+    """MRT/KRL/LRT only - TJ always comes from GTFS instead (see _tj_stations). Static
+    snapshot first (output/isochrone_*.py's *_stations.geojson) unless data_source ==
+    "live" or no static file exists yet, in which case falls back to a live osm.stations()
+    Overpass call. Filters out any TJ-labeled entries osm.stations() itself might return
+    (OSM has some public_transport=station+bus=yes nodes tagged as TJ) - GTFS stays the
+    one authority for TJ halte, not OSM."""
+    if data_source != "live":
+        cached = static_transit.stations()
+        if cached is not None:
+            return [s for s in cached if s["mode_label"] != "TJ"]
+    return [s for s in await osm.stations() if s["mode_label"] != "TJ"]
+
+
 async def get_station(station_id: str) -> dict:
     if not _stations:
-        for s in await osm.stations():
+        for s in await _rail_stations():
             _stations[s["id"]] = s
         for s in _tj_stations():
             _stations[s["id"]] = s
@@ -71,10 +85,10 @@ async def basemap_proxy(path: str):
 # --- stations ----------------------------------------------------------------
 
 @app.get("/api/stations")
-async def list_stations(mode: str | None = None):
+async def list_stations(mode: str | None = None, data_source: str = "static"):
     if mode and mode.upper() == "TJ":
         return _tj_stations()
-    stations = [s for s in await osm.stations() if s["mode_label"] != "TJ"]
+    stations = await _rail_stations(data_source)
     if mode:
         stations = [s for s in stations if s["mode_label"] == mode.upper()]
     return stations
@@ -127,24 +141,25 @@ async def catalogue_layer(name: str):
 # --- analysis ----------------------------------------------------------------
 
 @app.get("/api/analysis/walk-access")
-async def walk_access(station_id: str, radius_m: int = 800):
-    return await analysis.walk_access(await get_station(station_id), radius_m)
+async def walk_access(station_id: str, radius_m: int = 800, data_source: str = "static"):
+    return await analysis.walk_access(await get_station(station_id), radius_m, data_source)
 
 
 @app.get("/api/analysis/route")
-async def route(station_id: str, lon: float, lat: float, preference: str = "fast"):
-    return await analysis.comfortable_route(await get_station(station_id), lon, lat, preference)
+async def route(station_id: str, lon: float, lat: float, preference: str = "fast", data_source: str = "static"):
+    return await analysis.comfortable_route(await get_station(station_id), lon, lat, preference, data_source)
 
 
 @app.get("/api/analysis/amenity-equity")
-async def amenity_equity(station_id: str, radius: int = 500):
-    return await analysis.amenity_equity(await get_station(station_id), radius)
+async def amenity_equity(station_id: str, radius: int = 500, data_source: str = "static"):
+    return await analysis.amenity_equity(await get_station(station_id), radius, data_source)
 
 
 @app.get("/api/analysis/site-selection")
-async def site_selection(station_id: str, business_type: str = "APOTEK", subtype: str | None = None, radius: int = 1000):
+async def site_selection(station_id: str, business_type: str = "APOTEK", subtype: str | None = None,
+                          subtype2: str | None = None, radius: int = 1000, data_source: str = "static"):
     station = await get_station(station_id)
-    return await analysis.site_selection(station, business_type, subtype, radius)
+    return await analysis.site_selection(station, business_type, subtype, subtype2, radius, data_source)
 
 
 @app.get("/api/analysis/business-types")
@@ -154,7 +169,16 @@ def business_types():
 
 @app.get("/api/analysis/business-subtypes")
 def business_subtypes(prefix: str):
+    """TIPE_2 - coarse subcategory (e.g. MAKANAN DAN MINUMAN -> RESTORAN/MINUMAN/dst)."""
     return mapid_data.subtypes(prefix)
+
+
+@app.get("/api/analysis/business-subtypes2")
+def business_subtypes2(prefix: str, subtype: str | None = None):
+    """TIPE_3 - fine subcategory (e.g. RESTORAN -> RESTORAN PADANG/SEAFOOD/dst, or
+    MINUMAN -> COFFEESHOP/MINUMAN BOBA DAN MILK TEA/dst), optionally narrowed to one
+    TIPE_2 value first."""
+    return mapid_data.subtypes2(prefix, subtype)
 
 
 _dashboard: list[dict] = []  # last computed table; what-if and chat score against it
@@ -165,9 +189,18 @@ async def tod_dashboard(modes: str = "KRL,MRT,LRT", limit: int = 25):
     """Ranked SCI table for the given comma-separated mode_labels (KRL/MRT/LRT/TJ).
 
     The index is relative, so every station in the table is standardised against the others.
+
+    No data_source="live" option here on purpose (unlike every other use case) - this
+    scans EVERY station of the chosen mode(s) at once (up to `limit`), each one needing
+    its own POI/road Overpass calls if forced live. A single TJ scan alone is thousands of
+    halte - that's enough live Overpass traffic to get this project's IP rate-limited or
+    blocklisted (has happened before, see commit 336350c), not just slow. Station
+    enumeration itself still prefers the static snapshot (_rail_stations' own static-first/
+    live-fallback), that part was never the problem.
     """
     wanted = [m for m in modes.split(",") if m]
-    stations = [s for s in await osm.stations() if s["mode_label"] in wanted][:limit]
+    all_stations = await _rail_stations() + (_tj_stations() if "TJ" in wanted else [])
+    stations = [s for s in all_stations if s["mode_label"] in wanted][:limit]
     if not stations:
         raise HTTPException(404, "no stations match those modes")
 
@@ -203,16 +236,16 @@ def tod_metadata():
 
 
 @app.get("/api/analysis/resilience")
-async def resilience(station_id: str):
-    result = await analysis.resilience(await get_station(station_id))
+async def resilience(station_id: str, data_source: str = "static"):
+    result = await analysis.resilience(await get_station(station_id), data_source)
     result.pop("graph")
     result.pop("origin")
     return result
 
 
 @app.get("/api/analysis/detour")
-async def detour(station_id: str, lon: float, lat: float):
-    result = await analysis.resilience(await get_station(station_id))
+async def detour(station_id: str, lon: float, lat: float, data_source: str = "static"):
+    result = await analysis.resilience(await get_station(station_id), data_source)
     return analysis.detour(result["graph"], result["origin"], lon, lat)
 
 

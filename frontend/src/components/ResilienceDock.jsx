@@ -23,18 +23,31 @@ function countByCorridorClass(features, key, colors) {
 }
 
 const HAZARD_COLORS = { rendah: "#22c55e", sedang: "#f59e0b", tinggi: "#ef4444" }
+// MAPID's own 5-level Kelas (mode Statis) - different scheme from InaRISK's 3-level
+// rendah/sedang/tinggi (mode Live), same palette direction (green->red) as banjir_mapid.
+const MAPID_HAZARD_COLORS = {
+  "Sangat Rendah": "#22c55e", "Cukup Rendah": "#84cc16", "Sedang": "#f59e0b",
+  "Cukup Tinggi": "#f97316", "Tinggi": "#ef4444",
+}
 
 // Same "one selector drives map + stats" pattern as M-UC1's WalkDock - avoids a separate
 // map-mode picker and chart picker showing the same topic names twice.
 const TOPICS = [
   {
     id: "banjir", label: "Banjir",
+    // Mode Statis populates banjir_kelas (MAPID, 5-level), mode Live populates
+    // banjir_class (InaRISK, 3-level) instead - see analysis.py's resilience().
     rows: (result) => {
       const f = result.corridors?.features || []
-      return f.length && countByCorridorClass(f, "banjir_class", HAZARD_COLORS)
+      if (!f.length) return false
+      return result.summary.use_inarisk
+        ? countByCorridorClass(f, "banjir_class", HAZARD_COLORS)
+        : countByCorridorClass(f, "banjir_kelas", MAPID_HAZARD_COLORS)
     },
     format: "count",
-    note: (s) => `${s.banjir_known}/${s.corridors} koridor punya data InaRISK, ${s.banjir_tinggi} diklasifikasikan "tinggi".${!s.use_inarisk ? " Mode MAPID-saja aktif, banjir kosong." : ""}`,
+    note: (s) => s.use_inarisk
+      ? `${s.banjir_known}/${s.corridors} koridor punya data InaRISK, ${s.banjir_tinggi} diklasifikasikan "tinggi".`
+      : `${s.banjir_known}/${s.corridors} koridor punya data MAPID (Kelas 5-tingkat), ${s.banjir_tinggi} diklasifikasikan "Tinggi"/"Cukup Tinggi". Pindah ke mode Live buat klasifikasi InaRISK.`,
   },
   {
     id: "longsor", label: "Longsor",
@@ -43,7 +56,9 @@ const TOPICS = [
       return f.length && countByCorridorClass(f, "longsor_class", HAZARD_COLORS)
     },
     format: "count",
-    note: (s) => `${s.longsor_known}/${s.corridors} koridor punya data InaRISK, ${s.longsor_tinggi} diklasifikasikan "tinggi".${!s.use_inarisk ? " Mode MAPID-saja aktif, longsor kosong." : ""}`,
+    note: (s) => s.use_inarisk
+      ? `${s.longsor_known}/${s.corridors} koridor punya data InaRISK, ${s.longsor_tinggi} diklasifikasikan "tinggi".`
+      : "Mode Statis aktif - longsor cuma dihitung di mode Live (BNPB InaRISK), MAPID gak punya data ini.",
   },
   {
     id: "uhi", label: "UHI",
@@ -121,7 +136,7 @@ function Ringkasan({ result, mapMode, onMapMode }) {
         <div className="section">
           <p className="note" style={{ color: "#ef4444", fontWeight: 600 }}>
             ⚠ Server InaRISK (BNPB) sedang tidak bisa diakses - ini beda dengan "tidak ada risiko".
-            Coba lagi nanti, atau pakai mode "MAPID saja" buat layer UHI/ekologi/curah hujan.
+            Coba lagi nanti, atau pindah ke sumber data "Statis" (banjir dari MAPID, tanpa longsor).
           </p>
         </div>
       )}
@@ -150,15 +165,24 @@ function Ringkasan({ result, mapMode, onMapMode }) {
   )
 }
 
+const MAPID_TINGGI_KELAS = new Set(["Tinggi", "Cukup Tinggi"])
+
 function KoridorList({ result, onFocus }) {
   const corridors = result.corridors?.features || []
-  const risky = corridors.filter((f) => f.properties.banjir_class === "tinggi" || f.properties.longsor_class === "tinggi")
+  const usesInarisk = result.summary.use_inarisk
+  const risky = corridors.filter((f) => usesInarisk
+    ? f.properties.banjir_class === "tinggi" || f.properties.longsor_class === "tinggi"
+    : MAPID_TINGGI_KELAS.has(f.properties.banjir_kelas))
   return (
     <div className="section">
       <label>Koridor risiko "tinggi" ({risky.length})</label>
-      <p className="note">Diklasifikasikan InaRISK sendiri (bukan skor project ini) - ruas ini yang dihindari rute "aman" (detour).</p>
+      <p className="note">
+        {usesInarisk
+          ? "Diklasifikasikan InaRISK sendiri (bukan skor project ini) - ruas ini yang dihindari rute \"aman\" (detour)."
+          : "Diklasifikasikan MAPID sendiri (Kelas 5-tingkat, bukan skor project ini) - ruas ini yang dihindari rute \"aman\" (detour)."}
+      </p>
       <div className="board">
-        {risky.length === 0 && <p className="note">Tidak ada koridor berisiko "tinggi" terdeteksi (atau mode MAPID-saja aktif).</p>}
+        {risky.length === 0 && <p className="note">Tidak ada koridor berisiko "tinggi" terdeteksi.</p>}
         {risky.map((f, i) => (
           <button key={i} className="board-row" style={{ width: "100%", textAlign: "left", border: "none", background: "none", cursor: "pointer" }}
             onClick={() => onFocus(f)}>
@@ -167,8 +191,12 @@ function KoridorList({ result, onFocus }) {
               Koridor #{f.properties.corridor_id} ({f.properties.highway})
             </span>
             <div className="note">
-              {f.properties.banjir_class === "tinggi" && `banjir: ${f.properties.banjir_value} `}
-              {f.properties.longsor_class === "tinggi" && `longsor: ${f.properties.longsor_value}`}
+              {usesInarisk ? (
+                <>
+                  {f.properties.banjir_class === "tinggi" && `banjir: ${f.properties.banjir_value} `}
+                  {f.properties.longsor_class === "tinggi" && `longsor: ${f.properties.longsor_value}`}
+                </>
+              ) : `banjir: ${f.properties.banjir_kelas}`}
             </div>
           </button>
         ))}
