@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900" font-family="Arial, Helvetica, sans-serif">
+<rect width="1440" height="900" fill="#ffffff"/>
+<text x="20" y="26" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="bold" fill="#6b7280" text-anchor="start">PAGE 0 — Landing / Role Select (persona picker)</text>
+<g transform="translate(0,36)">
+<rect x="0" y="0" width="1440" height="864" rx="4" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<rect x="0" y="0" width="604.8" height="864" rx="4" fill="#f3ecfb" stroke="#374151" stroke-width="1.5"/>
+<rect x="60" y="241.92000000000002" width="484.79999999999995" height="380.16" rx="4" fill="#f3f4f6" stroke="#374151" stroke-width="1.5"/><line x1="60" y1="241.92000000000002" x2="544.8" y2="622.08" stroke="#9ca3af" stroke-width="1"/><line x1="544.8" y1="241.92000000000002" x2="60" y2="622.08" stroke="#9ca3af" stroke-width="1"/><text x="302.4" y="432.0" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="bold" fill="#9ca3af" text-anchor="middle">ILLUSTRATION</text>
+<text x="1022.4" y="90" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="bold" fill="#111827" text-anchor="middle">[LOGO]  SuperMaps</text>
+<text x="1022.4" y="118" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="normal" fill="#6b7280" text-anchor="middle">Selamat datang di SuperMaps</text>
+<text x="1022.4" y="138" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="normal" fill="#6b7280" text-anchor="middle">Silakan pilih role Anda</text>
+<rect x="684.8" y="190" width="675.2" height="90" rx="10" fill="#ffffff" stroke="#5b4bdb" stroke-width="1.5"/>
+<circle cx="720.8" cy="235.0" r="18" fill="#e5e7eb" stroke="#374151"/>
+<text x="754.8" y="224" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="bold" fill="#111827" text-anchor="start">Masyarakat</text>
+<text x="754.8" y="244" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="normal" fill="#6b7280" text-anchor="start">Navigasi jalan kaki, transfer, dan kenyamanan dari stasiun</text>
+<text x="1330.0" y="240.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="normal" fill="#5b4bdb" text-anchor="middle">→</text>
+<rect x="684.8" y="300" width="675.2" height="90" rx="10" fill="#ffffff" stroke="#5b4bdb" stroke-width="1.5"/>
+<circle cx="720.8" cy="345.0" r="18" fill="#e5e7eb" stroke="#374151"/>
+<text x="754.8" y="334" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="bold" fill="#111827" text-anchor="start">Pelaku Usaha</text>
+<text x="754.8" y="354" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="normal" fill="#6b7280" text-anchor="start">Site selection, kompetitor, dan anchor demand sekitar stasiun</text>
+<text x="1330.0" y="350.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="normal" fill="#5b4bdb" text-anchor="middle">→</text>
+<rect x="684.8" y="410" width="675.2" height="90" rx="10" fill="#ffffff" stroke="#5b4bdb" stroke-width="1.5"/>
+<circle cx="720.8" cy="455.0" r="18" fill="#e5e7eb" stroke="#374151"/>
+<text x="754.8" y="444" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="bold" fill="#111827" text-anchor="start">Pemangku Kebijakan</text>
+<text x="754.8" y="464" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="normal" fill="#6b7280" text-anchor="start">Indeks TOD dan ketahanan iklim kawasan stasiun</text>
+<text x="1330.0" y="460.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="normal" fill="#5b4bdb" text-anchor="middle">→</text>
+<circle cx="1002.4" cy="540" r="4" fill="#5b4bdb"/>
+<circle cx="1022.4" cy="540" r="4" fill="#e5e7eb"/>
+<circle cx="1042.4" cy="540" r="4" fill="#e5e7eb"/>
+</g>
+</svg>

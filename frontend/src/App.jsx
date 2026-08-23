@@ -153,6 +153,11 @@ export default function App() {
   const [showPoiHijau, setShowPoiHijau] = useState(true)
   const [showJalan, setShowJalan] = useState(true)
   const [showHeatmap, setShowHeatmap] = useState(true)
+  // Off by default - POI/station name pills are opaque DOM markers that always float
+  // above the map canvas (browser stacking, not a maplibre layer-order thing), so with
+  // labels on they visually bury the isochrone/heatmap coloring underneath. Icon badges
+  // alone stay small enough not to.
+  const [showPoiLabels, setShowPoiLabels] = useState(false)
   const layerToggles = useMemo(
     () => ({ isochrone: showIsochrone, poi_transfer: showPoiTransfer, poi_hijau: showPoiHijau, jalan: showJalan, heatmap: showHeatmap }),
     [showIsochrone, showPoiTransfer, showPoiHijau, showJalan, showHeatmap],
@@ -226,6 +231,7 @@ export default function App() {
           properties: {
             station_id: r.station_id,
             name: r.station,
+            mode: r.mode_label,
             sci: r.sci,
             rank: r.rank,
             classification: r.classification,
@@ -582,6 +588,10 @@ export default function App() {
             </>
           )}
           <button className="primary" onClick={run} disabled={loading}>Jalankan analisis</button>
+          <label className="filter-option">
+            <input type="checkbox" checked={showPoiLabels} onChange={(e) => setShowPoiLabels(e.target.checked)} />
+            Tampilkan teks POI &amp; stasiun
+          </label>
           {loading && (
             <div className="loading-status">
               <span className="spinner" />
@@ -639,6 +649,7 @@ export default function App() {
             onPickStation={selectStation}
             picking={picking}
             onMapPick={pickDestination}
+            showLabels={showPoiLabels}
           />
         )}
 

@@ -16,3 +16,11 @@ export const CATEGORY_COLORS = {
   perdagangan_retail: "#f06fae",
   kesehatan: "#22c55e",
 }
+
+export const CATEGORY_ICONS = {
+  pangan: "🍜",
+  pusat_perbelanjaan_pasar: "🛒",
+  keuangan: "🏦",
+  perdagangan_retail: "🏬",
+  kesehatan: "🏥",
+}

@@ -1,6 +1,6 @@
 import { api } from "./api"
 import { CLASS_COLORS } from "./tod"
-import { CATEGORIES, CATEGORY_COLORS, CATEGORY_LABELS } from "./equity"
+import { CATEGORIES, CATEGORY_COLORS, CATEGORY_ICONS, CATEGORY_LABELS } from "./equity"
 
 const ramp = (field, stops) => [
   "interpolate", ["linear"], ["get", field],
@@ -95,13 +95,16 @@ export const USE_CASES = [
         // TJ stops (real GTFS headway) vs KRL/MRT/LRT points (mode from the static
         // station list, see analysis._transfer_points) - is_proxy drives a visibly
         // different style so the map itself signals which numbers are real.
-        source: "transfer_points", type: "circle", toggle: "poi_transfer",
-        paint: {
-          "circle-radius": 6,
-          "circle-color": ["case", ["get", "is_proxy"], "#9ca3af", "#22c55e"],
-          "circle-stroke-width": 2,
-          "circle-stroke-color": ["case", ["get", "is_proxy"], "#6b7280", "#166534"],
-          "circle-opacity": 0.9,
+        // transfer_points already pins every MRT/KRL/LRT/TJ point in range (with
+        // headway/proxy info) - stationsLike tells MapView to hide the base all-stations
+        // picker dots while this is showing real data, so a station in range doesn't get
+        // two markers stacked on it. Before a query runs (no result yet) the base dots
+        // stay on, so the first map load still shows every station/halte.
+        source: "transfer_points", type: "circle", toggle: "poi_transfer", stationsLike: true,
+        pin: {
+          icon: (p) => (p.mode === "TJ" ? "🚌" : "🚆"),
+          color: (p) => (p.is_proxy ? "#9ca3af" : "#22c55e"),
+          label: (p) => p.name || p.mode || "Transfer",
         },
       },
       {
@@ -109,7 +112,11 @@ export const USE_CASES = [
         // feed green_grid's count below) - click targets for GreenSearch's "Rute"/focus
         // buttons.
         source: "ecology_poi", type: "circle", toggle: "poi_hijau",
-        paint: { "circle-radius": 5, "circle-color": "#22c55e", "circle-stroke-width": 1, "circle-stroke-color": "#fff" },
+        pin: {
+          icon: () => "🌳",
+          color: () => "#22c55e",
+          label: (p) => p.name || p.leisure || p.landuse || p.kind || "Hijau",
+        },
       },
       {
         // Access by Walking (Siburian et al. 2020, Table 1 weights) as one heatmap,
@@ -283,13 +290,11 @@ export const USE_CASES = [
       },
       {
         source: "poi", type: "circle",
-        paint: {
-          "circle-radius": 5,
-          "circle-color": ["match", ["get", "category"],
-            ...CATEGORIES.flatMap((c) => [c, CATEGORY_COLORS[c]]),
-            "#6b7280"],
-          "circle-opacity": ["case", ["get", "reachable"], 1, 0.35],
-          "circle-stroke-width": 1, "circle-stroke-color": "#fff",
+        pin: {
+          icon: (p) => CATEGORY_ICONS[p.category] || "📍",
+          color: (p) => CATEGORY_COLORS[p.category] || "#6b7280",
+          label: (p) => p.name || CATEGORY_LABELS[p.category] || "POI",
+          opacity: (p) => (p.reachable ? 1 : 0.4),
         },
       },
       { source: "route", type: "line", paint: { "line-color": "#111827", "line-width": 4 } },
@@ -384,16 +389,19 @@ export const USE_CASES = [
       { source: "catchment", type: "line", paint: { "line-color": "#7c3aed", "line-width": 1 } },
       {
         source: "anchors", type: "circle",
-        paint: {
-          "circle-radius": 4,
-          "circle-color": ["match", ["get", "anchor_type"],
-            "kantor", "#4a90e2", "kebutuhan_dasar", "#22c55e", "transit", "#f59e0b", "#9ca3af"],
-          "circle-opacity": 0.6,
+        pin: {
+          icon: (p) => ({ kantor: "🏢", kebutuhan_dasar: "🛒", transit: "🚌" }[p.anchor_type] || "📍"),
+          color: (p) => ({ kantor: "#4a90e2", kebutuhan_dasar: "#22c55e", transit: "#f59e0b" }[p.anchor_type] || "#9ca3af"),
+          label: (p) => p.name || p.anchor_type || "Anchor",
+          opacity: () => 0.85,
         },
       },
-      // One business type per query, so every competitor dot is the same solid color -
+      // One business type per query, so every competitor pin is the same solid color -
       // no rainbow mixing, gampang dibedain dari anchor.
-      { source: "competitors", type: "circle", paint: { "circle-radius": 6, "circle-color": "#7c3aed", "circle-stroke-width": 1.5, "circle-stroke-color": "#fff" } },
+      {
+        source: "competitors", type: "circle",
+        pin: { icon: () => "🏪", color: () => "#7c3aed", label: (p) => p.name || "Kompetitor" },
+      },
     ],
     legends: {
       walk_score: { title: "Walk score (Siburian et al. 2020)", stops: SCORE_STOPS },
@@ -465,6 +473,36 @@ export const USE_CASES = [
           "circle-stroke-width": ["case", ["get", "selected"], 3, 1],
           "circle-stroke-color": ["case", ["get", "selected"], "#111827", "#fff"],
           "circle-stroke-opacity": ["case", ["get", "dimmed"], 0.2, 1],
+        },
+      },
+      {
+        // Mode glyph on top of the SCI-sized bubble, same per-mode icon treatment as the
+        // base station picker dots (station-icon-* images registered by MapView).
+        source: "stations", type: "symbol", noPopup: true,
+        layout: {
+          "icon-image": ["match", ["get", "mode"],
+            "MRT", "station-icon-MRT", "LRT", "station-icon-LRT",
+            "KRL", "station-icon-KRL", "TJ", "station-icon-TJ",
+            "station-icon-default"],
+          "icon-size": ["interpolate", ["linear"], ["get", "sci"], 0, 0.16, 1, 0.26],
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+        },
+        paint: { "icon-opacity": ["case", ["get", "dimmed"], 0.2, 1] },
+      },
+      {
+        source: "stations", type: "symbol", noPopup: true, label: true,
+        layout: {
+          "text-field": ["get", "name"],
+          "text-size": 10,
+          "text-offset": [0, 1.3],
+          "text-anchor": "top",
+        },
+        paint: {
+          "text-color": "#111827",
+          "text-halo-color": "#ffffff",
+          "text-halo-width": 1.4,
+          "text-opacity": ["case", ["get", "dimmed"], 0.15, 1],
         },
       },
     ],
