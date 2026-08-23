@@ -247,6 +247,10 @@ button.secondary.active { background: var(--primary); color: #fff; border-color:
 
 .note { margin: 0; color: var(--text-secondary); }
 
+.note-details { margin-top: 4px; }
+.note-details summary { cursor: pointer; color: var(--text-secondary); font-size: 0.85em; user-select: none; }
+.note-details .note { margin-top: 4px; }
+
 .loading-status {
   display: flex;
   align-items: center;

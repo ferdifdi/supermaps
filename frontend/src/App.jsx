@@ -495,9 +495,12 @@ export default function App() {
                 </label>
               ))}
             </div>
-            <p className="note">
-              {useCase.options.dataSource.find((o) => o.value === dataSource)?.note}
-            </p>
+            <details className="note-details">
+              <summary>Keterangan</summary>
+              <p className="note">
+                {useCase.options.dataSource.find((o) => o.value === dataSource)?.note}
+              </p>
+            </details>
           </div>
         )}
 
