@@ -19,12 +19,16 @@ const MAP_MODES = [
 // competitor pins, and the voronoi catchment line are independent overlays here
 // regardless of which grid mode (walk_score/kompetitor/anchor) is picked above, see
 // usecases.js's U-UC1 layer "toggle" keys.
-function LayerToggles({ showAnchor, onToggleAnchor, showCompetitor, onToggleCompetitor, showCatchment, onToggleCatchment }) {
+function LayerToggles({
+  showAnchor, onToggleAnchor, showCompetitor, onToggleCompetitor, showCatchment, onToggleCatchment,
+  showHeatmap, onToggleHeatmap,
+}) {
   if (!onToggleAnchor) return null
   const items = [
     { label: "Anchor", show: showAnchor, onToggle: onToggleAnchor },
     { label: "Kompetitor", show: showCompetitor, onToggle: onToggleCompetitor },
     { label: "Catchment (voronoi)", show: showCatchment, onToggle: onToggleCatchment },
+    { label: "Heatmap (ikut topik dipilih)", show: showHeatmap, onToggle: onToggleHeatmap },
   ]
   return (
     <div className="section">
@@ -185,8 +189,12 @@ function Kompetitor({ result, onFocus, ...toggles }) {
 export default function SiteDock({
   open, onToggle, tab, onTab, result, onFocus, mapMode, onMapMode,
   showAnchor, onToggleAnchor, showCompetitor, onToggleCompetitor, showCatchment, onToggleCatchment,
+  showHeatmap, onToggleHeatmap,
 }) {
-  const toggles = { showAnchor, onToggleAnchor, showCompetitor, onToggleCompetitor, showCatchment, onToggleCatchment }
+  const toggles = {
+    showAnchor, onToggleAnchor, showCompetitor, onToggleCompetitor, showCatchment, onToggleCatchment,
+    showHeatmap, onToggleHeatmap,
+  }
   return (
     <>
       <button className={open ? "dock-toggle open" : "dock-toggle"} onClick={onToggle}>

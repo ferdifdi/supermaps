@@ -169,6 +169,9 @@ export default function App() {
   const [showSiteAnchor, setShowSiteAnchor] = useState(true)
   const [showSiteCompetitor, setShowSiteCompetitor] = useState(true)
   const [showSiteCatchment, setShowSiteCatchment] = useState(true)
+  // The grid fill itself (walk_score/kompetitor/anchor, whichever mode is picked) had no
+  // toggle at all - always on, unlike every other overlay here.
+  const [showSiteHeatmap, setShowSiteHeatmap] = useState(true)
   // K-UC2 layer toggle (ResilienceDock) - unlike M-UC1/M-UC2, every K-UC2 fill is
   // mode-gated (one topic visible at a time via the TOPICS picker), so there's just one
   // "hide whichever topic fill is active" checkbox to add, shared across all of them.
@@ -183,12 +186,13 @@ export default function App() {
       isochrone: showIsochrone, poi_transfer: showPoiTransfer, poi_hijau: showPoiHijau, jalan: showJalan, heatmap: showHeatmap,
       poi_isochrone: showEqIsochrone, poi_pins: showEqPoi, poi_heatmap: showEqHeatmap,
       site_anchor: showSiteAnchor, site_competitor: showSiteCompetitor, site_catchment: showSiteCatchment,
+      site_heatmap: showSiteHeatmap,
       resilience_heatmap: showResilienceHeatmap,
     }),
     [
       showIsochrone, showPoiTransfer, showPoiHijau, showJalan, showHeatmap,
       showEqIsochrone, showEqPoi, showEqHeatmap,
-      showSiteAnchor, showSiteCompetitor, showSiteCatchment,
+      showSiteAnchor, showSiteCompetitor, showSiteCatchment, showSiteHeatmap,
       showResilienceHeatmap,
     ],
   )
@@ -816,6 +820,8 @@ export default function App() {
           onToggleCompetitor={() => setShowSiteCompetitor((v) => !v)}
           showCatchment={showSiteCatchment}
           onToggleCatchment={() => setShowSiteCatchment((v) => !v)}
+          showHeatmap={showSiteHeatmap}
+          onToggleHeatmap={() => setShowSiteHeatmap((v) => !v)}
         />
       )}
 

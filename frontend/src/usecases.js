@@ -374,13 +374,13 @@ export const USE_CASES = [
     },
     run: (station, opts) => api.siteSelection(station.id, opts.businessType || "APOTEK", opts.subtype, opts.subtype2),
     layers: [
-      { source: "grid", type: "fill", mode: "walk_score", paint: { "fill-color": ramp("walk_score", SCORE_STOPS), "fill-opacity": 0.7 } },
+      { source: "grid", type: "fill", mode: "walk_score", toggle: "site_heatmap", paint: { "fill-color": ramp("walk_score", SCORE_STOPS), "fill-opacity": 0.7 } },
       {
-        source: "grid", type: "fill", mode: "kompetitor",
+        source: "grid", type: "fill", mode: "kompetitor", toggle: "site_heatmap",
         paint: { "fill-color": ramp("competitor_count", [[0, "#f7f7f7"], [1, "#e9d5ff"], [2, "#c084fc"], [4, "#9333ea"], [6, "#581c87"]]), "fill-opacity": 0.7 },
       },
       {
-        source: "grid", type: "fill", mode: "anchor",
+        source: "grid", type: "fill", mode: "anchor", toggle: "site_heatmap",
         paint: {
           "fill-opacity": 0.7,
           "fill-color": [
@@ -410,7 +410,7 @@ export const USE_CASES = [
       // per mode since all three grid fills above share this "grid" source/grid_id.
       // Listed last (topmost) so it isn't hidden under the fill/catchment lines above it.
       ...["walk_score", "kompetitor", "anchor"].map((mode) => ({
-        source: "grid", type: "symbol", mode, noPopup: true,
+        source: "grid", type: "symbol", mode, toggle: "site_heatmap", noPopup: true,
         layout: {
           "text-field": ["to-string", ["get", "grid_id"]], "text-size": 9,
           "text-allow-overlap": true, "text-ignore-placement": true,
