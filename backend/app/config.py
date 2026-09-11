@@ -11,6 +11,7 @@ MAPID_DATA_KEY = os.environ["MAPID_DATA_KEY"]
 MAPID_CATALOGUE_KEY = os.environ["MAPID_CATALOGUE_KEY"]
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 OPENAQ_API_KEY = os.getenv("OPENAQ_API_KEY", "")
+OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://localhost:8000")
 
