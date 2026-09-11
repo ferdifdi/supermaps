@@ -284,19 +284,25 @@ _dashboard: list[dict] = []  # last computed table; what-if and chat score again
 
 
 @app.get("/api/analysis/tod-dashboard")
-async def tod_dashboard(modes: str = "KRL,MRT,LRT", limit: int = 25):
-    """Ranked SCI table for the given comma-separated mode_labels (KRL/MRT/LRT/TJ).
+async def tod_dashboard(modes: str = "KRL,MRT,LRT", limit: int = 200):
+    """Ranked SCI table for the given comma-separated mode_labels (KRL/MRT/LRT).
 
-    The index is relative, so every station in the table is standardised against the others.
+    The index is relative, so every station in the table is standardised against the others -
+    silently dropping stations past a low `limit` before ranking (the old default was 25,
+    cutting KRL's 86 stations down to a fairly arbitrary first 25) meant "top station" and
+    "bottom station" weren't actually the true top/bottom of the mode. 200 comfortably covers
+    every included mode's real count (KRL is the largest at 86) - this is a safety ceiling now,
+    not a practical cap. TJ is out of scope for K-UC1 entirely (see frontend/src/tod.js), so
+    the thousands-of-halte case this used to guard against can't happen through this endpoint.
 
     No way to force this fully live (unlike every other use case, and there never was) -
-    this scans EVERY station of the chosen mode(s) at once (up to `limit`), each one
-    needing its own POI/road Overpass calls if forced live. A single TJ scan alone is
-    thousands of halte - that's enough live Overpass traffic to get this project's IP
-    rate-limited or blocklisted (has happened before, see commit 336350c), not just slow.
-    Station enumeration itself (_rail_stations) is one live osm.stations() call, cached to
-    disk by osm.py after the first hit - that part was never the problem; the semaphore
-    below is what actually protects the per-station scan.
+    this scans EVERY station of the chosen mode(s) at once (up to `limit`), each one needing
+    its own POI/road Overpass calls if forced live and not covered by the static cache
+    (backend/data/k-uc1/, see generate_kuc1_static.py). Station enumeration itself
+    (_rail_stations) is one live osm.stations() call, cached to disk by osm.py after the
+    first hit - that part was never the problem; the semaphore below is what actually
+    protects a live per-station scan from getting this project's IP rate-limited or
+    blocklisted again (has happened before, see commit 336350c).
     """
     wanted = [m for m in modes.split(",") if m]
     all_stations = await _rail_stations() + (_tj_stations() if "TJ" in wanted else [])
