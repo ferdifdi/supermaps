@@ -28,21 +28,22 @@ async function post(path, body) {
 export const api = {
   base: API,
   styles: () => get("/api/basemap/styles"),
-  stations: (mode, dataSource = "static") =>
-    get(`/api/stations?data_source=${dataSource}${mode ? `&mode=${mode}` : ""}`),
-  walkAccess: (id, radiusM, dataSource = "static") =>
-    get(`/api/analysis/walk-access?station_id=${id}&radius_m=${radiusM}&data_source=${dataSource}`),
-  amenityEquity: (id, radius, dataSource = "static") =>
-    get(`/api/analysis/amenity-equity?station_id=${id}&radius=${radius}&data_source=${dataSource}`),
-  route: (id, lon, lat, preference, dataSource = "static") =>
-    get(`/api/analysis/route?station_id=${id}&lon=${lon}&lat=${lat}&preference=${preference}&data_source=${dataSource}`),
-  siteSelection: (id, businessType, subtype, subtype2, dataSource = "static") =>
-    get(`/api/analysis/site-selection?station_id=${id}&business_type=${encodeURIComponent(businessType)}${subtype ? `&subtype=${encodeURIComponent(subtype)}` : ""}${subtype2 ? `&subtype2=${encodeURIComponent(subtype2)}` : ""}&data_source=${dataSource}`),
+  stations: (mode) =>
+    get(`/api/stations${mode ? `?mode=${mode}` : ""}`),
+  walkAccess: (id, radiusM) =>
+    get(`/api/analysis/walk-access?station_id=${id}&radius_m=${radiusM}`),
+  amenityEquity: (id, radius) =>
+    get(`/api/analysis/amenity-equity?station_id=${id}&radius=${radius}`),
+  route: (id, lon, lat, preference) =>
+    get(`/api/analysis/route?station_id=${id}&lon=${lon}&lat=${lat}&preference=${preference}`),
+  siteSelection: (id, businessType, subtype, subtype2) =>
+    get(`/api/analysis/site-selection?station_id=${id}&business_type=${encodeURIComponent(businessType)}${subtype ? `&subtype=${encodeURIComponent(subtype)}` : ""}${subtype2 ? `&subtype2=${encodeURIComponent(subtype2)}` : ""}`),
   businessTypes: () => get("/api/analysis/business-types"),
   businessSubtypes: (prefix) => get(`/api/analysis/business-subtypes?prefix=${encodeURIComponent(prefix)}`),
   businessSubtypes2: (prefix, subtype) =>
     get(`/api/analysis/business-subtypes2?prefix=${encodeURIComponent(prefix)}${subtype ? `&subtype=${encodeURIComponent(subtype)}` : ""}`),
-  resilience: (id, dataSource = "static") => get(`/api/analysis/resilience?station_id=${id}&data_source=${dataSource}`),
+  resilience: (id) => get(`/api/analysis/resilience?station_id=${id}`),
+  surveyForStation: (id) => get(`/api/survey/station/${id}`),
   todDashboard: (modes) => get(`/api/analysis/tod-dashboard?modes=${modes}`),
   todMetadata: () => get("/api/analysis/tod-metadata"),
   todWhatIf: (stationId, overrides) => post("/api/analysis/tod-whatif", { station_id: stationId, overrides }),
