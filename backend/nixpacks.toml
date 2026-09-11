@@ -1,0 +1,9 @@
+# rasterio (backend/app/lst.py) bundles GDAL in its manylinux wheel, but GDAL still
+# dynamically links a few system C libraries at runtime instead of bundling everything -
+# libexpat.so.1 (XML parsing) is one of them. Nixpacks' default Python image doesn't
+# include it, so `import rasterio` crashed the whole app on startup (ImportError:
+# libexpat.so.1: cannot open shared object file). geos/proj listed too since GDAL/rasterio
+# commonly need those as well and it's cheaper to add them now than debug one missing .so
+# at a time on the next deploy.
+[phases.setup]
+nixPkgs = ["expat", "geos", "proj"]
