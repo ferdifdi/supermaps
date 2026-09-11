@@ -150,16 +150,19 @@ MAX_PROMPT_CHARS = 8000  # Groq free tier rejects (413) large request bodies wel
 # any model's real context limit - this is a request-size budget, not a token budget.
 
 
-def _compact_result(result: dict, cap: int = 12) -> dict:
+def _compact_result(result: dict) -> dict:
     """Drop geometry, keep properties/summary - geometries are huge and the model only
-    ever needs to reason about the numbers/labels, never the coordinates. `cap` is
-    deliberately small (not "as many as fit") - a chat answer only needs enough rows to
-    reason about, not the full dataset."""
+    ever needs to reason about the numbers/labels, never the coordinates.
+
+    Does NOT cap how many features survive per FeatureCollection - a fixed cap silently
+    truncated every grid layer to its first N cells (e.g. 12), so the model only ever saw
+    a partial grid and had no way to know cells beyond that existed. That read as the
+    model being wrong about a cell (e.g. "grid 38 doesn't exist") when the real bug was
+    upstream. `_budget()` below is the actual size safety net - it drops an entire
+    oversized key rather than serving a silently-partial, misleading one."""
     def strip(v):
         if isinstance(v, dict) and v.get("type") == "FeatureCollection":
-            return [f.get("properties", {}) for f in v["features"][:cap]]
-        if isinstance(v, list):
-            return v[:cap]
+            return [f.get("properties", {}) for f in v["features"]]
         return v
     return {k: strip(v) for k, v in result.items()}
 
