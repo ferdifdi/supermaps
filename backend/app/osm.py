@@ -63,37 +63,52 @@ def mode_label(tags: dict) -> str:
     return "KRL"
 
 
+async def _try_mirror(client: httpx.AsyncClient, url: str, query: str) -> dict | None:
+    """One mirror attempt - None on any failure (unreachable, timeout, error status,
+    truncated body), never raises, so the caller can just race/skip past it."""
+    try:
+        r = await client.post(url, data={"data": query})
+    except httpx.TransportError:  # host unreachable or timed out
+        return None
+    if r.status_code >= 400:  # rate limit / load shedding / bad gateway / any server error
+        return None
+    try:
+        return r.json()
+    except json.JSONDecodeError:  # empty/truncated body
+        return None
+
+
 async def overpass(query: str) -> dict:
     key = hashlib.sha1(query.encode()).hexdigest()
     path = CACHE_DIR / f"osm_{key}.json"
     if path.exists():
         return json.loads(path.read_text(encoding="utf-8"))
-    # Short per-attempt timeout so a hanging mirror fails fast instead of eating the whole budget.
+    # Race every mirror concurrently instead of trying them one at a time - whichever
+    # responds first (and actually succeeds) wins, the rest get cancelled. A query used
+    # to pay each failing/slow mirror's full timeout in sequence before reaching a good
+    # one; this way a single healthy-and-fast mirror answers immediately regardless of
+    # its position in OVERPASS_URLS. The per-station semaphore elsewhere (K-UC1's
+    # dashboard scan) still caps how many *stations* are in flight at once, so this only
+    # ever fans out to N mirrors for the one query currently being resolved, not N times
+    # however many stations are queued.
     timeout = httpx.Timeout(connect=5, read=12, write=5, pool=5)
     async with httpx.AsyncClient(timeout=timeout, headers={"User-Agent": "SuperMaps/1.0"}) as client:
-        r = None
-        for attempt in range(len(OVERPASS_URLS)):
-            url = OVERPASS_URLS[attempt]
-            try:
-                r = await client.post(url, data={"data": query})
-            except httpx.TransportError:  # host unreachable or timed out, try the next mirror
-                r = None
-                continue
-            if r.status_code >= 400:  # rate limit / load shedding / bad gateway / any
-                # server-side error - try the next mirror instead of raising immediately.
-                # Was `in (429, 504)` only - missed 502/503/500 (and any other status),
-                # so a mirror consistently 502ing for one query killed the whole call on
-                # its first attempt without ever falling through to the other 2 mirrors
-                # (checked: happened in practice, same halte failing every single retry).
-                r = None
-                continue
-            try:
-                data = r.json()
-            except json.JSONDecodeError:  # empty/truncated body, try the next mirror
-                r = None
-                continue
-            break
-        if r is None:
+        tasks = {asyncio.create_task(_try_mirror(client, url, query)): url for url in OVERPASS_URLS}
+        data = None
+        try:
+            while tasks:
+                done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                for t in done:
+                    del tasks[t]
+                    result = t.result()
+                    if result is not None:
+                        data = result
+                if data is not None:
+                    break
+        finally:
+            for t in tasks:
+                t.cancel()
+        if data is None:
             raise httpx.ConnectError("all Overpass mirrors unreachable, rate-limited, or returned empty responses")
     path.write_text(json.dumps(data), encoding="utf-8")
     return data
@@ -214,18 +229,86 @@ async def trees(lon: float, lat: float, radius: int) -> list[dict]:
     return [{"lon": el["lon"], "lat": el["lat"]} for el in data["elements"]]
 
 
-async def pois(lon: float, lat: float, radius: int) -> list[dict]:
-    """Amenities, shops, offices and buildings around a point."""
+async def residential_pois(lon: float, lat: float, radius: int) -> list[dict]:
+    """Residential buildings only - feeds walk_score's residential_mix (M-UC1/U-UC1) and
+    K-UC1's population_density/land_use_diversity. This used to be one filter inside a
+    much bigger combined query that also pulled amenity/shop/office/other-building tags
+    for a commercial-classification fallback - that fallback is gone now (MAPID Data
+    Catalogue's PERDAGANGAN DAN RETAIL/KANTOR/basic-need categories fully cover what it
+    was standing in for across Jabodetabek - the OSM-tag classifier that did this,
+    osm_poi.py, was deleted outright), so this only ever
+    asks Overpass for the one tag MAPID has no equivalent of: residential buildings.
+    Measured live against Manggarai (a dense interchange, 800m radius): the old combined
+    query took 32s: this one is a small fraction of that, see the timing note in the
+    project history."""
+    q = f"""
+    [out:json][timeout:10];
+    nwr["building"~"residential|apartments|house"](around:{radius},{lat},{lon});
+    out center;
+    """
+    data = await overpass(q)
+    out = []
+    for el in data["elements"]:
+        tags = el.get("tags", {})
+        center = el.get("center") or el
+        if "lon" not in center:
+            continue
+        out.append({
+            "lon": center["lon"],
+            "lat": center["lat"],
+            "building": tags.get("building", ""),
+            "name": tags.get("name", ""),
+        })
+    return out
+
+
+async def green_pois(lon: float, lat: float, radius: int) -> list[dict]:
+    """Parks/gardens/grass/forest/recreation ground - MAPID has no POI-level green-space
+    layer (mapid_environment.py's ecology_index/rainfall/uhi are numeric index polygons,
+    not point locations), so this stays a live OSM query, same tags the old combined
+    pois() used for its green classification."""
     q = f"""
     [out:json][timeout:10];
     (
-      nwr["amenity"](around:{radius},{lat},{lon});
-      nwr["shop"](around:{radius},{lat},{lon});
-      nwr["office"](around:{radius},{lat},{lon});
-      nwr["building"~"residential|apartments|house|commercial|retail|office"](around:{radius},{lat},{lon});
       nwr["leisure"~"park|garden"](around:{radius},{lat},{lon});
       nwr["landuse"~"grass|forest|recreation_ground"](around:{radius},{lat},{lon});
-      way["waterway"~"river|stream|canal|drain"](around:{radius},{lat},{lon});
+    );
+    out center;
+    """
+    data = await overpass(q)
+    out = []
+    for el in data["elements"]:
+        tags = el.get("tags", {})
+        center = el.get("center") or el
+        if "lon" not in center:
+            continue
+        out.append({
+            "lon": center["lon"],
+            "lat": center["lat"],
+            "leisure": tags.get("leisure", ""),
+            "landuse": tags.get("landuse", ""),
+            "name": tags.get("name", ""),
+        })
+    return out
+
+
+async def facility_pois(lon: float, lat: float, radius: int) -> list[dict]:
+    """K-UC1 station-facility tags with no MAPID equivalent: parking (MAPID's Data
+    Catalogue has no parking category at all), safety/information proxies, generic
+    building presence (accessible_buildings), and pedestrian infrastructure nodes.
+
+    `amenity` here is deliberately restricted to parking/motorcycle_parking/police -
+    NOT the full amenity tag - the old combined pois() query's broad `nwr["amenity"]`
+    sweep existed to feed a commercial-classification fallback that's gone now (MAPID
+    covers those categories completely), so re-adding the full amenity tag would just
+    resurrect the same slow, now-pointless query. Parking specifically has no MAPID
+    stand-in and must keep coming from here.
+    """
+    q = f"""
+    [out:json][timeout:10];
+    (
+      nwr["amenity"~"parking|motorcycle_parking|police"](around:{radius},{lat},{lon});
+      nwr["building"](around:{radius},{lat},{lon});
       node["highway"="crossing"](around:{radius},{lat},{lon});
       node["highway"="bus_stop"](around:{radius},{lat},{lon});
       node["public_transport"="platform"](around:{radius},{lat},{lon});
@@ -244,12 +327,7 @@ async def pois(lon: float, lat: float, radius: int) -> list[dict]:
             "lon": center["lon"],
             "lat": center["lat"],
             "amenity": tags.get("amenity", ""),
-            "shop": tags.get("shop", ""),
-            "office": tags.get("office", ""),
             "building": tags.get("building", ""),
-            "leisure": tags.get("leisure", ""),
-            "landuse": tags.get("landuse", ""),
-            "waterway": tags.get("waterway", ""),
             "highway": tags.get("highway", ""),
             "railway": tags.get("railway", ""),
             "public_transport": tags.get("public_transport", ""),
@@ -257,9 +335,6 @@ async def pois(lon: float, lat: float, radius: int) -> list[dict]:
             "surveillance": tags.get("surveillance", ""),
             "departures_board": tags.get("departures_board", ""),
             "information": tags.get("information", ""),
-            "wheelchair": tags.get("wheelchair", ""),
-            "tactile_paving": tags.get("tactile_paving", ""),
-            "kerb": tags.get("kerb", ""),
             "name": tags.get("name", ""),
         })
     return out
@@ -278,10 +353,6 @@ async def routes(lon: float, lat: float, radius: int) -> int:
 
 def is_residential(poi: dict) -> bool:
     return poi["building"] in ("residential", "apartments", "house")
-
-
-def is_commercial(poi: dict) -> bool:
-    return bool(poi["shop"] or poi["office"]) or poi["building"] in ("commercial", "retail", "office")
 
 
 def is_green(poi: dict) -> bool:
