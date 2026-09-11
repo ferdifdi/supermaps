@@ -265,12 +265,14 @@ export const USE_CASES = [
       radius: [400, 800],
     },
     run: (station, opts) => api.amenityEquity(station.id, opts.radius || 800),
-    // "mode" layers only render when App's map-mode toggle matches; layers without a
-    // mode (POI dots, route, isochrone outline) always render regardless of which mode
-    // is active - the outline in particular needs to stay visible in heatmap modes too,
-    // so the coverage flag (green/red) doesn't disappear just because the fill is hidden.
+    // Single unified view - no more separate "Isochrone" mode to switch to, isochrone
+    // fill/outline, POI pins, and the heatmap_poi grid all show together (each still
+    // independently toggleable via LayerToggles). "heatmap_poi" stays as the one
+    // remaining `mode` tag purely so App.jsx's use-case-switch effect still has a mode to
+    // auto-select (and usecases.js's legend lookup has a key to resolve) - there's no
+    // second mode left to switch away from it to.
     layers: [
-      { source: "isochrone", type: "fill", mode: "isochrone", toggle: "poi_isochrone", paint: { "fill-color": "#5b4bdb", "fill-opacity": 0.12 } },
+      { source: "isochrone", type: "fill", toggle: "poi_isochrone", paint: { "fill-color": "#5b4bdb", "fill-opacity": 0.12 } },
       {
         source: "isochrone", type: "line", toggle: "poi_isochrone",
         paint: {
@@ -312,16 +314,15 @@ export const USE_CASES = [
         paint: { "text-color": "#111827", "text-halo-color": "#ffffff", "text-halo-width": 1 },
       },
     ],
-    // Legend switches with the map mode (see App.jsx) - each mode colors the map by a
-    // different property, so a single fixed legend would be wrong two-thirds of the time.
+    // One legend now that isochrone/POI/heatmap all show together (no more mode switch)
+    // - the POI pin category colors are what's genuinely hard to guess without a legend,
+    // so they're primary; the heatmap fill's blue shade (light=few, dark=many POI per
+    // cell) just gets a one-line explanation instead of its own full stop list, since
+    // two different color scales in one legend box reads as two legends stapled together.
     legends: {
-      isochrone: {
+      heatmap_poi: {
         title: "Kategori POI (redup = di luar jangkauan jalan kaki)",
         stops: CATEGORIES.map((c) => [CATEGORY_LABELS[c], CATEGORY_COLORS[c]]),
-      },
-      heatmap_poi: {
-        title: "Jumlah POI per grid 250 m",
-        stops: [[0, "#eff3ff"], [5, "#c6dbef"], [15, "#6baed6"], [30, "#2171b5"], ["50+", "#08306b"]],
       },
     },
     popup: [basicNeedPoiField(CATEGORY_LABELS), routeField, isochroneMinutesField],

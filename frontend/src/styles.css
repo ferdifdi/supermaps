@@ -316,6 +316,10 @@ button.secondary.active { background: var(--primary); color: #fff; border-color:
   padding: 10px 12px;
   font-size: 11px;
   box-shadow: var(--shadow);
+  /* Without this, maplibregl.Marker DOM pins (POI icons/labels) - which float above the
+     map canvas with their own implicit stacking - could render through/over this panel
+     instead of being cleanly covered by it. */
+  z-index: 30;
 }
 
 .legend-row { display: flex; align-items: center; gap: 6px; margin-top: 4px; }

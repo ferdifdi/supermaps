@@ -9,11 +9,6 @@ const TABS = [
   { id: "bandingkan", label: "Bandingkan" },
 ]
 
-const MAP_MODES = [
-  { id: "isochrone", label: "Isochrone" },
-  { id: "heatmap_poi", label: "Heatmap POI" },
-]
-
 // Same checkbox-list pattern as WalkDock's LayerToggles (M-UC1) - isochrone outline/fill,
 // basic-need POI pins, and the heatmap_poi grid choropleth (+ its grid_id labels) are
 // independent overlays here too, see usecases.js's M-UC2 layer "toggle" keys.
@@ -55,7 +50,7 @@ function CoverageFlag({ categories }) {
   )
 }
 
-function Ringkasan({ station, result, mapMode, onMapMode, radius, ...toggles }) {
+function Ringkasan({ station, result, radius, ...toggles }) {
   const s = result.summary
   return (
     <>
@@ -64,16 +59,6 @@ function Ringkasan({ station, result, mapMode, onMapMode, radius, ...toggles }) 
         <p className="note">{station.mode_label}</p>
       </div>
 
-      <div className="section">
-        <label>Tampilan peta</label>
-        <div className="dock-actions">
-          {MAP_MODES.map((m) => (
-            <button key={m.id} className={mapMode === m.id ? "mini active" : "mini"} onClick={() => onMapMode(m.id)}>
-              {m.label}
-            </button>
-          ))}
-        </div>
-      </div>
       <LayerToggles {...toggles} />
 
       <div className="section">
@@ -260,7 +245,7 @@ export default function EquityDock({
         </div>
 
         <div className="dock-body">
-          {tab === "ringkasan" && <Ringkasan station={station} result={result} mapMode={mapMode} onMapMode={onMapMode} radius={radius} {...toggles} />}
+          {tab === "ringkasan" && <Ringkasan station={station} result={result} radius={radius} {...toggles} />}
           {tab === "kategori" && <Kategori categories={result.summary.categories} {...toggles} />}
           {tab === "poi" && (
             <PoiSearch
