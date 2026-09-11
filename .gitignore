@@ -18,3 +18,11 @@ dist/
 output/*
 !output/*.py
 !output/requirements.txt
+
+# ML model weights/caches (sidewalk-quality analysis pipeline) - never commit these.
+*.pt
+*.pth
+*.onnx
+backend/data/survey_lapangan/photos/
+.hf_cache/
+huggingface_cache/
