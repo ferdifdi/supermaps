@@ -3,6 +3,7 @@
 import math
 
 import numpy as np
+import shapely
 from pyproj import Transformer
 from shapely.geometry import Point, Polygon, box, mapping, shape
 from shapely.ops import transform, unary_union
@@ -14,6 +15,16 @@ _to_deg = Transformer.from_crs("EPSG:32748", "EPSG:4326", always_xy=True).transf
 
 def to_m(geom):
     return transform(_to_m, geom)
+
+
+def to_m_points(lons, lats) -> list[Point]:
+    """Bulk WGS84->metric Point reprojection for large point sets (e.g. a whole MAPID
+    category file, tens of thousands of features) - one vectorized pyproj transform call
+    plus shapely 2.0's vectorized points() constructor, instead of to_m(Point(lon, lat))
+    in a Python loop (each iteration pays its own pyproj+shapely.ops.transform call
+    overhead, ~100x slower in aggregate for large N)."""
+    xs, ys = _to_m(np.asarray(lons, dtype=float), np.asarray(lats, dtype=float))
+    return list(shapely.points(xs, ys))
 
 
 def to_deg(geom):
