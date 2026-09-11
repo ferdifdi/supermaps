@@ -1,3 +1,5 @@
+import { HIGHWAY_LABELS } from "../popupFields"
+
 const TABS = [
   { id: "ringkasan", label: "Ringkasan" },
   { id: "koridor", label: "Koridor" },
@@ -80,7 +82,7 @@ const TOPICS = [
       const f = result.ecology_index?.features || []
       if (!f.length) return "Tidak ada data indeks ekologi yang mencakup lokasi ini."
       const avg = f.reduce((sum, ft) => sum + ft.properties.INDEKS, 0) / f.length
-      return `Rata-rata INDEKS ${avg.toFixed(3)} dari ${f.length} grid MAPID (2024, turunan RSEI).`
+      return `Indeks ekologi rata-rata ${avg.toFixed(3)} dari 1, di ${f.length} sel data MAPID (2024, turunan RSEI).`
     },
   },
   {
@@ -108,6 +110,26 @@ const TOPICS = [
   },
 ]
 
+// Same checkbox-list pattern as WalkDock's LayerToggles (M-UC1), but K-UC2 only has one
+// independent overlay to toggle: every fill here is mode-gated (one topic visible at a
+// time via TOPICS above), so there's just a single "hide whichever topic fill is active"
+// checkbox, shared across all of them via the "resilience_heatmap" toggle key in
+// usecases.js. No separate road-corridor skeleton layer exists here to add a toggle for.
+function LayerToggles({ showHeatmap, onToggleHeatmap }) {
+  if (!onToggleHeatmap) return null
+  return (
+    <div className="section">
+      <label>Layer di peta</label>
+      <div className="dock-actions" style={{ flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
+        <label className="filter-option" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <input type="checkbox" checked={showHeatmap !== false} onChange={onToggleHeatmap} />
+          Heatmap (ikut topik dipilih)
+        </label>
+      </div>
+    </div>
+  )
+}
+
 function BarChart({ rows }) {
   const max = Math.max(...rows.map((r) => r.value), 1)
   return (
@@ -127,7 +149,7 @@ function BarChart({ rows }) {
   )
 }
 
-function Ringkasan({ result, mapMode, onMapMode }) {
+function Ringkasan({ result, mapMode, onMapMode, ...toggles }) {
   const topic = TOPICS.find((t) => t.id === mapMode) || TOPICS[0]
   const rows = topic.rows(result)
   return (
@@ -150,6 +172,7 @@ function Ringkasan({ result, mapMode, onMapMode }) {
           ))}
         </div>
       </div>
+      <LayerToggles {...toggles} />
 
       <div className="section">
         <label>{topic.label}</label>
@@ -160,6 +183,7 @@ function Ringkasan({ result, mapMode, onMapMode }) {
       <div className="section">
         <label>Koridor jalan</label>
         <p className="note">{result.summary.corridors} ruas jalan dianalisis dalam radius 500m. Tidak ada skor kerentanan gabungan - tiap hazard (banjir, longsor, panas, ekologi, curah hujan) ditampilkan terpisah, apa adanya.</p>
+        <p className="note">Resolusi data: buffer 500 m dari stasiun, koridor jalan dengan lebar buffer 40 m.</p>
       </div>
     </>
   )
@@ -167,7 +191,7 @@ function Ringkasan({ result, mapMode, onMapMode }) {
 
 const MAPID_TINGGI_KELAS = new Set(["Tinggi", "Cukup Tinggi"])
 
-function KoridorList({ result, onFocus }) {
+function KoridorList({ result, onFocus, ...toggles }) {
   const corridors = result.corridors?.features || []
   const usesInarisk = result.summary.use_inarisk
   const risky = corridors.filter((f) => usesInarisk
@@ -175,6 +199,7 @@ function KoridorList({ result, onFocus }) {
     : MAPID_TINGGI_KELAS.has(f.properties.banjir_kelas))
   return (
     <div className="section">
+      <LayerToggles {...toggles} />
       <label>Koridor risiko "tinggi" ({risky.length})</label>
       <p className="note">
         {usesInarisk
@@ -188,7 +213,7 @@ function KoridorList({ result, onFocus }) {
             onClick={() => onFocus(f)}>
             <span className="board-name">
               <span className="dot" style={{ background: "#ef4444" }} />
-              Koridor #{f.properties.corridor_id} ({f.properties.highway})
+              Koridor #{f.properties.corridor_id} ({HIGHWAY_LABELS[f.properties.highway] || f.properties.highway})
             </span>
             <div className="note">
               {usesInarisk ? (
@@ -205,7 +230,10 @@ function KoridorList({ result, onFocus }) {
   )
 }
 
-export default function ResilienceDock({ open, onToggle, tab, onTab, result, onFocus, mapMode, onMapMode }) {
+export default function ResilienceDock({
+  open, onToggle, tab, onTab, result, onFocus, mapMode, onMapMode, showHeatmap, onToggleHeatmap,
+}) {
+  const toggles = { showHeatmap, onToggleHeatmap }
   return (
     <>
       <button className={open ? "dock-toggle open" : "dock-toggle"} onClick={onToggle}>
@@ -221,8 +249,8 @@ export default function ResilienceDock({ open, onToggle, tab, onTab, result, onF
         </div>
 
         <div className="dock-body">
-          {tab === "ringkasan" && <Ringkasan result={result} mapMode={mapMode} onMapMode={onMapMode} />}
-          {tab === "koridor" && <KoridorList result={result} onFocus={onFocus} />}
+          {tab === "ringkasan" && <Ringkasan result={result} mapMode={mapMode} onMapMode={onMapMode} {...toggles} />}
+          {tab === "koridor" && <KoridorList result={result} onFocus={onFocus} {...toggles} />}
         </div>
       </aside>
     </>
