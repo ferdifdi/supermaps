@@ -5,5 +5,10 @@
 # libexpat.so.1: cannot open shared object file). geos/proj listed too since GDAL/rasterio
 # commonly need those as well and it's cheaper to add them now than debug one missing .so
 # at a time on the next deploy.
+#
+# IMPORTANT: setting phases.setup.nixPkgs REPLACES Nixpacks' auto-detected setup packages
+# instead of adding to them - the first attempt at this file only listed expat/geos/proj
+# and broke the build entirely ("python: command not found") because python itself was no
+# longer in the package list. python312 has to be listed explicitly alongside them.
 [phases.setup]
-nixPkgs = ["expat", "geos", "proj"]
+nixPkgs = ["python312", "expat", "geos", "proj"]
