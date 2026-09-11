@@ -24,7 +24,7 @@ function Summary({ rows, metadata, onSelect }) {
     <>
       <div className="dock-actions">
         <button className={sort === "rank" ? "mini active" : "mini"} onClick={() => setSort("rank")}>
-          Urut SCI
+          Urut indeks
         </button>
         <button className={sort === "name" ? "mini active" : "mini"} onClick={() => setSort("name")}>
           Urut nama
@@ -37,7 +37,7 @@ function Summary({ rows, metadata, onSelect }) {
             <th>#</th>
             <th>Stasiun</th>
             <th>Moda</th>
-            <th>SCI</th>
+            <th>Indeks TOD</th>
             <th>Tipologi</th>
           </tr>
         </thead>
@@ -72,7 +72,7 @@ function Metadata({ metadata }) {
       {open && (
         <>
           <p className="note">{metadata.method}</p>
-          <p className="note">Buffer analisis: {metadata.buffer_m} m.</p>
+          <p className="note">Resolusi data: buffer {metadata.buffer_m} m dari stasiun.</p>
           <label>Indikator tanpa data terukur</label>
           <ul className="note-list">
             {metadata.no_data.map((d) => (
@@ -124,7 +124,7 @@ function Leaderboard({ rows, onSelect }) {
       </div>
 
       <select value={by} onChange={(e) => setBy(e.target.value)}>
-        <option value="sci">SCI keseluruhan</option>
+        <option value="sci">Indeks TOD keseluruhan</option>
         {Object.entries(CRITERIA_LABELS).map(([k, label]) => (
           <option key={k} value={k}>
             {label}
