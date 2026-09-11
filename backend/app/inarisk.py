@@ -1,9 +1,9 @@
 """BNPB InaRISK (gis.bnpb.go.id) - official government hazard index rasters, free,
-no auth. Used for K-UC2's "Live OSM murni" data source (data_source="live") - the
-"static" default uses MAPID's downloaded flood-risk zoning instead (mapid_environment.py),
-which is instant and never down; this module is the live, government-server-dependent
-alternative, restored specifically for when the user wants that live path back (it was
-removed once for being slow/flaky - see analysis.py's resilience() docstring history).
+no auth. Used by K-UC2's resilience() as the automatic fallback when MAPID's downloaded
+flood-risk zoning (mapid_environment.py) has no coverage for a station's buffer - MAPID
+is tried first (instant, never down); this module is the live, government-server-dependent
+alternative, used only when the static data has nothing for that area (no user toggle -
+see analysis.py's resilience()).
 
 Values are the raw hazard index (0-1) at a point, read via the ArcGIS "identify" raster
 operation - not an aggregated or re-derived score. BNPB's own published classification
