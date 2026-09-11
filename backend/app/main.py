@@ -1,13 +1,15 @@
 import asyncio
 import time
+from pathlib import Path
 
 import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import ai, analysis, gtfs, mapid, mapid_data, osm, static_transit
+from . import ai, analysis, gtfs, lst, mapid, mapid_data, osm, static_transit, survey
 from .config import MAPID_BASEMAP_KEY, MAPID_BASEMAP_URL, PUBLIC_BASE_URL, catalogue_layers
 from .geo import buffer_deg
 
@@ -15,6 +17,23 @@ app = FastAPI(title="SuperMaps API")
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
 )
+
+# Field-survey photos + AI overlay images (backend/data/survey_lapangan/{photos,analysis}/)
+# served as plain static files - the frontend just needs a fetchable URL per photo, not
+# an API response body.
+_SURVEY_DIR = Path(__file__).parent.parent / "data" / "survey_lapangan"
+if _SURVEY_DIR.exists():
+    app.mount("/static/survey", StaticFiles(directory=str(_SURVEY_DIR)), name="survey-static")
+
+
+@app.on_event("startup")
+def _warm_caches():
+    """Pay the one-time parse/reproject cost of the biggest MAPID categories (e.g.
+    PERDAGANGAN DAN RETAIL, ~65MB, ~11s the slow way) at server boot instead of on
+    whichever user's request happens to hit it first. Blocks startup briefly (once per
+    deploy/restart) so every real request after that is warm."""
+    mapid_data.warm_all()
+    lst._load()
 
 
 @app.exception_handler(httpx.TransportError)
@@ -26,13 +45,14 @@ STYLES = ["street-v2.0", "satellite-v2.0", "dark-v2.0", "light-v2.0"]
 _stations: dict[str, dict] = {}
 
 # In-process result cache for the analysis endpoints - these recompute the same walk_score
-# grid/road graph/isochrone from scratch on every call even when the inputs (station+radius+
-# data_source+...) are identical to a request made moments ago, which is most repeat clicks
+# grid/road graph/isochrone from scratch on every call even when the inputs (station+
+# radius+...) are identical to a request made moments ago, which is most repeat clicks
 # (toggling a layer, reopening a station). Keyed on every query param that affects the
-# result, values expire after _CACHE_TTL_S so "live" mode still refreshes periodically and
-# PM2.5 doesn't go stale for too long. First request for a given key is never faster - it
-# still does the full computation - only repeats of that exact key get the shortcut. Process
-# memory only: cleared on restart, not shared across workers if this ever runs with >1.
+# result, values expire after _CACHE_TTL_S so any live-fallback data (PM2.5, InaRISK, etc.)
+# still refreshes periodically and doesn't go stale for too long. First request for a given
+# key is never faster - it still does the full computation - only repeats of that exact key
+# get the shortcut. Process memory only: cleared on restart, not shared across workers if
+# this ever runs with >1.
 _CACHE_TTL_S = 300
 _cache: dict[tuple, tuple[float, object]] = {}
 
@@ -59,18 +79,19 @@ def _tj_stations() -> list[dict]:
     ]
 
 
-async def _rail_stations(data_source: str = "static") -> list[dict]:
-    """MRT/KRL/LRT only - TJ always comes from GTFS instead (see _tj_stations). Static
-    snapshot first (output/isochrone_*.py's *_stations.geojson) unless data_source ==
-    "live" or no static file exists yet, in which case falls back to a live osm.stations()
-    Overpass call. Filters out any TJ-labeled entries osm.stations() itself might return
-    (OSM has some public_transport=station+bus=yes nodes tagged as TJ) - GTFS stays the
-    one authority for TJ halte, not OSM."""
-    if data_source != "live":
-        cached = static_transit.stations()
-        if cached is not None:
-            return [s for s in cached if s["mode_label"] != "TJ"]
-    return [s for s in await osm.stations() if s["mode_label"] != "TJ"]
+async def _rail_stations() -> list[dict]:
+    """MRT/KRL/LRT only - TJ always comes from GTFS instead (see _tj_stations). Unlike the
+    rest of this app's OSM data, the station dropdown stays static-only on purpose: it's a
+    small, curated, manually-verified list (output/isochrone_*.py's *_stations.geojson),
+    and live osm.stations() has previously mislabeled stations' modes (see osm.py's
+    mode_label() docstring) - correctness matters more than freshness for a list this
+    small and this rarely-changing. Live is only a last-resort fallback if the static file
+    is missing entirely. Filters out any TJ-labeled entries the live fallback might
+    return (OSM has some public_transport=station+bus=yes nodes tagged as TJ) - GTFS
+    stays the one authority for TJ halte, not OSM."""
+    cached = static_transit.stations()
+    stations = cached if cached is not None else await osm.stations()
+    return [s for s in stations if s["mode_label"] != "TJ"]
 
 
 async def get_station(station_id: str) -> dict:
@@ -106,14 +127,38 @@ async def basemap_proxy(path: str):
 
 # --- stations ----------------------------------------------------------------
 
+def _with_survey_flags(stations: list[dict]) -> list[dict]:
+    """Flags stations/halte within survey.NEARBY_RADIUS_M of a field-survey activity -
+    lets the picker surface "has real trotoar survey data" up front."""
+    matches = survey.stations_with_survey(stations)
+    return [
+        {**s, "has_survey": s["id"] in matches, "survey_count": len(matches.get(s["id"], []))}
+        for s in stations
+    ]
+
+
 @app.get("/api/stations")
-async def list_stations(mode: str | None = None, data_source: str = "static"):
+async def list_stations(mode: str | None = None):
     if mode and mode.upper() == "TJ":
-        return _tj_stations()
-    stations = await _rail_stations(data_source)
+        return _with_survey_flags(_tj_stations())
+    stations = await _rail_stations()
     if mode:
         stations = [s for s in stations if s["mode_label"] == mode.upper()]
-    return stations
+    return _with_survey_flags(stations)
+
+
+@app.get("/api/survey/station/{station_id}")
+async def survey_for_station(station_id: str):
+    """Full field-survey detail (title/score/label + every analyzed photo and its AI
+    overlay image, as static URLs under /static/survey/) for a station's result panel."""
+    station = await get_station(station_id)
+    activities = survey.activities_for_station(station)
+    for a in activities:
+        for p in a["photos"]:
+            p["photo_url"] = f"{PUBLIC_BASE_URL}/static/survey/{p['photo']}"
+            if p["overlay"]:
+                p["overlay_url"] = f"{PUBLIC_BASE_URL}/static/survey/{p['overlay']}"
+    return activities
 
 
 # --- MAPID data --------------------------------------------------------------
@@ -163,37 +208,37 @@ async def catalogue_layer(name: str):
 # --- analysis ----------------------------------------------------------------
 
 @app.get("/api/analysis/walk-access")
-async def walk_access(station_id: str, radius_m: int = 800, data_source: str = "static"):
+async def walk_access(station_id: str, radius_m: int = 800):
     async def factory():
-        return await analysis.walk_access(await get_station(station_id), radius_m, data_source)
-    return await _cached(("walk-access", station_id, radius_m, data_source), factory)
+        return await analysis.walk_access(await get_station(station_id), radius_m)
+    return await _cached(("walk-access", station_id, radius_m), factory)
 
 
 @app.get("/api/analysis/route")
-async def route(station_id: str, lon: float, lat: float, preference: str = "fast", data_source: str = "static"):
+async def route(station_id: str, lon: float, lat: float, preference: str = "fast"):
     async def factory():
-        return await analysis.comfortable_route(await get_station(station_id), lon, lat, preference, data_source)
-    return await _cached(("route", station_id, lon, lat, preference, data_source), factory)
+        return await analysis.comfortable_route(await get_station(station_id), lon, lat, preference)
+    return await _cached(("route", station_id, lon, lat, preference), factory)
 
 
 @app.get("/api/analysis/amenity-equity")
-async def amenity_equity(station_id: str, radius: int = 500, data_source: str = "static"):
+async def amenity_equity(station_id: str, radius: int = 500):
     async def factory():
-        return await analysis.amenity_equity(await get_station(station_id), radius, data_source)
-    return await _cached(("amenity-equity", station_id, radius, data_source), factory)
+        return await analysis.amenity_equity(await get_station(station_id), radius)
+    return await _cached(("amenity-equity", station_id, radius), factory)
 
 
 @app.get("/api/analysis/site-selection")
 async def site_selection(station_id: str, business_type: str = "APOTEK", subtype: str | None = None,
-                          subtype2: str | None = None, radius: int | None = None, data_source: str = "static"):
+                          subtype2: str | None = None, radius: int | None = None):
     station = await get_station(station_id)
     if radius is None:
         radius = static_transit.MODE_RADIUS_M.get(station.get("mode_label", "").lower(), analysis.SITE_ANCHOR_RADIUS)
 
     async def factory():
-        return await analysis.site_selection(station, business_type, subtype, subtype2, radius, data_source)
+        return await analysis.site_selection(station, business_type, subtype, subtype2, radius)
     return await _cached(
-        ("site-selection", station_id, business_type, subtype, subtype2, radius, data_source), factory)
+        ("site-selection", station_id, business_type, subtype, subtype2, radius), factory)
 
 
 @app.get("/api/analysis/business-types")
@@ -224,13 +269,14 @@ async def tod_dashboard(modes: str = "KRL,MRT,LRT", limit: int = 25):
 
     The index is relative, so every station in the table is standardised against the others.
 
-    No data_source="live" option here on purpose (unlike every other use case) - this
-    scans EVERY station of the chosen mode(s) at once (up to `limit`), each one needing
-    its own POI/road Overpass calls if forced live. A single TJ scan alone is thousands of
-    halte - that's enough live Overpass traffic to get this project's IP rate-limited or
-    blocklisted (has happened before, see commit 336350c), not just slow. Station
-    enumeration itself still prefers the static snapshot (_rail_stations' own static-first/
-    live-fallback), that part was never the problem.
+    No way to force this fully live (unlike every other use case, and there never was) -
+    this scans EVERY station of the chosen mode(s) at once (up to `limit`), each one
+    needing its own POI/road Overpass calls if forced live. A single TJ scan alone is
+    thousands of halte - that's enough live Overpass traffic to get this project's IP
+    rate-limited or blocklisted (has happened before, see commit 336350c), not just slow.
+    Station enumeration itself (_rail_stations) is one live osm.stations() call, cached to
+    disk by osm.py after the first hit - that part was never the problem; the semaphore
+    below is what actually protects the per-station scan.
     """
     wanted = [m for m in modes.split(",") if m]
     all_stations = await _rail_stations() + (_tj_stations() if "TJ" in wanted else [])
@@ -269,27 +315,27 @@ def tod_metadata():
     return analysis.metadata()
 
 
-async def _resilience_cached(station_id: str, data_source: str) -> dict:
+async def _resilience_cached(station_id: str) -> dict:
     """Shared by /resilience and /detour - both used to call analysis.resilience()
     separately (scans/builds the graph for one station), so opening a station's detour tab
     right after its resilience tab redid the exact same work. Cached raw (graph/origin
     included, popped only in the /resilience response) so /detour can reuse it directly."""
     async def factory():
-        return await analysis.resilience(await get_station(station_id), data_source)
-    return await _cached(("resilience", station_id, data_source), factory)
+        return await analysis.resilience(await get_station(station_id))
+    return await _cached(("resilience", station_id), factory)
 
 
 @app.get("/api/analysis/resilience")
-async def resilience(station_id: str, data_source: str = "static"):
-    result = dict(await _resilience_cached(station_id, data_source))
+async def resilience(station_id: str):
+    result = dict(await _resilience_cached(station_id))
     result.pop("graph")
     result.pop("origin")
     return result
 
 
 @app.get("/api/analysis/detour")
-async def detour(station_id: str, lon: float, lat: float, data_source: str = "static"):
-    result = await _resilience_cached(station_id, data_source)
+async def detour(station_id: str, lon: float, lat: float):
+    result = await _resilience_cached(station_id)
     return analysis.detour(result["graph"], result["origin"], lon, lat)
 
 
