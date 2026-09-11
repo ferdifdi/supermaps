@@ -1,0 +1,529 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.90998780793797,
+          -6.182190189099472
+        ]
+      },
+      "properties": {
+        "_id": "6a8f309052d86e03b51bc8c7",
+        "title": "Trotoar di Sekitar Terminal Bus Transjakarta Pulo Gadung",
+        "description": "Area depan terminal bus transjakarta Pulo Gadung dipenuhi bus biru yang terparkir berjejeran. Trotoar di sekitar terminal tersebut sempit dan tidak layak. Bahkan di beberapa titik trotoar tidak ada. Terlihat juga sampah yang dibuang di pinggir jalan. Hal ini jelas membuat pejalan kaki tidak nyaman. #TimKaloMenangKitaJoget",
+        "medias": [
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/94acfdf5-32f7-46af-a5dc-c08ca1394845_Zy7K0himgI.png",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/19befeb4-9769-4335-85e7-621d51c50c4f_1787768917375.jpg",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/f34ee437-91fb-413b-a2a0-75244733384e_1787768919334.jpg",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/2819d5b4-eccf-4c83-a174-4a7b0ee34d7f_1787768922547.jpg",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/ba820e47-8c8e-40c0-a05e-942436da6e20_1787768925612.jpg",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/28b9e561-4c67-4bd4-b980-8593558ba1ee_1787768927307.jpg",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/d016c068-b1cb-4d2a-8fdc-a8df16b32a49_1787768930420.jpg"
+        ],
+        "total_comment": 0,
+        "created_at": "2026-08-26T18:29:36.092Z",
+        "likes": [],
+        "user_name": "mayalusiana",
+        "user_full_name": "Maya Lusiana",
+        "user_profile_picture": {
+          "name": "general_image/mayalusiana/1784470279595_IMG-20260516-WA0003.jpg",
+          "url": "https://mapidstorage.cdn.mapid.io/general_image/mayalusiana/1784470279595_IMG-20260516-WA0003.jpg",
+          "name_compressed": "general_image/mayalusiana/1784470279595_IMG-20260516-WA0003_compressed.jpeg",
+          "url_compressed": "https://mapidstorage.cdn.mapid.io/general_image/mayalusiana/1784470279595_IMG-20260516-WA0003_compressed.jpeg"
+        },
+        "community_name": "CONNECTED FUTURE 🌏",
+        "community_picture": "https://mapidstorage.cdn.mapid.io/general_image/mapid-apps/communities/Connected%20Future/1764853240583_AbJHst8Sjz.jpg",
+        "community_description": "MAPID 𝕏 Apps for #ConnectedCommunity and #ConnectedSurvey"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.9985134941304,
+          -6.236521985380961
+        ]
+      },
+      "properties": {
+        "_id": "6a8f2b6c52d86e03b51bc83e",
+        "title": "Trotoar Stasiun Bekasi: Jl Insinyur H. Juanda",
+        "description": "Jalan Insinyur H. Juanda memiliki suasana ramai. Hal ini dikarenakan banyaknya ruko/POI di sepanjang jalan tersebut. Ditemui banyak ojek pangkalan dan kendaraan yang padat merayap. Selain itu, terdapat pedagang kaki lima di sekitar pagar stasiun. Oleh karena itu, trotoar dalam kondisi yang tidak kondusif untuk pejalan kaki karena ramai oleh suara dan polusi kendaraan. #TimKaloMenangKitaJoget",
+        "medias": [
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/ee04db3b-5063-4380-bf62-a9355848fd49_6rT81gQioH.png",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/651e4736-ba15-48b6-95fb-7181340ed16b_1787767642530.jpg",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/d6e4d8fb-422b-47a2-94fb-1172e4dacffc_1787767644218.jpg",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/bd38e295-ae0c-405b-b660-f690532f5cca_1787767645592.jpg",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/a2e4e7d3-bf00-4474-b3aa-ee936244c410_1787767646909.jpg",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/564a3b0b-da1b-443f-a928-9060bf704c98_1787767647362.jpg",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/1444a326-8f19-4646-9d15-c623011319f2_1787767647797.jpg",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/10f2c387-b260-4fa3-b19b-9ef193c83dbf_1787767649066.jpg",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/165686fe-83c3-4ffb-b643-5db27c4b4bff_1787767650384.jpg"
+        ],
+        "total_comment": 0,
+        "created_at": "2026-08-26T18:07:40.553Z",
+        "likes": [],
+        "user_name": "mayalusiana",
+        "user_full_name": "Maya Lusiana",
+        "user_profile_picture": {
+          "name": "general_image/mayalusiana/1784470279595_IMG-20260516-WA0003.jpg",
+          "url": "https://mapidstorage.cdn.mapid.io/general_image/mayalusiana/1784470279595_IMG-20260516-WA0003.jpg",
+          "name_compressed": "general_image/mayalusiana/1784470279595_IMG-20260516-WA0003_compressed.jpeg",
+          "url_compressed": "https://mapidstorage.cdn.mapid.io/general_image/mayalusiana/1784470279595_IMG-20260516-WA0003_compressed.jpeg"
+        },
+        "community_name": "CONNECTED FUTURE 🌏",
+        "community_picture": "https://mapidstorage.cdn.mapid.io/general_image/mapid-apps/communities/Connected%20Future/1764853240583_AbJHst8Sjz.jpg",
+        "community_description": "MAPID 𝕏 Apps for #ConnectedCommunity and #ConnectedSurvey"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.82078462615647,
+          -6.2107798048990475
+        ]
+      },
+      "properties": {
+        "_id": "6a8de5b352d86e03b51b1f6b",
+        "title": "Stasiun KRL Sudirman: Jl Jendral Sudirman",
+        "description": "Trotoar di sekitar stasiun KRL Sudirman tergolong baik. Trotoar bersih dan rapi. Ditemui banyak pepohonan berjajar di sepanjang ruas jalan. #TimKaloMenangKitaJoget",
+        "medias": [
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/544ab8df-ee38-4717-bda8-56b00a8eeb80_4P9jtP7fGS.png",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/a346b55d-8b9e-467b-920a-61bae2691bb3_1787684266396.jpg",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/48cf1a48-a561-4639-b302-e457e5a56eee_1787684268049.jpg",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/00609fd2-560d-4b22-bc3d-05c8690728c6_1787684269328.jpg"
+        ],
+        "total_comment": 0,
+        "created_at": "2026-08-25T18:57:55.408Z",
+        "likes": [],
+        "user_name": "mayalusiana",
+        "user_full_name": "Maya Lusiana",
+        "user_profile_picture": {
+          "name": "general_image/mayalusiana/1784470279595_IMG-20260516-WA0003.jpg",
+          "url": "https://mapidstorage.cdn.mapid.io/general_image/mayalusiana/1784470279595_IMG-20260516-WA0003.jpg",
+          "name_compressed": "general_image/mayalusiana/1784470279595_IMG-20260516-WA0003_compressed.jpeg",
+          "url_compressed": "https://mapidstorage.cdn.mapid.io/general_image/mayalusiana/1784470279595_IMG-20260516-WA0003_compressed.jpeg"
+        },
+        "community_name": "CONNECTED FUTURE 🌏",
+        "community_picture": "https://mapidstorage.cdn.mapid.io/general_image/mapid-apps/communities/Connected%20Future/1764853240583_AbJHst8Sjz.jpg",
+        "community_description": "MAPID 𝕏 Apps for #ConnectedCommunity and #ConnectedSurvey"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.81386944190172,
+          -6.213875906546988
+        ]
+      },
+      "properties": {
+        "_id": "6a8de27152d86e03b51b1eb4",
+        "title": "Trotoar LRT Bendungan Hilir: Jl Bendungan Hilir",
+        "description": "Trotoar di jalan bendungan hilir, yang berada di dekat LRT Bendungan Hilir nampak dalam kondisi yang baik. Trotoar terlihat nyaman dan teduh karena pepohonan. Tidak ditemui penghalang seperti parkir liar atau pedagang kaki lima. #TimKaloMenangKitaJoget",
+        "medias": [
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/58a92ee7-3714-40ed-8b24-d97d25e0a317_LspxkUWhx5.png",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/8ed0d4e2-d6e5-48f3-a65a-07a29ddbc8fa_1787683437513.jpg"
+        ],
+        "total_comment": 0,
+        "created_at": "2026-08-25T18:44:01.359Z",
+        "likes": [],
+        "user_name": "mayalusiana",
+        "user_full_name": "Maya Lusiana",
+        "user_profile_picture": {
+          "name": "general_image/mayalusiana/1784470279595_IMG-20260516-WA0003.jpg",
+          "url": "https://mapidstorage.cdn.mapid.io/general_image/mayalusiana/1784470279595_IMG-20260516-WA0003.jpg",
+          "name_compressed": "general_image/mayalusiana/1784470279595_IMG-20260516-WA0003_compressed.jpeg",
+          "url_compressed": "https://mapidstorage.cdn.mapid.io/general_image/mayalusiana/1784470279595_IMG-20260516-WA0003_compressed.jpeg"
+        },
+        "community_name": "CONNECTED FUTURE 🌏",
+        "community_picture": "https://mapidstorage.cdn.mapid.io/general_image/mapid-apps/communities/Connected%20Future/1764853240583_AbJHst8Sjz.jpg",
+        "community_description": "MAPID 𝕏 Apps for #ConnectedCommunity and #ConnectedSurvey"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.82057459721028,
+          -6.211232057591943
+        ]
+      },
+      "properties": {
+        "_id": "6a8de05952d86e03b51b1e66",
+        "title": "Trotoar LRT Bendungan Hilir: Jalan Jendral Sudirman",
+        "description": "Trotoar di sekitar stasiun LRT Bendungan Hilir tepatnya di Jalan Jendral Sudirman dalam kondisi baik. Trotoar bersih, lebar, dan tersedia halte yang berdekatan dengan stasiun, memungkinkan perpindahan moda yang nyaman. Selain itu, pepohonan di sekitarnya juga menambah kenyamanan pejalan kaki yang melewati trotoar tersebut. #TimKaloMenangKitaJoget",
+        "medias": [
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/ec45bcc1-fb7a-4a04-b117-04191e19dc87_YiSclSfP3v.png",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/40fcb8c5-bd5c-494f-a024-56db27600d07_1787682891164.jpg",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/4c5e4e55-e039-48ca-ae92-a4af18adcd35_1787682892717.jpg",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/78a54562-5d7b-4578-b807-8e330cd11782_1787682893729.jpg",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/636c5682-467c-49f9-a6e1-73c73415cab5_1787682895032.jpg"
+        ],
+        "total_comment": 0,
+        "created_at": "2026-08-25T18:35:05.319Z",
+        "likes": [],
+        "user_name": "mayalusiana",
+        "user_full_name": "Maya Lusiana",
+        "user_profile_picture": {
+          "name": "general_image/mayalusiana/1784470279595_IMG-20260516-WA0003.jpg",
+          "url": "https://mapidstorage.cdn.mapid.io/general_image/mayalusiana/1784470279595_IMG-20260516-WA0003.jpg",
+          "name_compressed": "general_image/mayalusiana/1784470279595_IMG-20260516-WA0003_compressed.jpeg",
+          "url_compressed": "https://mapidstorage.cdn.mapid.io/general_image/mayalusiana/1784470279595_IMG-20260516-WA0003_compressed.jpeg"
+        },
+        "community_name": "CONNECTED FUTURE 🌏",
+        "community_picture": "https://mapidstorage.cdn.mapid.io/general_image/mapid-apps/communities/Connected%20Future/1764853240583_AbJHst8Sjz.jpg",
+        "community_description": "MAPID 𝕏 Apps for #ConnectedCommunity and #ConnectedSurvey"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.8327774948466,
+          -6.2236079971808635
+        ]
+      },
+      "properties": {
+        "_id": "6a8ddaef52d86e03b51b1dd0",
+        "title": "Trotoar LRT Kuningan: Jl Rasuna Said",
+        "description": "Trotoar di sekitar stasiun LRT Kuningan tepatnya di Jalan Rasuna Said terlihat baik dan memadai. Trotoar lebar, tidak ditemui kerusakan dan rapi. Selain itu juga ditemui pohon-pohon di sekelilingnya yang membuat lingkungan di trotoar sejuk dan teduh. #TimKaloMenangKitaJoget",
+        "medias": [
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/0e59b3eb-1871-4777-a92e-a0c1b63d708f_LFSq6YPWaE.png",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/593e0c35-1466-4819-8e99-9cdca4265843_1787681513664.jpg",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/52b86cfd-f19b-4d57-95a3-d7da1cf9b815_1787681515373.jpg"
+        ],
+        "total_comment": 0,
+        "created_at": "2026-08-25T18:11:59.712Z",
+        "likes": [],
+        "user_name": "mayalusiana",
+        "user_full_name": "Maya Lusiana",
+        "user_profile_picture": {
+          "name": "general_image/mayalusiana/1784470279595_IMG-20260516-WA0003.jpg",
+          "url": "https://mapidstorage.cdn.mapid.io/general_image/mayalusiana/1784470279595_IMG-20260516-WA0003.jpg",
+          "name_compressed": "general_image/mayalusiana/1784470279595_IMG-20260516-WA0003_compressed.jpeg",
+          "url_compressed": "https://mapidstorage.cdn.mapid.io/general_image/mayalusiana/1784470279595_IMG-20260516-WA0003_compressed.jpeg"
+        },
+        "community_name": "CONNECTED FUTURE 🌏",
+        "community_picture": "https://mapidstorage.cdn.mapid.io/general_image/mapid-apps/communities/Connected%20Future/1764853240583_AbJHst8Sjz.jpg",
+        "community_description": "MAPID 𝕏 Apps for #ConnectedCommunity and #ConnectedSurvey"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.81743143678898,
+          -6.226609325020917
+        ]
+      },
+      "properties": {
+        "_id": "6a8dd6cf52d86e03b51b1d2f",
+        "title": "Trotoar LRT Pancoran: Jl Gatot Subroto",
+        "description": "Trotoar di sekitar LRT Pancoran tepatnya di jalan Gatot Subroto dalam kondisi yang baik. Trotoar terlihat bersih, lebar, dan rapi. Ditemui juga adanya fasilitas pendukung seperti JPO dan halte. #TimKaloMenangKitaJoget",
+        "medias": [
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/b3309b1a-8cc9-4cc7-92c2-e65aa94a6557_b40iUTtPR6.png",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/358bb2ff-9192-442f-9620-7bcfec2abfba_1787680455927.jpg",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/c935aaca-f655-459d-81b2-d4306aae2aab_1787680457530.jpg"
+        ],
+        "total_comment": 0,
+        "created_at": "2026-08-25T17:54:23.270Z",
+        "likes": [],
+        "user_name": "mayalusiana",
+        "user_full_name": "Maya Lusiana",
+        "user_profile_picture": {
+          "name": "general_image/mayalusiana/1784470279595_IMG-20260516-WA0003.jpg",
+          "url": "https://mapidstorage.cdn.mapid.io/general_image/mayalusiana/1784470279595_IMG-20260516-WA0003.jpg",
+          "name_compressed": "general_image/mayalusiana/1784470279595_IMG-20260516-WA0003_compressed.jpeg",
+          "url_compressed": "https://mapidstorage.cdn.mapid.io/general_image/mayalusiana/1784470279595_IMG-20260516-WA0003_compressed.jpeg"
+        },
+        "community_name": "CONNECTED FUTURE 🌏",
+        "community_picture": "https://mapidstorage.cdn.mapid.io/general_image/mapid-apps/communities/Connected%20Future/1764853240583_AbJHst8Sjz.jpg",
+        "community_description": "MAPID 𝕏 Apps for #ConnectedCommunity and #ConnectedSurvey"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.85048649120375,
+          -6.209719562522707
+        ]
+      },
+      "properties": {
+        "_id": "6a8dd14c52d86e03b51b1b7c",
+        "title": "Trotoar Stasiun Manggarai: Jl Manggarai Utara 2",
+        "description": "Kondisi trotoar di sekitar stasiun Manggarai tepatnya di jalan manggarai utara 2 kurang memadai, ditemui beberapa kerusakan serta kualitas material yang kurang baik. Bahkan terdapat ruas jalan yang tidak memiliki trotoar. Lingkungan di sekitar jalan ini overcrowded dan kurang rapi. #TimKaloMenangKitaJoget",
+        "medias": [
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/65731eaf-ba44-40ed-ad38-8af31ef7bc2d_ASFEqTMoE6.png",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/17ad609f-e4d0-4474-8460-38392a943d39_1787679048774.jpg",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/3027569c-ad3b-4131-b575-eae974dfd890_1787679049274.jpg"
+        ],
+        "total_comment": 0,
+        "created_at": "2026-08-25T17:30:52.264Z",
+        "likes": [],
+        "user_name": "mayalusiana",
+        "user_full_name": "Maya Lusiana",
+        "user_profile_picture": {
+          "name": "general_image/mayalusiana/1784470279595_IMG-20260516-WA0003.jpg",
+          "url": "https://mapidstorage.cdn.mapid.io/general_image/mayalusiana/1784470279595_IMG-20260516-WA0003.jpg",
+          "name_compressed": "general_image/mayalusiana/1784470279595_IMG-20260516-WA0003_compressed.jpeg",
+          "url_compressed": "https://mapidstorage.cdn.mapid.io/general_image/mayalusiana/1784470279595_IMG-20260516-WA0003_compressed.jpeg"
+        },
+        "community_name": "CONNECTED FUTURE 🌏",
+        "community_picture": "https://mapidstorage.cdn.mapid.io/general_image/mapid-apps/communities/Connected%20Future/1764853240583_AbJHst8Sjz.jpg",
+        "community_description": "MAPID 𝕏 Apps for #ConnectedCommunity and #ConnectedSurvey"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.85599913804043,
+          -6.213540972883862
+        ]
+      },
+      "properties": {
+        "_id": "6a8dcf0e52d86e03b51b1b1f",
+        "title": "Trotoar Stasiun Manggarai: Jl Manggarai Utara I",
+        "description": "Trotoar di sekitar stasiun manggarai tepatnya di jalan manggarai utara 1 terlihat sempit dan banyak penghalang seperti pedagang kaki lima hingga parkir liar. Selain itu dijumpai juga bajai biru yang berjajar rapat di depan stasiun, memberikan opsi moda untuk pengguna transum. #TimKaloMenangKitaJoget",
+        "medias": [
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/6dbf1c14-dc74-4855-a3e8-de2e98c5b105_h7icsYWatq.png",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/b4e0223f-e419-401a-b933-34d854a0c6cc_1787678469017.jpg",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/d3da5bd0-abfe-476d-9af7-06c8cf963205_1787678469670.jpg",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/89265182-711b-426c-98d1-b9bb479aa9e7_1787678470103.jpg",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/211bb5be-6609-48e1-b5c3-41d9ff589ff0_1787678470486.jpg"
+        ],
+        "total_comment": 0,
+        "created_at": "2026-08-25T17:21:18.172Z",
+        "likes": [],
+        "user_name": "mayalusiana",
+        "user_full_name": "Maya Lusiana",
+        "user_profile_picture": {
+          "name": "general_image/mayalusiana/1784470279595_IMG-20260516-WA0003.jpg",
+          "url": "https://mapidstorage.cdn.mapid.io/general_image/mayalusiana/1784470279595_IMG-20260516-WA0003.jpg",
+          "name_compressed": "general_image/mayalusiana/1784470279595_IMG-20260516-WA0003_compressed.jpeg",
+          "url_compressed": "https://mapidstorage.cdn.mapid.io/general_image/mayalusiana/1784470279595_IMG-20260516-WA0003_compressed.jpeg"
+        },
+        "community_name": "CONNECTED FUTURE 🌏",
+        "community_picture": "https://mapidstorage.cdn.mapid.io/general_image/mapid-apps/communities/Connected%20Future/1764853240583_AbJHst8Sjz.jpg",
+        "community_description": "MAPID 𝕏 Apps for #ConnectedCommunity and #ConnectedSurvey"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.8576449629578,
+          -6.225552901598348
+        ]
+      },
+      "properties": {
+        "_id": "6a899a2f52d86e03b518b28a",
+        "title": "Stasiun Tebet: Jl KH Abdullah Syafei, Trotoar Kotor dan Sempit",
+        "description": "Jalanan di sekitar stasiun Tebet tepatnya di jalan KH Abdullah Syafei memiliki trotoar yang sempit dan kotor. Terlihat pula banyaknya bajai yang parkir di samping trotoar. #TimKaloMenangKitaJoget",
+        "medias": [
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/9efb98b7-0d89-4354-bc56-952f56c532f8_RdtlvROA2J.png",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/0ded078f-722e-44cc-9acc-215930325ddc_1787402796362.jpg"
+        ],
+        "total_comment": 0,
+        "created_at": "2026-08-22T12:46:39.988Z",
+        "likes": [],
+        "user_name": "mayalusiana",
+        "user_full_name": "Maya Lusiana",
+        "user_profile_picture": {
+          "name": "general_image/mayalusiana/1784470279595_IMG-20260516-WA0003.jpg",
+          "url": "https://mapidstorage.cdn.mapid.io/general_image/mayalusiana/1784470279595_IMG-20260516-WA0003.jpg",
+          "name_compressed": "general_image/mayalusiana/1784470279595_IMG-20260516-WA0003_compressed.jpeg",
+          "url_compressed": "https://mapidstorage.cdn.mapid.io/general_image/mayalusiana/1784470279595_IMG-20260516-WA0003_compressed.jpeg"
+        },
+        "community_name": "CONNECTED FUTURE 🌏",
+        "community_picture": "https://mapidstorage.cdn.mapid.io/general_image/mapid-apps/communities/Connected%20Future/1764853240583_AbJHst8Sjz.jpg",
+        "community_description": "MAPID 𝕏 Apps for #ConnectedCommunity and #ConnectedSurvey"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.85742839718199,
+          -6.227442493658884
+        ]
+      },
+      "properties": {
+        "_id": "6a89983752d86e03b518b1d0",
+        "title": "Trotoar di sekitar Stasiun Tebet: Jl Tebet raya, lebar namun banyak kendaraan parkir",
+        "description": "Di jalanan sekitar stasiun Tebet tepatnya jl Tebet Raya dijumpai trotoar yang cukup lebar. Suasana teduh karena adanya pohon di samping trotoar. Namun masih ditemui parkir motor dan mobil yang menghalangi akses pejalan kaki tersebut. #TimKaloMenangKitaJoget",
+        "medias": [
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/55b2cc8e-46fd-4cef-9624-7dadaa676a6c_LL6G18JaMz.png",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/aa1e292e-ddfa-4217-9db3-43bbc6ddd22d_1787402285153.jpg",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/3783487d-1176-4f2f-9546-0efb518eccd5_1787402285848.jpg"
+        ],
+        "total_comment": 0,
+        "created_at": "2026-08-22T12:38:15.484Z",
+        "likes": [],
+        "user_name": "mayalusiana",
+        "user_full_name": "Maya Lusiana",
+        "user_profile_picture": {
+          "name": "general_image/mayalusiana/1784470279595_IMG-20260516-WA0003.jpg",
+          "url": "https://mapidstorage.cdn.mapid.io/general_image/mayalusiana/1784470279595_IMG-20260516-WA0003.jpg",
+          "name_compressed": "general_image/mayalusiana/1784470279595_IMG-20260516-WA0003_compressed.jpeg",
+          "url_compressed": "https://mapidstorage.cdn.mapid.io/general_image/mayalusiana/1784470279595_IMG-20260516-WA0003_compressed.jpeg"
+        },
+        "community_name": "CONNECTED FUTURE 🌏",
+        "community_picture": "https://mapidstorage.cdn.mapid.io/general_image/mapid-apps/communities/Connected%20Future/1764853240583_AbJHst8Sjz.jpg",
+        "community_description": "MAPID 𝕏 Apps for #ConnectedCommunity and #ConnectedSurvey"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.85497482596264,
+          -6.228153278486175
+        ]
+      },
+      "properties": {
+        "_id": "6a8993cf52d86e03b518ae62",
+        "title": "Trotoar di sekitar stasiun tebet: jl Tebet utara dalam",
+        "description": "Terlihat kondisi trotoar tidak memadai, terutama untuk disabilitas. Terdapat kendaraan yang parkir sembarangan sehingga menghalangi akses trotoar. Selain itu, terdapat pula 2 besi yang berpotensi mengganggu pejalan kaki. #TimKaloMenangKitaJoget",
+        "medias": [
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/1bc86def-3505-4901-8af3-29e38e96b841_Q90ktKooy9.png",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/cf051c3d-298e-4643-b8e5-fc9ef91aa4b3_1787401153381.jpg",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/a8a130fe-7c58-4958-b95b-4bf7a69c1727_1787401153940.jpg"
+        ],
+        "total_comment": 0,
+        "created_at": "2026-08-22T12:19:27.316Z",
+        "likes": [],
+        "user_name": "mayalusiana",
+        "user_full_name": "Maya Lusiana",
+        "user_profile_picture": {
+          "name": "general_image/mayalusiana/1784470279595_IMG-20260516-WA0003.jpg",
+          "url": "https://mapidstorage.cdn.mapid.io/general_image/mayalusiana/1784470279595_IMG-20260516-WA0003.jpg",
+          "name_compressed": "general_image/mayalusiana/1784470279595_IMG-20260516-WA0003_compressed.jpeg",
+          "url_compressed": "https://mapidstorage.cdn.mapid.io/general_image/mayalusiana/1784470279595_IMG-20260516-WA0003_compressed.jpeg"
+        },
+        "community_name": "CONNECTED FUTURE 🌏",
+        "community_picture": "https://mapidstorage.cdn.mapid.io/general_image/mapid-apps/communities/Connected%20Future/1764853240583_AbJHst8Sjz.jpg",
+        "community_description": "MAPID 𝕏 Apps for #ConnectedCommunity and #ConnectedSurvey"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.85485184542705,
+          -6.235615090982208
+        ]
+      },
+      "properties": {
+        "_id": "6a898f4652d86e03b518ad01",
+        "title": "Kondisi Trotoar di Sekitar Stasiun Tebet: Ruas Jalan Tebet Timur Dalam II",
+        "description": "Sepanjang ruas jalan tebet timur dalam II tidak memiliki trotoar yang memadai. Bahu jalan tampak rusak, disertai dengan sampah-sampah yang mengotorinya. Terdapat pula motor dan mobil yang terparkir di pinggir jalan yang berpotensi mempersempit area untuk pejalan kaki. #TimKaloMenangKitaJoget",
+        "medias": [
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/d4d728a1-a940-459d-bb9a-e04fb3c5768a_8o59MJ9eVR.png",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/1df83a43-6891-4b73-b7fb-5c614e305bb2_1787399998424.jpg",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/705f8da6-b927-4317-9fcd-0f2709ce39cc_1787399999049.jpg"
+        ],
+        "total_comment": 0,
+        "created_at": "2026-08-22T12:00:06.235Z",
+        "likes": [],
+        "user_name": "mayalusiana",
+        "user_full_name": "Maya Lusiana",
+        "user_profile_picture": {
+          "name": "general_image/mayalusiana/1784470279595_IMG-20260516-WA0003.jpg",
+          "url": "https://mapidstorage.cdn.mapid.io/general_image/mayalusiana/1784470279595_IMG-20260516-WA0003.jpg",
+          "name_compressed": "general_image/mayalusiana/1784470279595_IMG-20260516-WA0003_compressed.jpeg",
+          "url_compressed": "https://mapidstorage.cdn.mapid.io/general_image/mayalusiana/1784470279595_IMG-20260516-WA0003_compressed.jpeg"
+        },
+        "community_name": "CONNECTED FUTURE 🌏",
+        "community_picture": "https://mapidstorage.cdn.mapid.io/general_image/mapid-apps/communities/Connected%20Future/1764853240583_AbJHst8Sjz.jpg",
+        "community_description": "MAPID 𝕏 Apps for #ConnectedCommunity and #ConnectedSurvey"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.82535769999998,
+          -6.3902124
+        ]
+      },
+      "properties": {
+        "_id": "6a8921ea52d86e03b51830d7",
+        "title": "Trotoar di Jalan Menuju Stasiun Depok Baru",
+        "description": "Trotoar di Jalan Menuju Stasiun Depok Baru terlihat kurang memadai. Terdapat jalan yang tidak ada trotoar di bahu jalan. Di sekitar stasiun, ada banyak street food. #TimKaloMenangKitaJoget",
+        "medias": [
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/a0f94493-7c6c-4944-bfbb-56e89ea63e39_ltldGZTL22.png",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/a974691c-0b4a-4705-b551-1c0d692bf271_1787372003081.jpg",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/e227671e-46e2-4174-97e8-adaaf5bd5796_1787372003309.jpg"
+        ],
+        "total_comment": 0,
+        "created_at": "2026-08-22T04:13:30.155Z",
+        "likes": [],
+        "user_name": "mayalusiana",
+        "user_full_name": "Maya Lusiana",
+        "user_profile_picture": {
+          "name": "general_image/mayalusiana/1784470279595_IMG-20260516-WA0003.jpg",
+          "url": "https://mapidstorage.cdn.mapid.io/general_image/mayalusiana/1784470279595_IMG-20260516-WA0003.jpg",
+          "name_compressed": "general_image/mayalusiana/1784470279595_IMG-20260516-WA0003_compressed.jpeg",
+          "url_compressed": "https://mapidstorage.cdn.mapid.io/general_image/mayalusiana/1784470279595_IMG-20260516-WA0003_compressed.jpeg"
+        },
+        "community_name": "CONNECTED FUTURE 🌏",
+        "community_picture": "https://mapidstorage.cdn.mapid.io/general_image/mapid-apps/communities/Connected%20Future/1764853240583_AbJHst8Sjz.jpg",
+        "community_description": "MAPID 𝕏 Apps for #ConnectedCommunity and #ConnectedSurvey"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.8252938,
+          -6.3900154
+        ]
+      },
+      "properties": {
+        "_id": "6a8920c4478dc3b356b726bf",
+        "title": "Trotoar di Kawasan Stasiun Depok baru",
+        "description": "Terdapat trotoar yang memadai di sepanjang jalan di depan azko. Namun terlihat gangguan berupa umkm dan parkir yang di beberapa titik.Secara keseluruhan trotoar tersebut masih layak untuk digunakan. #TimKaloMenangKitaJoget",
+        "medias": [
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/02365813-d386-43c5-8857-ea56db2d99eb_xvytaU70Li.png",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/043044b0-bf3c-4b6c-9e85-fdefc03d1a63_1787371713789.jpg",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/c9e0e358-8b06-490a-9b91-3266d88a6e4d_1787371714016.jpg",
+          "https://mapid-app-chat.cdn.mapid.io/692d03413a0cf54ea6633e89/d47acf2c-72d5-4413-bc52-8e3e298c19e0_1787371714181.jpg"
+        ],
+        "total_comment": 0,
+        "created_at": "2026-08-22T04:08:36.745Z",
+        "likes": [],
+        "user_name": "mayalusiana",
+        "user_full_name": "Maya Lusiana",
+        "user_profile_picture": {
+          "name": "general_image/mayalusiana/1784470279595_IMG-20260516-WA0003.jpg",
+          "url": "https://mapidstorage.cdn.mapid.io/general_image/mayalusiana/1784470279595_IMG-20260516-WA0003.jpg",
+          "name_compressed": "general_image/mayalusiana/1784470279595_IMG-20260516-WA0003_compressed.jpeg",
+          "url_compressed": "https://mapidstorage.cdn.mapid.io/general_image/mayalusiana/1784470279595_IMG-20260516-WA0003_compressed.jpeg"
+        },
+        "community_name": "CONNECTED FUTURE 🌏",
+        "community_picture": "https://mapidstorage.cdn.mapid.io/general_image/mapid-apps/communities/Connected%20Future/1764853240583_AbJHst8Sjz.jpg",
+        "community_description": "MAPID 𝕏 Apps for #ConnectedCommunity and #ConnectedSurvey"
+      }
+    }
+  ]
+}

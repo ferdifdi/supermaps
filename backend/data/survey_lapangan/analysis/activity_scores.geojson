@@ -1,0 +1,470 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.90998780793797,
+          -6.182190189099472
+        ]
+      },
+      "properties": {
+        "activity_id": "6a8f309052d86e03b51bc8c7",
+        "title": "Trotoar di Sekitar Terminal Bus Transjakarta Pulo Gadung",
+        "description": "Area depan terminal bus transjakarta Pulo Gadung dipenuhi bus biru yang terparkir berjejeran. Trotoar di sekitar terminal tersebut sempit dan tidak layak. Bahkan di beberapa titik trotoar tidak ada. Terlihat juga sampah yang dibuang di pinggir jalan. Hal ini jelas membuat pejalan kaki tidak nyaman. #TimKaloMenangKitaJoget",
+        "n_photos_analyzed": 6,
+        "composite_score": 45.6,
+        "label": "Sedang",
+        "components": {
+          "sidewalk_present_score": 10.5,
+          "shade_score": 89.0,
+          "obstruction_score": 72.5
+        },
+        "segmentation_pct": {
+          "road": 18.86,
+          "sidewalk": 3.15,
+          "vegetation": 26.37,
+          "pole": 0.74,
+          "traffic light": 0.0,
+          "person": 0.53
+        }
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.9985134941304,
+          -6.236521985380961
+        ]
+      },
+      "properties": {
+        "activity_id": "6a8f2b6c52d86e03b51bc83e",
+        "title": "Trotoar Stasiun Bekasi: Jl Insinyur H. Juanda",
+        "description": "Jalan Insinyur H. Juanda memiliki suasana ramai. Hal ini dikarenakan banyaknya ruko/POI di sepanjang jalan tersebut. Ditemui banyak ojek pangkalan dan kendaraan yang padat merayap. Selain itu, terdapat pedagang kaki lima di sekitar pagar stasiun. Oleh karena itu, trotoar dalam kondisi yang tidak kondusif untuk pejalan kaki karena ramai oleh suara dan polusi kendaraan. #TimKaloMenangKitaJoget",
+        "n_photos_analyzed": 8,
+        "composite_score": 52.2,
+        "label": "Sedang",
+        "components": {
+          "sidewalk_present_score": 43.4,
+          "shade_score": 48.3,
+          "obstruction_score": 73.8
+        },
+        "segmentation_pct": {
+          "road": 3.58,
+          "sidewalk": 13.01,
+          "vegetation": 16.83,
+          "pole": 1.26,
+          "traffic light": 0.03,
+          "person": 3.33
+        }
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.82078462615647,
+          -6.2107798048990475
+        ]
+      },
+      "properties": {
+        "activity_id": "6a8de5b352d86e03b51b1f6b",
+        "title": "Stasiun KRL Sudirman: Jl Jendral Sudirman",
+        "description": "Trotoar di sekitar stasiun KRL Sudirman tergolong baik. Trotoar bersih dan rapi. Ditemui banyak pepohonan berjajar di sepanjang ruas jalan. #TimKaloMenangKitaJoget",
+        "n_photos_analyzed": 3,
+        "composite_score": 51.0,
+        "label": "Sedang",
+        "components": {
+          "sidewalk_present_score": 11.0,
+          "shade_score": 100.0,
+          "obstruction_score": 81.7
+        },
+        "segmentation_pct": {
+          "road": 5.89,
+          "sidewalk": 3.31,
+          "vegetation": 60.33,
+          "pole": 1.27,
+          "traffic light": 0.0,
+          "person": 0.09
+        }
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.81386944190172,
+          -6.213875906546988
+        ]
+      },
+      "properties": {
+        "activity_id": "6a8de27152d86e03b51b1eb4",
+        "title": "Trotoar LRT Bendungan Hilir: Jl Bendungan Hilir",
+        "description": "Trotoar di jalan bendungan hilir, yang berada di dekat LRT Bendungan Hilir nampak dalam kondisi yang baik. Trotoar terlihat nyaman dan teduh karena pepohonan. Tidak ditemui penghalang seperti parkir liar atau pedagang kaki lima. #TimKaloMenangKitaJoget",
+        "n_photos_analyzed": 1,
+        "composite_score": 47.7,
+        "label": "Sedang",
+        "components": {
+          "sidewalk_present_score": 18.3,
+          "shade_score": 64.4,
+          "obstruction_score": 90.0
+        },
+        "segmentation_pct": {
+          "road": 19.95,
+          "sidewalk": 5.48,
+          "vegetation": 16.11,
+          "pole": 0.19,
+          "traffic light": 0.0,
+          "person": 0.44
+        }
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.82057459721028,
+          -6.211232057591943
+        ]
+      },
+      "properties": {
+        "activity_id": "6a8de05952d86e03b51b1e66",
+        "title": "Trotoar LRT Bendungan Hilir: Jalan Jendral Sudirman",
+        "description": "Trotoar di sekitar stasiun LRT Bendungan Hilir tepatnya di Jalan Jendral Sudirman dalam kondisi baik. Trotoar bersih, lebar, dan tersedia halte yang berdekatan dengan stasiun, memungkinkan perpindahan moda yang nyaman. Selain itu, pepohonan di sekitarnya juga menambah kenyamanan pejalan kaki yang melewati trotoar tersebut. #TimKaloMenangKitaJoget",
+        "n_photos_analyzed": 4,
+        "composite_score": 44.5,
+        "label": "Sedang",
+        "components": {
+          "sidewalk_present_score": 14.3,
+          "shade_score": 91.8,
+          "obstruction_score": 57.5
+        },
+        "segmentation_pct": {
+          "road": 8.86,
+          "sidewalk": 4.29,
+          "vegetation": 50.4,
+          "pole": 0.59,
+          "traffic light": 0.01,
+          "person": 0.44
+        }
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.8327774948466,
+          -6.2236079971808635
+        ]
+      },
+      "properties": {
+        "activity_id": "6a8ddaef52d86e03b51b1dd0",
+        "title": "Trotoar LRT Kuningan: Jl Rasuna Said",
+        "description": "Trotoar di sekitar stasiun LRT Kuningan tepatnya di Jalan Rasuna Said terlihat baik dan memadai. Trotoar lebar, tidak ditemui kerusakan dan rapi. Selain itu juga ditemui pohon-pohon di sekelilingnya yang membuat lingkungan di trotoar sejuk dan teduh. #TimKaloMenangKitaJoget",
+        "n_photos_analyzed": 2,
+        "composite_score": 44.0,
+        "label": "Sedang",
+        "components": {
+          "sidewalk_present_score": 13.2,
+          "shade_score": 52.0,
+          "obstruction_score": 97.5
+        },
+        "segmentation_pct": {
+          "road": 15.41,
+          "sidewalk": 3.96,
+          "vegetation": 31.07,
+          "pole": 4.4,
+          "traffic light": 0.04,
+          "person": 2.44
+        }
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.81743143678898,
+          -6.226609325020917
+        ]
+      },
+      "properties": {
+        "activity_id": "6a8dd6cf52d86e03b51b1d2f",
+        "title": "Trotoar LRT Pancoran: Jl Gatot Subroto",
+        "description": "Trotoar di sekitar LRT Pancoran tepatnya di jalan Gatot Subroto dalam kondisi yang baik. Trotoar terlihat bersih, lebar, dan rapi. Ditemui juga adanya fasilitas pendukung seperti JPO dan halte. #TimKaloMenangKitaJoget",
+        "n_photos_analyzed": 2,
+        "composite_score": 43.1,
+        "label": "Sedang",
+        "components": {
+          "sidewalk_present_score": 37.0,
+          "shade_score": 8.4,
+          "obstruction_score": 90.0
+        },
+        "segmentation_pct": {
+          "road": 17.27,
+          "sidewalk": 11.1,
+          "vegetation": 2.11,
+          "pole": 2.22,
+          "traffic light": 0.0,
+          "person": 0.67
+        }
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.85048649120375,
+          -6.209719562522707
+        ]
+      },
+      "properties": {
+        "activity_id": "6a8dd14c52d86e03b51b1b7c",
+        "title": "Trotoar Stasiun Manggarai: Jl Manggarai Utara 2",
+        "description": "Kondisi trotoar di sekitar stasiun Manggarai tepatnya di jalan manggarai utara 2 kurang memadai, ditemui beberapa kerusakan serta kualitas material yang kurang baik. Bahkan terdapat ruas jalan yang tidak memiliki trotoar. Lingkungan di sekitar jalan ini overcrowded dan kurang rapi. #TimKaloMenangKitaJoget",
+        "n_photos_analyzed": 2,
+        "composite_score": 46.2,
+        "label": "Sedang",
+        "components": {
+          "sidewalk_present_score": 32.1,
+          "shade_score": 25.7,
+          "obstruction_score": 95.0
+        },
+        "segmentation_pct": {
+          "road": 6.55,
+          "sidewalk": 9.63,
+          "vegetation": 6.43,
+          "pole": 0.71,
+          "traffic light": 0.0,
+          "person": 4.18
+        }
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.85599913804043,
+          -6.213540972883862
+        ]
+      },
+      "properties": {
+        "activity_id": "6a8dcf0e52d86e03b51b1b1f",
+        "title": "Trotoar Stasiun Manggarai: Jl Manggarai Utara I",
+        "description": "Trotoar di sekitar stasiun manggarai tepatnya di jalan manggarai utara 1 terlihat sempit dan banyak penghalang seperti pedagang kaki lima hingga parkir liar. Selain itu dijumpai juga bajai biru yang berjajar rapat di depan stasiun, memberikan opsi moda untuk pengguna transum. #TimKaloMenangKitaJoget",
+        "n_photos_analyzed": 4,
+        "composite_score": 35.3,
+        "label": "Buruk",
+        "components": {
+          "sidewalk_present_score": 9.3,
+          "shade_score": 83.8,
+          "obstruction_score": 38.8
+        },
+        "segmentation_pct": {
+          "road": 12.25,
+          "sidewalk": 2.81,
+          "vegetation": 38.31,
+          "pole": 0.62,
+          "traffic light": 0.01,
+          "person": 0.25
+        }
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.8576449629578,
+          -6.225552901598348
+        ]
+      },
+      "properties": {
+        "activity_id": "6a899a2f52d86e03b518b28a",
+        "title": "Stasiun Tebet: Jl KH Abdullah Syafei, Trotoar Kotor dan Sempit",
+        "description": "Jalanan di sekitar stasiun Tebet tepatnya di jalan KH Abdullah Syafei memiliki trotoar yang sempit dan kotor. Terlihat pula banyaknya bajai yang parkir di samping trotoar. #TimKaloMenangKitaJoget",
+        "n_photos_analyzed": 1,
+        "composite_score": 65.5,
+        "label": "Sedang",
+        "components": {
+          "sidewalk_present_score": 31.0,
+          "shade_score": 100.0,
+          "obstruction_score": 100.0
+        },
+        "segmentation_pct": {
+          "road": 0.34,
+          "sidewalk": 9.29,
+          "vegetation": 38.93,
+          "pole": 2.68,
+          "traffic light": 0.0,
+          "person": 4.93
+        }
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.85742839718199,
+          -6.227442493658884
+        ]
+      },
+      "properties": {
+        "activity_id": "6a89983752d86e03b518b1d0",
+        "title": "Trotoar di sekitar Stasiun Tebet: Jl Tebet raya, lebar namun banyak kendaraan parkir",
+        "description": "Di jalanan sekitar stasiun Tebet tepatnya jl Tebet Raya dijumpai trotoar yang cukup lebar. Suasana teduh karena adanya pohon di samping trotoar. Namun masih ditemui parkir motor dan mobil yang menghalangi akses pejalan kaki tersebut. #TimKaloMenangKitaJoget",
+        "n_photos_analyzed": 2,
+        "composite_score": 54.4,
+        "label": "Sedang",
+        "components": {
+          "sidewalk_present_score": 23.8,
+          "shade_score": 100.0,
+          "obstruction_score": 70.0
+        },
+        "segmentation_pct": {
+          "road": 10.21,
+          "sidewalk": 7.12,
+          "vegetation": 40.64,
+          "pole": 0.34,
+          "traffic light": 0.0,
+          "person": 0.82
+        }
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.85497482596264,
+          -6.228153278486175
+        ]
+      },
+      "properties": {
+        "activity_id": "6a8993cf52d86e03b518ae62",
+        "title": "Trotoar di sekitar stasiun tebet: jl Tebet utara dalam",
+        "description": "Terlihat kondisi trotoar tidak memadai, terutama untuk disabilitas. Terdapat kendaraan yang parkir sembarangan sehingga menghalangi akses trotoar. Selain itu, terdapat pula 2 besi yang berpotensi mengganggu pejalan kaki. #TimKaloMenangKitaJoget",
+        "n_photos_analyzed": 2,
+        "composite_score": 55.5,
+        "label": "Sedang",
+        "components": {
+          "sidewalk_present_score": 47.5,
+          "shade_score": 66.8,
+          "obstruction_score": 60.0
+        },
+        "segmentation_pct": {
+          "road": 22.05,
+          "sidewalk": 14.26,
+          "vegetation": 16.71,
+          "pole": 2.75,
+          "traffic light": 0.0,
+          "person": 2.19
+        }
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.85485184542705,
+          -6.235615090982208
+        ]
+      },
+      "properties": {
+        "activity_id": "6a898f4652d86e03b518ad01",
+        "title": "Kondisi Trotoar di Sekitar Stasiun Tebet: Ruas Jalan Tebet Timur Dalam II",
+        "description": "Sepanjang ruas jalan tebet timur dalam II tidak memiliki trotoar yang memadai. Bahu jalan tampak rusak, disertai dengan sampah-sampah yang mengotorinya. Terdapat pula motor dan mobil yang terparkir di pinggir jalan yang berpotensi mempersempit area untuk pejalan kaki. #TimKaloMenangKitaJoget",
+        "n_photos_analyzed": 2,
+        "composite_score": 26.7,
+        "label": "Buruk",
+        "components": {
+          "sidewalk_present_score": 2.3,
+          "shade_score": 94.5,
+          "obstruction_score": 7.5
+        },
+        "segmentation_pct": {
+          "road": 28.73,
+          "sidewalk": 0.69,
+          "vegetation": 24.61,
+          "pole": 0.33,
+          "traffic light": 0.04,
+          "person": 0.53
+        }
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.82535769999998,
+          -6.3902124
+        ]
+      },
+      "properties": {
+        "activity_id": "6a8921ea52d86e03b51830d7",
+        "title": "Trotoar di Jalan Menuju Stasiun Depok Baru",
+        "description": "Trotoar di Jalan Menuju Stasiun Depok Baru terlihat kurang memadai. Terdapat jalan yang tidak ada trotoar di bahu jalan. Di sekitar stasiun, ada banyak street food. #TimKaloMenangKitaJoget",
+        "n_photos_analyzed": 2,
+        "composite_score": 29.0,
+        "label": "Buruk",
+        "components": {
+          "sidewalk_present_score": 5.5,
+          "shade_score": 17.6,
+          "obstruction_score": 87.5
+        },
+        "segmentation_pct": {
+          "road": 39.66,
+          "sidewalk": 1.65,
+          "vegetation": 4.39,
+          "pole": 0.14,
+          "traffic light": 0.0,
+          "person": 1.21
+        }
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.8252938,
+          -6.3900154
+        ]
+      },
+      "properties": {
+        "activity_id": "6a8920c4478dc3b356b726bf",
+        "title": "Trotoar di Kawasan Stasiun Depok baru",
+        "description": "Terdapat trotoar yang memadai di sepanjang jalan di depan azko. Namun terlihat gangguan berupa umkm dan parkir yang di beberapa titik.Secara keseluruhan trotoar tersebut masih layak untuk digunakan. #TimKaloMenangKitaJoget",
+        "n_photos_analyzed": 3,
+        "composite_score": 30.0,
+        "label": "Buruk",
+        "components": {
+          "sidewalk_present_score": 16.1,
+          "shade_score": 11.0,
+          "obstruction_score": 76.7
+        },
+        "segmentation_pct": {
+          "road": 40.76,
+          "sidewalk": 4.84,
+          "vegetation": 2.75,
+          "pole": 0.66,
+          "traffic light": 0.0,
+          "person": 0.12
+        }
+      }
+    }
+  ]
+}

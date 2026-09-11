@@ -1,0 +1,2460 @@
+[
+  {
+    "activity_id": "6a8f309052d86e03b51bc8c7",
+    "photo": "photos/6a8f309052d86e03b51bc8c7/1.jpg",
+    "overlay": "analysis/overlays/6a8f309052d86e03b51bc8c7/1_analisis.jpg",
+    "detections": [
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.7307,
+        "bbox_xyxy": [
+          44.4,
+          857.9,
+          108.4,
+          1005.2
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.4593,
+        "bbox_xyxy": [
+          1809.4,
+          794.7,
+          1853.7,
+          938.6
+        ]
+      },
+      {
+        "class": "truck",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.354,
+        "bbox_xyxy": [
+          1669.3,
+          781.5,
+          1919.6,
+          947.7
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.3089,
+        "bbox_xyxy": [
+          1829.3,
+          791.5,
+          1868.4,
+          939.8
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 33.88,
+      "sidewalk": 1.17,
+      "vegetation": 15.68,
+      "pole": 0.02,
+      "traffic light": 0.0,
+      "person": 2.16
+    },
+    "composite_score": 33.9,
+    "label": "Buruk",
+    "components": {
+      "sidewalk_present_score": 3.9,
+      "shade_score": 62.7,
+      "obstruction_score": 65.0
+    }
+  },
+  {
+    "activity_id": "6a8f309052d86e03b51bc8c7",
+    "photo": "photos/6a8f309052d86e03b51bc8c7/2.jpg",
+    "overlay": "analysis/overlays/6a8f309052d86e03b51bc8c7/2_analisis.jpg",
+    "detections": [],
+    "segmentation_pct": {
+      "road": 19.06,
+      "sidewalk": 6.87,
+      "vegetation": 47.33,
+      "pole": 0.09,
+      "traffic light": 0.0,
+      "person": 0.4
+    },
+    "composite_score": 61.5,
+    "label": "Sedang",
+    "components": {
+      "sidewalk_present_score": 22.9,
+      "shade_score": 100.0,
+      "obstruction_score": 100.0
+    }
+  },
+  {
+    "activity_id": "6a8f309052d86e03b51bc8c7",
+    "photo": "photos/6a8f309052d86e03b51bc8c7/3.jpg",
+    "overlay": "analysis/overlays/6a8f309052d86e03b51bc8c7/3_analisis.jpg",
+    "detections": [
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.6384,
+        "bbox_xyxy": [
+          1091.8,
+          604.7,
+          1127.2,
+          689.0
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.4783,
+        "bbox_xyxy": [
+          1125.6,
+          604.9,
+          1160.8,
+          694.9
+        ]
+      },
+      {
+        "class": "bus",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.3449,
+        "bbox_xyxy": [
+          583.5,
+          482.6,
+          759.6,
+          631.4
+        ]
+      },
+      {
+        "class": "bus",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.3379,
+        "bbox_xyxy": [
+          1205.5,
+          452.9,
+          1913.7,
+          773.4
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 31.44,
+      "sidewalk": 0.19,
+      "vegetation": 27.2,
+      "pole": 0.11,
+      "traffic light": 0.0,
+      "person": 0.42
+    },
+    "composite_score": 37.8,
+    "label": "Buruk",
+    "components": {
+      "sidewalk_present_score": 0.6,
+      "shade_score": 100.0,
+      "obstruction_score": 50.0
+    }
+  },
+  {
+    "activity_id": "6a8f309052d86e03b51bc8c7",
+    "photo": "photos/6a8f309052d86e03b51bc8c7/4.jpg",
+    "overlay": "analysis/overlays/6a8f309052d86e03b51bc8c7/4_analisis.jpg",
+    "detections": [
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.585,
+        "bbox_xyxy": [
+          1455.6,
+          949.7,
+          1614.2,
+          1016.5
+        ]
+      },
+      {
+        "class": "truck",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.522,
+        "bbox_xyxy": [
+          923.8,
+          786.3,
+          1364.6,
+          1057.2
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 8.8,
+      "sidewalk": 1.26,
+      "vegetation": 23.22,
+      "pole": 0.16,
+      "traffic light": 0.0,
+      "person": 0.17
+    },
+    "composite_score": 40.3,
+    "label": "Sedang",
+    "components": {
+      "sidewalk_present_score": 4.2,
+      "shade_score": 92.9,
+      "obstruction_score": 60.0
+    }
+  },
+  {
+    "activity_id": "6a8f309052d86e03b51bc8c7",
+    "photo": "photos/6a8f309052d86e03b51bc8c7/5.jpg",
+    "overlay": "analysis/overlays/6a8f309052d86e03b51bc8c7/5_analisis.jpg",
+    "detections": [
+      {
+        "class": "bicycle",
+        "proxy_for": "non_pedestrian_traffic",
+        "confidence": 0.2815,
+        "bbox_xyxy": [
+          5.0,
+          707.1,
+          323.9,
+          936.9
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 11.5,
+      "sidewalk": 5.48,
+      "vegetation": 19.59,
+      "pole": 2.98,
+      "traffic light": 0.0,
+      "person": 0.0
+    },
+    "composite_score": 53.7,
+    "label": "Sedang",
+    "components": {
+      "sidewalk_present_score": 18.3,
+      "shade_score": 78.4,
+      "obstruction_score": 100.0
+    }
+  },
+  {
+    "activity_id": "6a8f309052d86e03b51bc8c7",
+    "photo": "photos/6a8f309052d86e03b51bc8c7/6.jpg",
+    "overlay": "analysis/overlays/6a8f309052d86e03b51bc8c7/6_analisis.jpg",
+    "detections": [
+      {
+        "class": "truck",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.6864,
+        "bbox_xyxy": [
+          501.2,
+          618.0,
+          1064.6,
+          1000.0
+        ]
+      },
+      {
+        "class": "traffic light",
+        "proxy_for": "crossing_signal_proxy",
+        "confidence": 0.4841,
+        "bbox_xyxy": [
+          1892.7,
+          59.1,
+          2018.5,
+          365.7
+        ]
+      },
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.258,
+        "bbox_xyxy": [
+          500.8,
+          615.9,
+          1065.1,
+          1002.4
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 8.49,
+      "sidewalk": 3.95,
+      "vegetation": 25.19,
+      "pole": 1.09,
+      "traffic light": 0.0,
+      "person": 0.02
+    },
+    "composite_score": 46.6,
+    "label": "Sedang",
+    "components": {
+      "sidewalk_present_score": 13.2,
+      "shade_score": 100.0,
+      "obstruction_score": 60.0
+    }
+  },
+  {
+    "activity_id": "6a8f2b6c52d86e03b51bc83e",
+    "photo": "photos/6a8f2b6c52d86e03b51bc83e/1.jpg",
+    "overlay": "analysis/overlays/6a8f2b6c52d86e03b51bc83e/1_analisis.jpg",
+    "detections": [
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.7237,
+        "bbox_xyxy": [
+          1810.2,
+          1451.3,
+          1918.1,
+          1837.2
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.7116,
+        "bbox_xyxy": [
+          936.3,
+          1214.8,
+          1116.4,
+          1659.8
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.6879,
+        "bbox_xyxy": [
+          2.4,
+          1213.6,
+          136.9,
+          1716.7
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.4796,
+        "bbox_xyxy": [
+          1670.1,
+          1363.6,
+          1736.3,
+          1552.9
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.3307,
+        "bbox_xyxy": [
+          1610.6,
+          1352.2,
+          1677.4,
+          1547.8
+        ]
+      },
+      {
+        "class": "potted plant",
+        "proxy_for": "street_furniture",
+        "confidence": 0.3201,
+        "bbox_xyxy": [
+          1066.3,
+          1331.9,
+          1493.2,
+          1778.8
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 3.07,
+      "sidewalk": 15.25,
+      "vegetation": 6.41,
+      "pole": 1.24,
+      "traffic light": 0.0,
+      "person": 4.07
+    },
+    "composite_score": 46.8,
+    "label": "Sedang",
+    "components": {
+      "sidewalk_present_score": 50.8,
+      "shade_score": 25.6,
+      "obstruction_score": 60.0
+    }
+  },
+  {
+    "activity_id": "6a8f2b6c52d86e03b51bc83e",
+    "photo": "photos/6a8f2b6c52d86e03b51bc83e/2.jpg",
+    "overlay": "analysis/overlays/6a8f2b6c52d86e03b51bc83e/2_analisis.jpg",
+    "detections": [
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.8307,
+        "bbox_xyxy": [
+          776.7,
+          1096.1,
+          952.7,
+          1530.5
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.829,
+        "bbox_xyxy": [
+          1340.2,
+          1246.2,
+          1473.8,
+          1510.7
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.7536,
+        "bbox_xyxy": [
+          573.7,
+          1076.2,
+          731.6,
+          1591.1
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.7024,
+        "bbox_xyxy": [
+          754.0,
+          1108.5,
+          843.2,
+          1436.3
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.4854,
+        "bbox_xyxy": [
+          214.2,
+          1103.2,
+          280.4,
+          1264.6
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.4549,
+        "bbox_xyxy": [
+          376.3,
+          1112.9,
+          495.7,
+          1319.5
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 9.48,
+      "sidewalk": 18.21,
+      "vegetation": 2.33,
+      "pole": 0.08,
+      "traffic light": 0.0,
+      "person": 8.37
+    },
+    "composite_score": 50.2,
+    "label": "Sedang",
+    "components": {
+      "sidewalk_present_score": 60.7,
+      "shade_score": 9.3,
+      "obstruction_score": 70.0
+    }
+  },
+  {
+    "activity_id": "6a8f2b6c52d86e03b51bc83e",
+    "photo": "photos/6a8f2b6c52d86e03b51bc83e/3.jpg",
+    "overlay": "analysis/overlays/6a8f2b6c52d86e03b51bc83e/3_analisis.jpg",
+    "detections": [
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.9059,
+        "bbox_xyxy": [
+          1622.3,
+          1489.9,
+          1919.0,
+          1809.0
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.802,
+        "bbox_xyxy": [
+          1155.5,
+          1458.6,
+          1269.1,
+          1762.2
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.7846,
+        "bbox_xyxy": [
+          1411.5,
+          1502.6,
+          1563.1,
+          1758.8
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.7163,
+        "bbox_xyxy": [
+          455.1,
+          1367.1,
+          558.2,
+          1631.8
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.6927,
+        "bbox_xyxy": [
+          305.5,
+          1333.6,
+          434.2,
+          1657.5
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.4944,
+        "bbox_xyxy": [
+          713.6,
+          1433.3,
+          892.4,
+          1735.5
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.4766,
+        "bbox_xyxy": [
+          675.7,
+          1439.5,
+          771.4,
+          1690.6
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.3369,
+        "bbox_xyxy": [
+          947.4,
+          1445.8,
+          1048.1,
+          1598.8
+        ]
+      },
+      {
+        "class": "truck",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.2746,
+        "bbox_xyxy": [
+          1204.2,
+          1427.6,
+          1455.4,
+          1698.6
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 0.45,
+      "sidewalk": 4.96,
+      "vegetation": 58.45,
+      "pole": 0.02,
+      "traffic light": 0.0,
+      "person": 4.77
+    },
+    "composite_score": 39.5,
+    "label": "Buruk",
+    "components": {
+      "sidewalk_present_score": 16.5,
+      "shade_score": 100.0,
+      "obstruction_score": 25.0
+    }
+  },
+  {
+    "activity_id": "6a8f2b6c52d86e03b51bc83e",
+    "photo": "photos/6a8f2b6c52d86e03b51bc83e/4.jpg",
+    "overlay": "analysis/overlays/6a8f2b6c52d86e03b51bc83e/4_analisis.jpg",
+    "detections": [
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.8791,
+        "bbox_xyxy": [
+          172.7,
+          1220.2,
+          501.0,
+          1957.6
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.4233,
+        "bbox_xyxy": [
+          114.3,
+          1324.8,
+          258.0,
+          1719.7
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 4.44,
+      "sidewalk": 4.13,
+      "vegetation": 11.47,
+      "pole": 4.18,
+      "traffic light": 0.15,
+      "person": 6.29
+    },
+    "composite_score": 40.9,
+    "label": "Sedang",
+    "components": {
+      "sidewalk_present_score": 13.8,
+      "shade_score": 45.9,
+      "obstruction_score": 90.0
+    }
+  },
+  {
+    "activity_id": "6a8f2b6c52d86e03b51bc83e",
+    "photo": "photos/6a8f2b6c52d86e03b51bc83e/5.jpg",
+    "overlay": "analysis/overlays/6a8f2b6c52d86e03b51bc83e/5_analisis.jpg",
+    "detections": [
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.8165,
+        "bbox_xyxy": [
+          472.4,
+          1263.1,
+          628.1,
+          1630.4
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.7477,
+        "bbox_xyxy": [
+          383.0,
+          1272.0,
+          497.1,
+          1586.7
+        ]
+      },
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.5895,
+        "bbox_xyxy": [
+          27.4,
+          1273.2,
+          234.7,
+          1463.4
+        ]
+      },
+      {
+        "class": "bench",
+        "proxy_for": "street_furniture",
+        "confidence": 0.5781,
+        "bbox_xyxy": [
+          698.9,
+          1464.4,
+          931.2,
+          1748.3
+        ]
+      },
+      {
+        "class": "bench",
+        "proxy_for": "street_furniture",
+        "confidence": 0.5743,
+        "bbox_xyxy": [
+          617.1,
+          1432.1,
+          933.1,
+          1751.7
+        ]
+      },
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.3052,
+        "bbox_xyxy": [
+          0.0,
+          1280.7,
+          45.6,
+          1430.3
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.2942,
+        "bbox_xyxy": [
+          620.8,
+          1422.6,
+          814.0,
+          1678.6
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 4.84,
+      "sidewalk": 6.5,
+      "vegetation": 29.55,
+      "pole": 1.42,
+      "traffic light": 0.0,
+      "person": 2.65
+    },
+    "composite_score": 47.1,
+    "label": "Sedang",
+    "components": {
+      "sidewalk_present_score": 21.7,
+      "shade_score": 100.0,
+      "obstruction_score": 45.0
+    }
+  },
+  {
+    "activity_id": "6a8f2b6c52d86e03b51bc83e",
+    "photo": "photos/6a8f2b6c52d86e03b51bc83e/6.jpg",
+    "overlay": "analysis/overlays/6a8f2b6c52d86e03b51bc83e/6_analisis.jpg",
+    "detections": [],
+    "segmentation_pct": {
+      "road": 0.0,
+      "sidewalk": 0.0,
+      "vegetation": 3.37,
+      "pole": 0.27,
+      "traffic light": 0.0,
+      "person": 0.04
+    },
+    "composite_score": 28.4,
+    "label": "Buruk",
+    "components": {
+      "sidewalk_present_score": 0.0,
+      "shade_score": 13.5,
+      "obstruction_score": 100.0
+    }
+  },
+  {
+    "activity_id": "6a8f2b6c52d86e03b51bc83e",
+    "photo": "photos/6a8f2b6c52d86e03b51bc83e/7.jpg",
+    "overlay": "analysis/overlays/6a8f2b6c52d86e03b51bc83e/7_analisis.jpg",
+    "detections": [],
+    "segmentation_pct": {
+      "road": 0.97,
+      "sidewalk": 27.28,
+      "vegetation": 23.02,
+      "pole": 0.4,
+      "traffic light": 0.0,
+      "person": 0.45
+    },
+    "composite_score": 93.5,
+    "label": "Baik",
+    "components": {
+      "sidewalk_present_score": 90.9,
+      "shade_score": 92.1,
+      "obstruction_score": 100.0
+    }
+  },
+  {
+    "activity_id": "6a8f2b6c52d86e03b51bc83e",
+    "photo": "photos/6a8f2b6c52d86e03b51bc83e/8.jpg",
+    "overlay": "analysis/overlays/6a8f2b6c52d86e03b51bc83e/8_analisis.jpg",
+    "detections": [
+      {
+        "class": "traffic light",
+        "proxy_for": "crossing_signal_proxy",
+        "confidence": 0.2972,
+        "bbox_xyxy": [
+          1004.1,
+          444.7,
+          1057.1,
+          556.1
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 5.4,
+      "sidewalk": 27.78,
+      "vegetation": 0.01,
+      "pole": 2.49,
+      "traffic light": 0.12,
+      "person": 0.0
+    },
+    "composite_score": 71.3,
+    "label": "Baik",
+    "components": {
+      "sidewalk_present_score": 92.6,
+      "shade_score": 0.0,
+      "obstruction_score": 100.0
+    }
+  },
+  {
+    "activity_id": "6a8de5b352d86e03b51b1f6b",
+    "photo": "photos/6a8de5b352d86e03b51b1f6b/1.jpg",
+    "overlay": "analysis/overlays/6a8de5b352d86e03b51b1f6b/1_analisis.jpg",
+    "detections": [
+      {
+        "class": "bench",
+        "proxy_for": "street_furniture",
+        "confidence": 0.4098,
+        "bbox_xyxy": [
+          303.9,
+          1507.0,
+          768.5,
+          1713.1
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 0.9,
+      "sidewalk": 4.08,
+      "vegetation": 71.94,
+      "pole": 2.44,
+      "traffic light": 0.0,
+      "person": 0.22
+    },
+    "composite_score": 56.8,
+    "label": "Sedang",
+    "components": {
+      "sidewalk_present_score": 13.6,
+      "shade_score": 100.0,
+      "obstruction_score": 100.0
+    }
+  },
+  {
+    "activity_id": "6a8de5b352d86e03b51b1f6b",
+    "photo": "photos/6a8de5b352d86e03b51b1f6b/2.jpg",
+    "overlay": "analysis/overlays/6a8de5b352d86e03b51b1f6b/2_analisis.jpg",
+    "detections": [
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.7795,
+        "bbox_xyxy": [
+          433.5,
+          1200.1,
+          497.2,
+          1411.1
+        ]
+      },
+      {
+        "class": "truck",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.583,
+        "bbox_xyxy": [
+          0.5,
+          886.4,
+          456.4,
+          1442.7
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 14.69,
+      "sidewalk": 5.82,
+      "vegetation": 58.22,
+      "pole": 1.31,
+      "traffic light": 0.0,
+      "person": 0.0
+    },
+    "composite_score": 53.5,
+    "label": "Sedang",
+    "components": {
+      "sidewalk_present_score": 19.4,
+      "shade_score": 100.0,
+      "obstruction_score": 75.0
+    }
+  },
+  {
+    "activity_id": "6a8de5b352d86e03b51b1f6b",
+    "photo": "photos/6a8de5b352d86e03b51b1f6b/3.jpg",
+    "overlay": "analysis/overlays/6a8de5b352d86e03b51b1f6b/3_analisis.jpg",
+    "detections": [
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.7039,
+        "bbox_xyxy": [
+          1095.4,
+          1465.5,
+          1251.4,
+          1737.0
+        ]
+      },
+      {
+        "class": "bench",
+        "proxy_for": "street_furniture",
+        "confidence": 0.6106,
+        "bbox_xyxy": [
+          1235.1,
+          1591.6,
+          1446.7,
+          1693.1
+        ]
+      },
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.568,
+        "bbox_xyxy": [
+          1806.6,
+          1525.0,
+          1919.5,
+          1694.7
+        ]
+      },
+      {
+        "class": "bench",
+        "proxy_for": "street_furniture",
+        "confidence": 0.3581,
+        "bbox_xyxy": [
+          1062.0,
+          1591.2,
+          1444.8,
+          1694.7
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.3086,
+        "bbox_xyxy": [
+          1097.9,
+          1466.4,
+          1246.2,
+          1656.7
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 2.08,
+      "sidewalk": 0.04,
+      "vegetation": 50.83,
+      "pole": 0.06,
+      "traffic light": 0.0,
+      "person": 0.05
+    },
+    "composite_score": 42.6,
+    "label": "Sedang",
+    "components": {
+      "sidewalk_present_score": 0.1,
+      "shade_score": 100.0,
+      "obstruction_score": 70.0
+    }
+  },
+  {
+    "activity_id": "6a8de27152d86e03b51b1eb4",
+    "photo": "photos/6a8de27152d86e03b51b1eb4/1.jpg",
+    "overlay": "analysis/overlays/6a8de27152d86e03b51b1eb4/1_analisis.jpg",
+    "detections": [
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.6885,
+        "bbox_xyxy": [
+          964.1,
+          1162.3,
+          1038.7,
+          1283.0
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.5418,
+        "bbox_xyxy": [
+          881.4,
+          1144.2,
+          928.0,
+          1282.4
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 19.95,
+      "sidewalk": 5.48,
+      "vegetation": 16.11,
+      "pole": 0.19,
+      "traffic light": 0.0,
+      "person": 0.44
+    },
+    "composite_score": 47.7,
+    "label": "Sedang",
+    "components": {
+      "sidewalk_present_score": 18.3,
+      "shade_score": 64.4,
+      "obstruction_score": 90.0
+    }
+  },
+  {
+    "activity_id": "6a8de05952d86e03b51b1e66",
+    "photo": "photos/6a8de05952d86e03b51b1e66/1.jpg",
+    "overlay": "analysis/overlays/6a8de05952d86e03b51b1e66/1_analisis.jpg",
+    "detections": [],
+    "segmentation_pct": {
+      "road": 6.59,
+      "sidewalk": 6.6,
+      "vegetation": 16.85,
+      "pole": 0.5,
+      "traffic light": 0.0,
+      "person": 1.31
+    },
+    "composite_score": 52.9,
+    "label": "Sedang",
+    "components": {
+      "sidewalk_present_score": 22.0,
+      "shade_score": 67.4,
+      "obstruction_score": 100.0
+    }
+  },
+  {
+    "activity_id": "6a8de05952d86e03b51b1e66",
+    "photo": "photos/6a8de05952d86e03b51b1e66/2.jpg",
+    "overlay": "analysis/overlays/6a8de05952d86e03b51b1e66/2_analisis.jpg",
+    "detections": [
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.7741,
+        "bbox_xyxy": [
+          999.2,
+          1161.7,
+          1780.6,
+          1431.0
+        ]
+      },
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.333,
+        "bbox_xyxy": [
+          1252.9,
+          1119.0,
+          1396.4,
+          1168.6
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.3082,
+        "bbox_xyxy": [
+          1707.3,
+          1223.6,
+          1785.8,
+          1315.0
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 6.67,
+      "sidewalk": 1.66,
+      "vegetation": 63.32,
+      "pole": 0.73,
+      "traffic light": 0.03,
+      "person": 0.23
+    },
+    "composite_score": 41.5,
+    "label": "Sedang",
+    "components": {
+      "sidewalk_present_score": 5.5,
+      "shade_score": 100.0,
+      "obstruction_score": 55.0
+    }
+  },
+  {
+    "activity_id": "6a8de05952d86e03b51b1e66",
+    "photo": "photos/6a8de05952d86e03b51b1e66/3.jpg",
+    "overlay": "analysis/overlays/6a8de05952d86e03b51b1e66/3_analisis.jpg",
+    "detections": [
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.7485,
+        "bbox_xyxy": [
+          240.8,
+          1087.8,
+          305.7,
+          1242.0
+        ]
+      },
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.3764,
+        "bbox_xyxy": [
+          1621.2,
+          1252.4,
+          1737.1,
+          1317.2
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 6.03,
+      "sidewalk": 1.76,
+      "vegetation": 70.32,
+      "pole": 0.68,
+      "traffic light": 0.0,
+      "person": 0.15
+    },
+    "composite_score": 46.7,
+    "label": "Sedang",
+    "components": {
+      "sidewalk_present_score": 5.9,
+      "shade_score": 100.0,
+      "obstruction_score": 75.0
+    }
+  },
+  {
+    "activity_id": "6a8de05952d86e03b51b1e66",
+    "photo": "photos/6a8de05952d86e03b51b1e66/4.jpg",
+    "overlay": "analysis/overlays/6a8de05952d86e03b51b1e66/4_analisis.jpg",
+    "detections": [
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.9106,
+        "bbox_xyxy": [
+          697.4,
+          1199.1,
+          1567.9,
+          1533.5
+        ]
+      },
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.3882,
+        "bbox_xyxy": [
+          1415.4,
+          1245.6,
+          1583.2,
+          1287.9
+        ]
+      },
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.3081,
+        "bbox_xyxy": [
+          1419.1,
+          1230.5,
+          1588.6,
+          1289.4
+        ]
+      },
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.2677,
+        "bbox_xyxy": [
+          1113.9,
+          1183.7,
+          1253.4,
+          1232.0
+        ]
+      },
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.2588,
+        "bbox_xyxy": [
+          1135.7,
+          1188.0,
+          1259.4,
+          1222.5
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 16.13,
+      "sidewalk": 7.12,
+      "vegetation": 51.1,
+      "pole": 0.45,
+      "traffic light": 0.0,
+      "person": 0.06
+    },
+    "composite_score": 36.9,
+    "label": "Buruk",
+    "components": {
+      "sidewalk_present_score": 23.7,
+      "shade_score": 100.0,
+      "obstruction_score": 0.0
+    }
+  },
+  {
+    "activity_id": "6a8ddaef52d86e03b51b1dd0",
+    "photo": "photos/6a8ddaef52d86e03b51b1dd0/1.jpg",
+    "overlay": "analysis/overlays/6a8ddaef52d86e03b51b1dd0/1_analisis.jpg",
+    "detections": [],
+    "segmentation_pct": {
+      "road": 19.99,
+      "sidewalk": 6.69,
+      "vegetation": 1.0,
+      "pole": 8.68,
+      "traffic light": 0.07,
+      "person": 0.72
+    },
+    "composite_score": 37.1,
+    "label": "Buruk",
+    "components": {
+      "sidewalk_present_score": 22.3,
+      "shade_score": 4.0,
+      "obstruction_score": 100.0
+    }
+  },
+  {
+    "activity_id": "6a8ddaef52d86e03b51b1dd0",
+    "photo": "photos/6a8ddaef52d86e03b51b1dd0/2.jpg",
+    "overlay": "analysis/overlays/6a8ddaef52d86e03b51b1dd0/2_analisis.jpg",
+    "detections": [
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.7044,
+        "bbox_xyxy": [
+          1010.8,
+          1130.2,
+          1249.7,
+          1615.4
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 10.83,
+      "sidewalk": 1.22,
+      "vegetation": 61.13,
+      "pole": 0.12,
+      "traffic light": 0.0,
+      "person": 4.17
+    },
+    "composite_score": 50.8,
+    "label": "Sedang",
+    "components": {
+      "sidewalk_present_score": 4.1,
+      "shade_score": 100.0,
+      "obstruction_score": 95.0
+    }
+  },
+  {
+    "activity_id": "6a8dd6cf52d86e03b51b1d2f",
+    "photo": "photos/6a8dd6cf52d86e03b51b1d2f/1.jpg",
+    "overlay": "analysis/overlays/6a8dd6cf52d86e03b51b1d2f/1_analisis.jpg",
+    "detections": [
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.5248,
+        "bbox_xyxy": [
+          1661.9,
+          1272.5,
+          1794.5,
+          1539.5
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.4115,
+        "bbox_xyxy": [
+          493.6,
+          351.4,
+          685.8,
+          623.9
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 18.14,
+      "sidewalk": 11.69,
+      "vegetation": 1.6,
+      "pole": 2.27,
+      "traffic light": 0.0,
+      "person": 0.91
+    },
+    "composite_score": 43.6,
+    "label": "Sedang",
+    "components": {
+      "sidewalk_present_score": 39.0,
+      "shade_score": 6.4,
+      "obstruction_score": 90.0
+    }
+  },
+  {
+    "activity_id": "6a8dd6cf52d86e03b51b1d2f",
+    "photo": "photos/6a8dd6cf52d86e03b51b1d2f/2.jpg",
+    "overlay": "analysis/overlays/6a8dd6cf52d86e03b51b1d2f/2_analisis.jpg",
+    "detections": [
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.6028,
+        "bbox_xyxy": [
+          20.1,
+          218.8,
+          240.4,
+          714.0
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.3,
+        "bbox_xyxy": [
+          0.1,
+          1228.7,
+          95.2,
+          1588.9
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 16.39,
+      "sidewalk": 10.51,
+      "vegetation": 2.62,
+      "pole": 2.17,
+      "traffic light": 0.0,
+      "person": 0.43
+    },
+    "composite_score": 42.6,
+    "label": "Sedang",
+    "components": {
+      "sidewalk_present_score": 35.0,
+      "shade_score": 10.5,
+      "obstruction_score": 90.0
+    }
+  },
+  {
+    "activity_id": "6a8dd14c52d86e03b51b1b7c",
+    "photo": "photos/6a8dd14c52d86e03b51b1b7c/1.jpg",
+    "overlay": "analysis/overlays/6a8dd14c52d86e03b51b1b7c/1_analisis.jpg",
+    "detections": [
+      {
+        "class": "bicycle",
+        "proxy_for": "non_pedestrian_traffic",
+        "confidence": 0.605,
+        "bbox_xyxy": [
+          5.0,
+          1049.5,
+          642.8,
+          1425.0
+        ]
+      },
+      {
+        "class": "bicycle",
+        "proxy_for": "non_pedestrian_traffic",
+        "confidence": 0.5099,
+        "bbox_xyxy": [
+          193.4,
+          1053.8,
+          642.8,
+          1425.0
+        ]
+      },
+      {
+        "class": "bicycle",
+        "proxy_for": "non_pedestrian_traffic",
+        "confidence": 0.3664,
+        "bbox_xyxy": [
+          1.5,
+          1054.6,
+          384.2,
+          1422.8
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.3277,
+        "bbox_xyxy": [
+          0.4,
+          891.2,
+          154.9,
+          1342.5
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 9.57,
+      "sidewalk": 0.06,
+      "vegetation": 12.86,
+      "pole": 0.54,
+      "traffic light": 0.0,
+      "person": 4.46
+    },
+    "composite_score": 36.7,
+    "label": "Buruk",
+    "components": {
+      "sidewalk_present_score": 0.2,
+      "shade_score": 51.4,
+      "obstruction_score": 95.0
+    }
+  },
+  {
+    "activity_id": "6a8dd14c52d86e03b51b1b7c",
+    "photo": "photos/6a8dd14c52d86e03b51b1b7c/2.jpg",
+    "overlay": "analysis/overlays/6a8dd14c52d86e03b51b1b7c/2_analisis.jpg",
+    "detections": [
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.8947,
+        "bbox_xyxy": [
+          582.9,
+          719.3,
+          868.8,
+          1404.9
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 3.54,
+      "sidewalk": 19.21,
+      "vegetation": 0.0,
+      "pole": 0.88,
+      "traffic light": 0.0,
+      "person": 3.9
+    },
+    "composite_score": 55.8,
+    "label": "Sedang",
+    "components": {
+      "sidewalk_present_score": 64.0,
+      "shade_score": 0.0,
+      "obstruction_score": 95.0
+    }
+  },
+  {
+    "activity_id": "6a8dcf0e52d86e03b51b1b1f",
+    "photo": "photos/6a8dcf0e52d86e03b51b1b1f/1.jpg",
+    "overlay": "analysis/overlays/6a8dcf0e52d86e03b51b1b1f/1_analisis.jpg",
+    "detections": [
+      {
+        "class": "bench",
+        "proxy_for": "street_furniture",
+        "confidence": 0.7059,
+        "bbox_xyxy": [
+          51.0,
+          1182.1,
+          295.9,
+          1319.7
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.6519,
+        "bbox_xyxy": [
+          623.5,
+          1124.4,
+          743.2,
+          1234.7
+        ]
+      },
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.5309,
+        "bbox_xyxy": [
+          1417.9,
+          1057.2,
+          1499.4,
+          1134.5
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.4057,
+        "bbox_xyxy": [
+          735.0,
+          1065.5,
+          786.4,
+          1190.1
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.4036,
+        "bbox_xyxy": [
+          683.7,
+          1065.2,
+          740.1,
+          1190.0
+        ]
+      },
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.3967,
+        "bbox_xyxy": [
+          1229.2,
+          1050.7,
+          1269.4,
+          1080.2
+        ]
+      },
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.3352,
+        "bbox_xyxy": [
+          1273.5,
+          1049.4,
+          1315.4,
+          1082.1
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 11.27,
+      "sidewalk": 5.52,
+      "vegetation": 59.59,
+      "pole": 0.1,
+      "traffic light": 0.0,
+      "person": 0.58
+    },
+    "composite_score": 40.5,
+    "label": "Sedang",
+    "components": {
+      "sidewalk_present_score": 18.4,
+      "shade_score": 100.0,
+      "obstruction_score": 25.0
+    }
+  },
+  {
+    "activity_id": "6a8dcf0e52d86e03b51b1b1f",
+    "photo": "photos/6a8dcf0e52d86e03b51b1b1f/2.jpg",
+    "overlay": "analysis/overlays/6a8dcf0e52d86e03b51b1b1f/2_analisis.jpg",
+    "detections": [
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.8029,
+        "bbox_xyxy": [
+          1240.2,
+          960.5,
+          1369.3,
+          1254.1
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.703,
+        "bbox_xyxy": [
+          320.4,
+          768.3,
+          372.2,
+          899.3
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.4469,
+        "bbox_xyxy": [
+          67.3,
+          647.8,
+          156.1,
+          895.2
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 24.88,
+      "sidewalk": 2.62,
+      "vegetation": 41.35,
+      "pole": 0.58,
+      "traffic light": 0.0,
+      "person": 0.26
+    },
+    "composite_score": 50.6,
+    "label": "Sedang",
+    "components": {
+      "sidewalk_present_score": 8.7,
+      "shade_score": 100.0,
+      "obstruction_score": 85.0
+    }
+  },
+  {
+    "activity_id": "6a8dcf0e52d86e03b51b1b1f",
+    "photo": "photos/6a8dcf0e52d86e03b51b1b1f/3.jpg",
+    "overlay": "analysis/overlays/6a8dcf0e52d86e03b51b1b1f/3_analisis.jpg",
+    "detections": [
+      {
+        "class": "truck",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.7402,
+        "bbox_xyxy": [
+          1277.3,
+          1128.1,
+          1463.2,
+          1291.4
+        ]
+      },
+      {
+        "class": "truck",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.7319,
+        "bbox_xyxy": [
+          948.7,
+          1079.6,
+          1229.8,
+          1341.8
+        ]
+      },
+      {
+        "class": "truck",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.7185,
+        "bbox_xyxy": [
+          221.9,
+          1014.4,
+          790.4,
+          1427.2
+        ]
+      },
+      {
+        "class": "truck",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.5795,
+        "bbox_xyxy": [
+          746.7,
+          1046.5,
+          975.4,
+          1407.0
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.4953,
+        "bbox_xyxy": [
+          1225.1,
+          1166.1,
+          1270.4,
+          1260.6
+        ]
+      },
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.3625,
+        "bbox_xyxy": [
+          0.1,
+          970.0,
+          258.2,
+          1423.0
+        ]
+      },
+      {
+        "class": "truck",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.2999,
+        "bbox_xyxy": [
+          0.8,
+          970.1,
+          261.8,
+          1421.9
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 4.06,
+      "sidewalk": 0.0,
+      "vegetation": 8.75,
+      "pole": 0.52,
+      "traffic light": 0.0,
+      "person": 0.02
+    },
+    "composite_score": 8.8,
+    "label": "Buruk",
+    "components": {
+      "sidewalk_present_score": 0.0,
+      "shade_score": 35.0,
+      "obstruction_score": 0.0
+    }
+  },
+  {
+    "activity_id": "6a8dcf0e52d86e03b51b1b1f",
+    "photo": "photos/6a8dcf0e52d86e03b51b1b1f/4.jpg",
+    "overlay": "analysis/overlays/6a8dcf0e52d86e03b51b1b1f/4_analisis.jpg",
+    "detections": [
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.6709,
+        "bbox_xyxy": [
+          883.6,
+          1026.6,
+          929.1,
+          1129.8
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.6071,
+        "bbox_xyxy": [
+          1019.4,
+          1068.6,
+          1116.3,
+          1218.4
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.4258,
+        "bbox_xyxy": [
+          989.9,
+          1033.3,
+          1025.5,
+          1111.9
+        ]
+      },
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.3698,
+        "bbox_xyxy": [
+          1358.7,
+          1057.7,
+          1483.3,
+          1143.5
+        ]
+      },
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.2553,
+        "bbox_xyxy": [
+          1479.4,
+          1132.1,
+          1499.4,
+          1214.9
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 8.78,
+      "sidewalk": 3.09,
+      "vegetation": 43.54,
+      "pole": 1.29,
+      "traffic light": 0.02,
+      "person": 0.14
+    },
+    "composite_score": 41.4,
+    "label": "Sedang",
+    "components": {
+      "sidewalk_present_score": 10.3,
+      "shade_score": 100.0,
+      "obstruction_score": 45.0
+    }
+  },
+  {
+    "activity_id": "6a899a2f52d86e03b518b28a",
+    "photo": "photos/6a899a2f52d86e03b518b28a/1.jpg",
+    "overlay": "analysis/overlays/6a899a2f52d86e03b518b28a/1_analisis.jpg",
+    "detections": [],
+    "segmentation_pct": {
+      "road": 0.34,
+      "sidewalk": 9.29,
+      "vegetation": 38.93,
+      "pole": 2.68,
+      "traffic light": 0.0,
+      "person": 4.93
+    },
+    "composite_score": 65.5,
+    "label": "Sedang",
+    "components": {
+      "sidewalk_present_score": 31.0,
+      "shade_score": 100.0,
+      "obstruction_score": 100.0
+    }
+  },
+  {
+    "activity_id": "6a89983752d86e03b518b1d0",
+    "photo": "photos/6a89983752d86e03b518b1d0/1.jpg",
+    "overlay": "analysis/overlays/6a89983752d86e03b518b1d0/1_analisis.jpg",
+    "detections": [
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.8615,
+        "bbox_xyxy": [
+          913.8,
+          1114.0,
+          1501.0,
+          1677.9
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.4119,
+        "bbox_xyxy": [
+          944.0,
+          1101.7,
+          1012.7,
+          1201.1
+        ]
+      },
+      {
+        "class": "bench",
+        "proxy_for": "street_furniture",
+        "confidence": 0.2685,
+        "bbox_xyxy": [
+          388.9,
+          1012.8,
+          518.2,
+          1115.0
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 13.98,
+      "sidewalk": 7.88,
+      "vegetation": 31.52,
+      "pole": 0.31,
+      "traffic light": 0.0,
+      "person": 0.92
+    },
+    "composite_score": 56.9,
+    "label": "Sedang",
+    "components": {
+      "sidewalk_present_score": 26.3,
+      "shade_score": 100.0,
+      "obstruction_score": 75.0
+    }
+  },
+  {
+    "activity_id": "6a89983752d86e03b518b1d0",
+    "photo": "photos/6a89983752d86e03b518b1d0/2.jpg",
+    "overlay": "analysis/overlays/6a89983752d86e03b518b1d0/2_analisis.jpg",
+    "detections": [
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.8164,
+        "bbox_xyxy": [
+          967.4,
+          994.6,
+          1028.6,
+          1151.5
+        ]
+      },
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.3623,
+        "bbox_xyxy": [
+          1322.3,
+          1020.1,
+          1461.6,
+          1093.4
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.3192,
+        "bbox_xyxy": [
+          1458.0,
+          1037.8,
+          1500.9,
+          1165.2
+        ]
+      },
+      {
+        "class": "potted plant",
+        "proxy_for": "street_furniture",
+        "confidence": 0.3185,
+        "bbox_xyxy": [
+          1143.3,
+          1052.8,
+          1225.4,
+          1147.8
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.3065,
+        "bbox_xyxy": [
+          1439.3,
+          1036.8,
+          1500.0,
+          1165.6
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 6.43,
+      "sidewalk": 6.37,
+      "vegetation": 49.76,
+      "pole": 0.38,
+      "traffic light": 0.0,
+      "person": 0.73
+    },
+    "composite_score": 51.9,
+    "label": "Sedang",
+    "components": {
+      "sidewalk_present_score": 21.2,
+      "shade_score": 100.0,
+      "obstruction_score": 65.0
+    }
+  },
+  {
+    "activity_id": "6a8993cf52d86e03b518ae62",
+    "photo": "photos/6a8993cf52d86e03b518ae62/1.jpg",
+    "overlay": "analysis/overlays/6a8993cf52d86e03b518ae62/1_analisis.jpg",
+    "detections": [
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.7781,
+        "bbox_xyxy": [
+          0.6,
+          393.3,
+          185.7,
+          599.2
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.6893,
+        "bbox_xyxy": [
+          1307.9,
+          741.5,
+          1499.5,
+          1362.0
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.4974,
+        "bbox_xyxy": [
+          143.8,
+          419.9,
+          190.7,
+          535.3
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 14.43,
+      "sidewalk": 19.86,
+      "vegetation": 12.4,
+      "pole": 4.77,
+      "traffic light": 0.0,
+      "person": 3.99
+    },
+    "composite_score": 63.0,
+    "label": "Sedang",
+    "components": {
+      "sidewalk_present_score": 66.2,
+      "shade_score": 49.6,
+      "obstruction_score": 70.0
+    }
+  },
+  {
+    "activity_id": "6a8993cf52d86e03b518ae62",
+    "photo": "photos/6a8993cf52d86e03b518ae62/2.jpg",
+    "overlay": "analysis/overlays/6a8993cf52d86e03b518ae62/2_analisis.jpg",
+    "detections": [
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.6524,
+        "bbox_xyxy": [
+          355.8,
+          639.5,
+          583.3,
+          878.9
+        ]
+      },
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.5558,
+        "bbox_xyxy": [
+          278.6,
+          601.5,
+          455.4,
+          707.8
+        ]
+      },
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.5518,
+        "bbox_xyxy": [
+          680.2,
+          685.4,
+          847.1,
+          843.4
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.3474,
+        "bbox_xyxy": [
+          296.3,
+          642.2,
+          583.5,
+          968.8
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 29.66,
+      "sidewalk": 8.66,
+      "vegetation": 21.01,
+      "pole": 0.74,
+      "traffic light": 0.0,
+      "person": 0.38
+    },
+    "composite_score": 47.9,
+    "label": "Sedang",
+    "components": {
+      "sidewalk_present_score": 28.9,
+      "shade_score": 84.0,
+      "obstruction_score": 50.0
+    }
+  },
+  {
+    "activity_id": "6a898f4652d86e03b518ad01",
+    "photo": "photos/6a898f4652d86e03b518ad01/1.jpg",
+    "overlay": "analysis/overlays/6a898f4652d86e03b518ad01/1_analisis.jpg",
+    "detections": [
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.9399,
+        "bbox_xyxy": [
+          673.2,
+          497.0,
+          1498.4,
+          1109.2
+        ]
+      },
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.8646,
+        "bbox_xyxy": [
+          1298.9,
+          773.9,
+          1499.5,
+          1367.0
+        ]
+      },
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.847,
+        "bbox_xyxy": [
+          345.1,
+          485.8,
+          1175.6,
+          898.6
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.676,
+        "bbox_xyxy": [
+          0.1,
+          479.5,
+          91.2,
+          691.6
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.4103,
+        "bbox_xyxy": [
+          0.0,
+          480.8,
+          55.9,
+          689.9
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.3493,
+        "bbox_xyxy": [
+          0.0,
+          509.1,
+          40.8,
+          686.6
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.3142,
+        "bbox_xyxy": [
+          303.5,
+          516.8,
+          373.3,
+          648.7
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.2934,
+        "bbox_xyxy": [
+          218.1,
+          501.5,
+          281.9,
+          570.5
+        ]
+      },
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.2756,
+        "bbox_xyxy": [
+          0.5,
+          942.5,
+          187.8,
+          1400.8
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 31.32,
+      "sidewalk": 0.0,
+      "vegetation": 22.26,
+      "pole": 0.53,
+      "traffic light": 0.0,
+      "person": 0.7
+    },
+    "composite_score": 22.3,
+    "label": "Buruk",
+    "components": {
+      "sidewalk_present_score": 0.0,
+      "shade_score": 89.0,
+      "obstruction_score": 0.0
+    }
+  },
+  {
+    "activity_id": "6a898f4652d86e03b518ad01",
+    "photo": "photos/6a898f4652d86e03b518ad01/2.jpg",
+    "overlay": "analysis/overlays/6a898f4652d86e03b518ad01/2_analisis.jpg",
+    "detections": [
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.8637,
+        "bbox_xyxy": [
+          258.1,
+          1031.0,
+          601.0,
+          1243.7
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.7596,
+        "bbox_xyxy": [
+          1342.5,
+          1052.5,
+          1397.9,
+          1239.1
+        ]
+      },
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.7567,
+        "bbox_xyxy": [
+          0.0,
+          1020.0,
+          298.5,
+          1226.9
+        ]
+      },
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.6079,
+        "bbox_xyxy": [
+          592.6,
+          1031.3,
+          848.8,
+          1254.9
+        ]
+      },
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.2631,
+        "bbox_xyxy": [
+          1411.5,
+          1091.1,
+          1475.6,
+          1155.2
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 26.13,
+      "sidewalk": 1.38,
+      "vegetation": 26.95,
+      "pole": 0.13,
+      "traffic light": 0.08,
+      "person": 0.37
+    },
+    "composite_score": 31.1,
+    "label": "Buruk",
+    "components": {
+      "sidewalk_present_score": 4.6,
+      "shade_score": 100.0,
+      "obstruction_score": 15.0
+    }
+  },
+  {
+    "activity_id": "6a8921ea52d86e03b51830d7",
+    "photo": "photos/6a8921ea52d86e03b51830d7/1.jpg",
+    "overlay": "analysis/overlays/6a8921ea52d86e03b51830d7/1_analisis.jpg",
+    "detections": [
+      {
+        "class": "potted plant",
+        "proxy_for": "street_furniture",
+        "confidence": 0.4472,
+        "bbox_xyxy": [
+          547.3,
+          533.2,
+          720.0,
+          876.1
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 35.38,
+      "sidewalk": 2.54,
+      "vegetation": 4.49,
+      "pole": 0.06,
+      "traffic light": 0.0,
+      "person": 0.07
+    },
+    "composite_score": 33.7,
+    "label": "Buruk",
+    "components": {
+      "sidewalk_present_score": 8.5,
+      "shade_score": 18.0,
+      "obstruction_score": 100.0
+    }
+  },
+  {
+    "activity_id": "6a8921ea52d86e03b51830d7",
+    "photo": "photos/6a8921ea52d86e03b51830d7/2.jpg",
+    "overlay": "analysis/overlays/6a8921ea52d86e03b51830d7/2_analisis.jpg",
+    "detections": [
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.4079,
+        "bbox_xyxy": [
+          24.0,
+          495.3,
+          96.0,
+          689.0
+        ]
+      },
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.309,
+        "bbox_xyxy": [
+          627.0,
+          500.3,
+          719.8,
+          576.4
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 43.93,
+      "sidewalk": 0.75,
+      "vegetation": 4.3,
+      "pole": 0.22,
+      "traffic light": 0.0,
+      "person": 2.35
+    },
+    "composite_score": 24.3,
+    "label": "Buruk",
+    "components": {
+      "sidewalk_present_score": 2.5,
+      "shade_score": 17.2,
+      "obstruction_score": 75.0
+    }
+  },
+  {
+    "activity_id": "6a8920c4478dc3b356b726bf",
+    "photo": "photos/6a8920c4478dc3b356b726bf/1.jpg",
+    "overlay": "analysis/overlays/6a8920c4478dc3b356b726bf/1_analisis.jpg",
+    "detections": [
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.3451,
+        "bbox_xyxy": [
+          246.2,
+          566.9,
+          293.9,
+          661.1
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 35.85,
+      "sidewalk": 3.69,
+      "vegetation": 5.98,
+      "pole": 0.04,
+      "traffic light": 0.0,
+      "person": 0.08
+    },
+    "composite_score": 35.9,
+    "label": "Buruk",
+    "components": {
+      "sidewalk_present_score": 12.3,
+      "shade_score": 23.9,
+      "obstruction_score": 95.0
+    }
+  },
+  {
+    "activity_id": "6a8920c4478dc3b356b726bf",
+    "photo": "photos/6a8920c4478dc3b356b726bf/2.jpg",
+    "overlay": "analysis/overlays/6a8920c4478dc3b356b726bf/2_analisis.jpg",
+    "detections": [
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.3742,
+        "bbox_xyxy": [
+          1.3,
+          577.6,
+          62.9,
+          722.3
+        ]
+      },
+      {
+        "class": "person",
+        "proxy_for": "pedestrian_presence",
+        "confidence": 0.3373,
+        "bbox_xyxy": [
+          50.6,
+          520.2,
+          73.2,
+          573.0
+        ]
+      },
+      {
+        "class": "bench",
+        "proxy_for": "street_furniture",
+        "confidence": 0.2883,
+        "bbox_xyxy": [
+          9.8,
+          569.1,
+          127.5,
+          625.2
+        ]
+      },
+      {
+        "class": "bicycle",
+        "proxy_for": "non_pedestrian_traffic",
+        "confidence": 0.2674,
+        "bbox_xyxy": [
+          376.5,
+          558.6,
+          507.9,
+          652.2
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 45.46,
+      "sidewalk": 6.69,
+      "vegetation": 0.75,
+      "pole": 1.4,
+      "traffic light": 0.0,
+      "person": 0.03
+    },
+    "composite_score": 30.6,
+    "label": "Buruk",
+    "components": {
+      "sidewalk_present_score": 22.3,
+      "shade_score": 3.0,
+      "obstruction_score": 75.0
+    }
+  },
+  {
+    "activity_id": "6a8920c4478dc3b356b726bf",
+    "photo": "photos/6a8920c4478dc3b356b726bf/3.jpg",
+    "overlay": "analysis/overlays/6a8920c4478dc3b356b726bf/3_analisis.jpg",
+    "detections": [
+      {
+        "class": "truck",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.4341,
+        "bbox_xyxy": [
+          478.5,
+          577.5,
+          702.8,
+          690.8
+        ]
+      },
+      {
+        "class": "car",
+        "proxy_for": "vehicle_encroachment",
+        "confidence": 0.2908,
+        "bbox_xyxy": [
+          478.7,
+          575.9,
+          703.1,
+          690.6
+        ]
+      }
+    ],
+    "segmentation_pct": {
+      "road": 40.98,
+      "sidewalk": 4.13,
+      "vegetation": 1.51,
+      "pole": 0.54,
+      "traffic light": 0.0,
+      "person": 0.24
+    },
+    "composite_score": 23.4,
+    "label": "Buruk",
+    "components": {
+      "sidewalk_present_score": 13.8,
+      "shade_score": 6.0,
+      "obstruction_score": 60.0
+    }
+  }
+]
