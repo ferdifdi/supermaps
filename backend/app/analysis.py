@@ -14,7 +14,7 @@ from shapely.ops import unary_union
 from shapely.strtree import STRtree
 
 from . import airquality, gtfs, inarisk, lst, mapid_data, mapid_environment, network, osm, static_poi, static_transit, weather
-from .geo import fc, feature, grid, hex_grid, intersections, normalize, to_deg, to_m
+from .geo import fc, feature, grid, hex_grid, intersections, normalize, to_deg, to_m, to_m_points
 
 WALK_BUFFER = 500
 TOD_BUFFER = 400
@@ -240,7 +240,9 @@ async def _walk_graph(station: dict, radius: int):
         raw_trees = [{"lon": p["lon"], "lat": p["lat"]} for p in static_green if p["kind"] == "tree"] \
             if static_green is not None else []
     aq = await airquality.nearby_pm25(station["lon"], station["lat"])
-    graph = network.build(roads)
+    # graph already built once inside _context() above - rebuilding it here from the same
+    # `roads` list was pure duplicate work (measured: this alone made M-UC1's walk_access
+    # noticeably slower than U-UC1's site_selection, which only goes through _context()).
     return roads, residential, graph, origin, buffer_m, lines, aq, raw_trees, pois_ok, green, green_ok
 
 
@@ -248,8 +250,18 @@ def _accessibility_summary(roads: list[dict]) -> dict:
     """Share of road length with a usable sidewalk / explicit wheelchair access - the
     info layer for gap #4, independent of any single route."""
     total = sidewalk = wheelchair_ok = wheelchair_no = 0.0
+    # Bulk-reproject every road's coordinates in one shot instead of to_m(Point(...)) per
+    # point - same fix as network.build()/mapid_data.py, this loop runs over the exact
+    # same `roads` list network.build() just processed.
+    lons, lats, bounds = [], [], [0]
     for r in roads:
-        pts = [to_m(Point(lon, lat)) for lon, lat in r["coords"]]
+        for lon, lat in r["coords"]:
+            lons.append(lon)
+            lats.append(lat)
+        bounds.append(len(lons))
+    all_pts = to_m_points(lons, lats) if lons else []
+    for i, r in enumerate(roads):
+        pts = all_pts[bounds[i]:bounds[i + 1]]
         length = sum(a.distance(b) for a, b in zip(pts, pts[1:]))
         total += length
         if r.get("sidewalk") in ("both", "left", "right", "yes"):
