@@ -270,10 +270,23 @@ export default function App() {
 
   // Stable reference (not recreated every render) - AiPanel resets its chat whenever
   // this changes, so a fresh object each render would wipe the conversation constantly.
-  const aiDashboardResult = useMemo(
-    () => (todRows.length ? { stations: todRows.slice(0, 30) } : null),
-    [todRows],
-  )
+  //
+  // Slimmed to the comparison-relevant fields only - a full row (raw indicators +
+  // normalized indicators + priorities + typology_reason) runs ~4300 characters each,
+  // so even 30 of them (~130k chars) blew straight through ai.py's 8000-char request
+  // budget and got dropped as a whole ("kok ga ngumpulin json ... {}" - the backend was
+  // silently omitting the entire "stations" key because it could never fit, not sending
+  // a truncated version of it). Station/SCI/rank/classification/criteria is enough to
+  // answer "why does this station rank behind its neighbors" without the per-indicator
+  // raw values, source tags, and improvement-priority text that made each row so heavy.
+  const aiDashboardResult = useMemo(() => {
+    if (!todRows.length) return null
+    const slim = todRows.map((r) => ({
+      station: r.station, mode_label: r.mode_label, sci: r.sci, rank: r.rank,
+      classification: r.classification, typology: r.typology, criteria: r.criteria,
+    }))
+    return { stations: slim }
+  }, [todRows])
 
   // On the dashboard the map is fed from the scored rows, not from a per-station analysis run.
   const dashboardResult = useMemo(() => {

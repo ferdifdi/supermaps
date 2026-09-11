@@ -171,14 +171,32 @@ def _budget(compact: dict) -> str:
     """Hard ceiling on the final JSON string regardless of how many keys/rows survived
     _compact_result - summary first (small, most important), other keys added only while
     the whole thing still serializes under budget, so a result with many large sections
-    can't blow the request size."""
+    can't blow the request size.
+
+    A key whose full value doesn't fit is no longer dropped outright if that value is a
+    list (e.g. K-UC1's per-station rows) - it's trimmed down to however many leading
+    elements DO fit instead. Sending 25 of 30 stations is still an answerable comparison;
+    silently sending none of them (what used to happen the moment the 30th row tipped the
+    JSON over budget) isn't, and reads as a data/AI bug rather than a size constraint."""
     summary = compact.pop("summary", None)
     out = {"summary": summary} if summary is not None else {}
     for k, v in compact.items():
         candidate = {**out, k: v}
-        if len(json.dumps(candidate, ensure_ascii=False)) > MAX_PROMPT_CHARS:
+        if len(json.dumps(candidate, ensure_ascii=False)) <= MAX_PROMPT_CHARS:
+            out = candidate
             continue
-        out = candidate
+        if not isinstance(v, list) or not v:
+            continue
+        lo, hi = 0, len(v)
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            trial = {**out, k: v[:mid]}
+            if len(json.dumps(trial, ensure_ascii=False)) <= MAX_PROMPT_CHARS:
+                lo = mid
+            else:
+                hi = mid - 1
+        if lo > 0:
+            out = {**out, k: v[:lo]}
     return json.dumps(out, ensure_ascii=False)
 
 
