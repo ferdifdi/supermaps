@@ -19,7 +19,7 @@ from pathlib import Path
 from shapely.geometry import Point
 from shapely.strtree import STRtree
 
-from .geo import to_m
+from .geo import to_m, to_m_points
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
@@ -95,25 +95,37 @@ def _load_prefix(prefix: str):
     global _tree
     role = ROLES[prefix]
     category = BASIC_NEED_CATEGORY_BY_PREFIX.get(prefix)
+    roles = [role, "basic_need"] if (category and role != "basic_need") else [role]
+
+    # Bulk-reproject: a category file can be 100k+ points (PERDAGANGAN DAN RETAIL alone
+    # took ~11s the old way, one Point+pyproj transform per feature in a Python loop).
+    # to_m_points() does one vectorized transform for the whole batch instead.
+    lons, lats, feats = [], [], []
     for path in DATA_DIR.glob(f"{prefix} DI *.geojson"):
         data = json.loads(path.read_text(encoding="utf-8"))
         for f in data["features"]:
             lon, lat = f["geometry"]["coordinates"][:2]
-            props = f["properties"]
-            roles = [role]
-            if category and role != "basic_need":
-                roles.append("basic_need")
-            _points.append(to_m(Point(lon, lat)))
-            _roles.append(roles)
-            _prefixes.append(prefix)
-            _props.append({
-                "lon": lon, "lat": lat, "name": props.get("NAMA", ""),
-                "category": category,
-                "tipe_2": props.get("TIPE_2", ""), "tipe_3": props.get("TIPE_3", ""),
-                "alamat": props.get("ALAMAT", ""), "telepon": props.get("TELEPON", ""),
-                "status": props.get("STATUS", ""), "kecamatan": props.get("KECAMATAN", ""),
-                "desa": props.get("DESA", ""),
-            })
+            lons.append(lon)
+            lats.append(lat)
+            feats.append(f)
+    if not feats:
+        _loaded_prefixes.add(prefix)
+        return
+
+    for pt, f in zip(to_m_points(lons, lats), feats):
+        props = f["properties"]
+        lon, lat = f["geometry"]["coordinates"][:2]
+        _points.append(pt)
+        _roles.append(roles)
+        _prefixes.append(prefix)
+        _props.append({
+            "lon": lon, "lat": lat, "name": props.get("NAMA", ""),
+            "category": category,
+            "tipe_2": props.get("TIPE_2", ""), "tipe_3": props.get("TIPE_3", ""),
+            "alamat": props.get("ALAMAT", ""), "telepon": props.get("TELEPON", ""),
+            "status": props.get("STATUS", ""), "kecamatan": props.get("KECAMATAN", ""),
+            "desa": props.get("DESA", ""),
+        })
     _loaded_prefixes.add(prefix)
     _tree = None
 
@@ -162,6 +174,15 @@ def by_prefix(lon: float, lat: float, radius: int, prefix: str,
         and (subtype2 is None or _props[i]["tipe_3"] == subtype2)
         and _points[i].distance(origin) <= radius
     ]
+
+
+def warm_all() -> None:
+    """Load every ROLES category upfront - meant to run once at server startup, not on
+    the first request. Without this, whichever category a use case needs first (e.g.
+    M-UC1's PERDAGANGAN DAN RETAIL) pays its one-time parse+reproject cost inline on
+    that unlucky first user's request instead of during deploy, before traffic arrives."""
+    for prefix in ROLES:
+        _load_prefix(prefix)
 
 
 def subtypes(prefix: str) -> list[str]:
