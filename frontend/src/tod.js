@@ -1,4 +1,7 @@
-export const MODES = ["KRL", "MRT", "LRT", "TJ"]
+// TJ excluded - thousands of halte made a full-mode scan far slower than KRL/MRT/LRT
+// for comparatively little TOD-dashboard value (see generate_kuc1_static.py's docstring
+// for the same reasoning applied to K-UC1's static generation script).
+export const MODES = ["KRL", "MRT", "LRT"]
 export const CLASSIFICATIONS = ["tinggi", "sedang", "rendah"]
 export const TYPOLOGIES = ["mixed-use", "retail cepat", "housing-support", "pembenahan dasar"]
 

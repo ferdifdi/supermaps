@@ -586,10 +586,7 @@ export default function App() {
                   </label>
                 ))}
               </div>
-              <p className="note">Satu moda per analisis - gabungan beberapa moda (terutama TJ, halte-nya banyak) bikin Overpass lambat.</p>
-              {scopeMode === "TJ" && (
-                <p className="note">Transjakarta punya banyak halte — perhitungan pertama lebih lama.</p>
-              )}
+              <p className="note">Satu moda per analisis - gabungan beberapa moda bikin Overpass lambat.</p>
               <p className="note">
                 Indeks bersifat relatif: setiap stasiun distandardisasi terhadap stasiun lain dalam
                 tabel yang sama.
