@@ -14,6 +14,31 @@ const MAP_MODES = [
   { id: "heatmap_poi", label: "Heatmap POI" },
 ]
 
+// Same checkbox-list pattern as WalkDock's LayerToggles (M-UC1) - isochrone outline/fill,
+// basic-need POI pins, and the heatmap_poi grid choropleth (+ its grid_id labels) are
+// independent overlays here too, see usecases.js's M-UC2 layer "toggle" keys.
+function LayerToggles({ showIsochrone, onToggleIsochrone, showPoi, onTogglePoi, showHeatmap, onToggleHeatmap }) {
+  if (!onToggleIsochrone) return null
+  const items = [
+    { label: "Isochrone", show: showIsochrone, onToggle: onToggleIsochrone },
+    { label: "Titik POI", show: showPoi, onToggle: onTogglePoi },
+    { label: "Heatmap POI (ikut topik dipilih)", show: showHeatmap, onToggle: onToggleHeatmap },
+  ]
+  return (
+    <div className="section">
+      <label>Layer di peta</label>
+      <div className="dock-actions" style={{ flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
+        {items.map((it) => (
+          <label key={it.label} className="filter-option" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <input type="checkbox" checked={it.show !== false} onChange={it.onToggle} />
+            {it.label}
+          </label>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function CoverageFlag({ categories }) {
   const missing = CATEGORIES.filter((c) => categories[c].is_desert)
   if (!missing.length) {
@@ -30,7 +55,7 @@ function CoverageFlag({ categories }) {
   )
 }
 
-function Ringkasan({ station, result, mapMode, onMapMode }) {
+function Ringkasan({ station, result, mapMode, onMapMode, radius, ...toggles }) {
   const s = result.summary
   return (
     <>
@@ -49,6 +74,7 @@ function Ringkasan({ station, result, mapMode, onMapMode }) {
           ))}
         </div>
       </div>
+      <LayerToggles {...toggles} />
 
       <div className="section">
         <CoverageFlag categories={s.categories} />
@@ -56,15 +82,18 @@ function Ringkasan({ station, result, mapMode, onMapMode }) {
           <b>{s.basic_need_poi_reachable}</b> dari {s.basic_need_poi_total} POI kebutuhan dasar
           benar-benar terjangkau jalan kaki ({s.isochrone_area_ha} ha area jangkauan).
         </p>
+        <p className="note">Resolusi data: buffer {radius} m dari stasiun (isochrone jaringan jalan), grid 250 m.</p>
       </div>
     </>
   )
 }
 
-function Kategori({ categories }) {
+function Kategori({ categories, ...toggles }) {
   const max = Math.max(...CATEGORIES.map((c) => categories[c].poi_total), 1)
   return (
-    <div className="section">
+    <>
+      <LayerToggles {...toggles} />
+      <div className="section">
       <CoverageFlag categories={categories} />
       {CATEGORIES.map((cat) => {
         const c = categories[cat]
@@ -84,7 +113,8 @@ function Kategori({ categories }) {
           </div>
         )
       })}
-    </div>
+      </div>
+    </>
   )
 }
 
@@ -102,7 +132,7 @@ function PoiDetail({ props }) {
   )
 }
 
-function PoiSearch({ result, categoryFilter, onCategoryFilter, onFocusPoi, onRoutePoi, routingId }) {
+function PoiSearch({ result, categoryFilter, onCategoryFilter, onFocusPoi, onRoutePoi, routingId, ...toggles }) {
   const [q, setQ] = useState("")
   const [expanded, setExpanded] = useState(null)
   const all = result.poi.features
@@ -117,6 +147,7 @@ function PoiSearch({ result, categoryFilter, onCategoryFilter, onFocusPoi, onRou
 
   return (
     <div className="section">
+      <LayerToggles {...toggles} />
       <label>Filter kategori</label>
       <div className="dock-actions">
         {CATEGORIES.map((cat) => (
@@ -211,7 +242,9 @@ function Bandingkan({ station, result, radius, stations }) {
 export default function EquityDock({
   open, onToggle, tab, onTab, station, result, radius, stations,
   categoryFilter, onCategoryFilter, onFocusPoi, onRoutePoi, routingId, mapMode, onMapMode,
+  showIsochrone, onToggleIsochrone, showPoi, onTogglePoi, showHeatmap, onToggleHeatmap,
 }) {
+  const toggles = { showIsochrone, onToggleIsochrone, showPoi, onTogglePoi, showHeatmap, onToggleHeatmap }
   return (
     <>
       <button className={open ? "dock-toggle open" : "dock-toggle"} onClick={onToggle}>
@@ -227,12 +260,13 @@ export default function EquityDock({
         </div>
 
         <div className="dock-body">
-          {tab === "ringkasan" && <Ringkasan station={station} result={result} mapMode={mapMode} onMapMode={onMapMode} />}
-          {tab === "kategori" && <Kategori categories={result.summary.categories} />}
+          {tab === "ringkasan" && <Ringkasan station={station} result={result} mapMode={mapMode} onMapMode={onMapMode} radius={radius} {...toggles} />}
+          {tab === "kategori" && <Kategori categories={result.summary.categories} {...toggles} />}
           {tab === "poi" && (
             <PoiSearch
               result={result} categoryFilter={categoryFilter} onCategoryFilter={onCategoryFilter}
               onFocusPoi={onFocusPoi} onRoutePoi={onRoutePoi} routingId={routingId}
+              {...toggles}
             />
           )}
           {tab === "bandingkan" && <Bandingkan station={station} result={result} radius={radius} stations={stations} />}
