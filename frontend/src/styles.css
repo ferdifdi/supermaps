@@ -251,6 +251,12 @@ button.secondary.active { background: var(--primary); color: #fff; border-color:
 .note-details summary { cursor: pointer; color: var(--text-secondary); font-size: 0.85em; user-select: none; }
 .note-details .note { margin-top: 4px; }
 
+.survey-activity { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.survey-photos { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+.survey-photo-pair { display: flex; gap: 6px; }
+.survey-photo-pair img { width: 160px; height: auto; border-radius: 6px; object-fit: cover; }
+.survey-photo-pair .note { font-size: 0.8em; text-align: center; }
+
 .loading-status {
   display: flex;
   align-items: center;
@@ -324,8 +330,8 @@ button.secondary.active { background: var(--primary); color: #fff; border-color:
   cursor: pointer;
 }
 .poi-pin-icon {
-  width: 26px;
-  height: 26px;
+  width: 20px;
+  height: 20px;
   border-radius: 50% 50% 50% 4px;
   transform: rotate(45deg);
   display: flex;
@@ -817,19 +823,34 @@ button.secondary.active { background: var(--primary); color: #fff; border-color:
   top: auto;
   left: 16px;
   z-index: 30;
-  width: 36px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
   height: 36px;
-  border-radius: 50%;
+  padding: 0 14px 0 12px;
+  border-radius: 18px;
   border: 1px solid var(--border);
   background: var(--surface);
   cursor: pointer;
-  font-size: 16px;
+  font-size: 13px;
+  font-weight: 600;
   line-height: 1;
   box-shadow: var(--shadow);
   color: var(--text);
+  white-space: nowrap;
 }
 
+.panel-back-icon { font-size: 16px; line-height: 1; }
+.panel-back-label { line-height: 1; }
+
 .panel-back:hover { background: var(--primary-soft); color: var(--primary-dark); border-color: var(--primary-soft-border); }
+
+/* Very narrow viewports: icon-only pill so it can't overflow the sheet's top-left corner. */
+@media (max-width: 380px) {
+  .panel-back { width: 36px; height: 36px; padding: 0; border-radius: 50%; justify-content: center; }
+  .panel-back-label { display: none; }
+}
 
 /* Placed after the base rule above so it wins the cascade (same specificity, later
    wins) - the desktop top:60/left:16 is meaningless on mobile, where the panel is a
