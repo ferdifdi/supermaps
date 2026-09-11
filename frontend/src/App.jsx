@@ -138,6 +138,12 @@ export default function App() {
 
   // M-UC2 extras (POI search/filter, compare, route)
   const [poiCategoryFilter, setPoiCategoryFilter] = useState([])
+  // U-UC1's anchor-type filter (kantor/kebutuhan_dasar/transit) used to be local state
+  // inside AnchorSearch - it filtered that panel's own search list but never touched
+  // what MapView actually drew, so toggling it never added/removed anchor pins on the
+  // map itself. Lifted here so mapResult below can apply it, same pattern as M-UC2's
+  // poiCategoryFilter.
+  const [anchorTypeFilter, setAnchorTypeFilter] = useState([])
   const [focusPoint, setFocusPoint] = useState(null)
   const [routeResult, setRouteResult] = useState(null)
   const [routingId, setRoutingId] = useState(null)
@@ -320,6 +326,14 @@ export default function App() {
   // coverage status even in the heatmap modes, where the fill is hidden.
   const mapResult = useMemo(() => {
     if (useCase.extras === "walk") return result ? { ...result, ...(routeResult && { route: routeResult }) } : result
+    if (useCase.extras === "site") {
+      if (!result || !anchorTypeFilter.length) return result
+      const anchors = {
+        ...result.anchors,
+        features: result.anchors.features.filter((f) => anchorTypeFilter.includes(f.properties.anchor_type)),
+      }
+      return { ...result, anchors }
+    }
     if (useCase.extras !== "equity" || !result) return result
     const poi = poiCategoryFilter.length
       ? { ...result.poi, features: result.poi.features.filter((f) => poiCategoryFilter.includes(f.properties.category)) }
@@ -330,7 +344,7 @@ export default function App() {
       features: result.isochrone.features.map((f) => ({ ...f, properties: { ...f.properties, complete } })),
     }
     return { ...result, poi, isochrone, ...(routeResult && { route: routeResult }) }
-  }, [useCase, result, poiCategoryFilter, routeResult])
+  }, [useCase, result, poiCategoryFilter, anchorTypeFilter, routeResult])
 
   async function run() {
     if (mapStatus.error) return setStatus("Peta gagal dimuat. Reload halaman (F5), lalu coba lagi.")
@@ -835,6 +849,8 @@ export default function App() {
           onToggleCatchment={() => setShowSiteCatchment((v) => !v)}
           showHeatmap={showSiteHeatmap}
           onToggleHeatmap={() => setShowSiteHeatmap((v) => !v)}
+          anchorTypeFilter={anchorTypeFilter}
+          onAnchorTypeFilter={setAnchorTypeFilter}
         />
       )}
 
@@ -853,23 +869,25 @@ export default function App() {
         />
       )}
 
-      {/* Kept mounted (hidden via CSS, not removed from the tree) whenever there's a
+      {/* Kept mounted (hidden via a prop, not removed from the tree) whenever there's a
           result to ask about - conditionally rendering on resultView === "ai" used to
           unmount AiDock/AiPanel every time the user switched to "Hasil" and back, which
-          destroyed the chat's useState history. AiDock already has its own open-class
-          show/hide mechanism (same as every other dock), it just needed to actually be
-          used here instead of full removal. */}
+          destroyed the chat's useState history. A wrapping <div> around AiDock was tried
+          first, but .dock is a direct flex-row sibling (its height comes from stretching
+          against that row) - the extra wrapper broke that, so .dock-body/.chat-body's
+          flex:1 had nothing bounded to size against and just grew with content forever
+          instead of scrolling. `hidden` is applied inside AiDock itself instead, so no
+          extra DOM node sits between it and the flex row. */}
       {(useCase.dashboard ? todRows.length > 0 : result) && (
-        <div style={resultView === "ai" ? undefined : { display: "none" }}>
-          <AiDock
-            open={dockOpen}
-            onToggle={() => setDockOpen((v) => !v)}
-            useCaseId={useCaseId}
-            label={useCase.title}
-            persona={persona}
-            result={useCase.dashboard ? aiDashboardResult : result}
-          />
-        </div>
+        <AiDock
+          hidden={resultView !== "ai"}
+          open={dockOpen}
+          onToggle={() => setDockOpen((v) => !v)}
+          useCaseId={useCaseId}
+          label={useCase.title}
+          persona={persona}
+          result={useCase.dashboard ? aiDashboardResult : result}
+        />
       )}
 
       {(resultView === "hasil" || resultView === "ai") && !loading && !(useCase.dashboard ? todRows.length > 0 : result) && (

@@ -303,7 +303,11 @@ button.secondary.active { background: var(--primary); color: #fff; border-color:
   white-space: pre-wrap;
 }
 
-.main { position: relative; flex: 1; }
+/* overflow:hidden clips anything that visually extends past the map's own box - without
+   it, a POI/station DOM marker (maplibregl.Marker) sitting near the map's edge could
+   have its text label bleed sideways into the sidebar/dock flex columns next to it,
+   rendering on top of (and behind, depending on paint order) that panel's own content. */
+.main { position: relative; flex: 1; overflow: hidden; }
 .map { position: absolute; inset: 0; }
 
 .legend {

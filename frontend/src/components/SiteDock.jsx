@@ -109,10 +109,12 @@ function Ringkasan({ result, mapMode, onMapMode, ...toggles }) {
   )
 }
 
-function AnchorSearch({ result, onFocus, ...toggles }) {
+function AnchorSearch({ result, onFocus, typeFilter, onTypeFilter, ...toggles }) {
   const [q, setQ] = useState("")
-  const [typeFilter, setTypeFilter] = useState([])
   const all = result.anchors?.features || []
+  // typeFilter lives in App.jsx now, not locally - it needs to reach mapResult there so
+  // toggling it actually adds/removes anchor pins on the map, not just this list (it used
+  // to be local state here, which only ever filtered this search list).
   const byType = typeFilter.length ? all.filter((f) => typeFilter.includes(f.properties.anchor_type)) : all
   const matches = (q.trim()
     ? byType.filter((f) => (f.properties.name || "").toLowerCase().includes(q.trim().toLowerCase()))
@@ -120,7 +122,7 @@ function AnchorSearch({ result, onFocus, ...toggles }) {
   ).slice(0, 30)
 
   const toggleType = (t) =>
-    setTypeFilter((prev) => (prev.includes(t) ? prev.filter((v) => v !== t) : [...prev, t]))
+    onTypeFilter((prev) => (prev.includes(t) ? prev.filter((v) => v !== t) : [...prev, t]))
 
   return (
     <div className="section">
@@ -189,7 +191,7 @@ function Kompetitor({ result, onFocus, ...toggles }) {
 export default function SiteDock({
   open, onToggle, tab, onTab, result, onFocus, mapMode, onMapMode,
   showAnchor, onToggleAnchor, showCompetitor, onToggleCompetitor, showCatchment, onToggleCatchment,
-  showHeatmap, onToggleHeatmap,
+  showHeatmap, onToggleHeatmap, anchorTypeFilter, onAnchorTypeFilter,
 }) {
   const toggles = {
     showAnchor, onToggleAnchor, showCompetitor, onToggleCompetitor, showCatchment, onToggleCatchment,
@@ -211,7 +213,13 @@ export default function SiteDock({
 
         <div className="dock-body">
           {tab === "ringkasan" && <Ringkasan result={result} mapMode={mapMode} onMapMode={onMapMode} {...toggles} />}
-          {tab === "anchor" && <AnchorSearch result={result} onFocus={onFocus} {...toggles} />}
+          {tab === "anchor" && (
+            <AnchorSearch
+              result={result} onFocus={onFocus}
+              typeFilter={anchorTypeFilter} onTypeFilter={onAnchorTypeFilter}
+              {...toggles}
+            />
+          )}
           {tab === "kompetitor" && <Kompetitor result={result} onFocus={onFocus} {...toggles} />}
         </div>
       </aside>
