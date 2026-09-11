@@ -1,4 +1,5 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { api } from "../api"
 
 const TABS = [
   { id: "ringkasan", label: "Ringkasan" },
@@ -34,13 +35,13 @@ const TOPICS = [
   {
     id: "isochrone", label: "Peta jalan",
     rows: (result) => result.summary.access_by_walking_components && [
-      { label: "Jaringan jalan", value: result.summary.access_by_walking_components.road_network, color: "#5b4bdb" },
-      { label: "Ped-shed", value: result.summary.access_by_walking_components.ped_shed, color: "#4a90e2" },
+      { label: "Kepadatan jaringan jalan", value: result.summary.access_by_walking_components.road_network, color: "#5b4bdb" },
+      { label: "Radius layan pejalan kaki", value: result.summary.access_by_walking_components.ped_shed, color: "#4a90e2" },
       { label: "Persimpangan", value: result.summary.access_by_walking_components.intersection, color: "#b87cf6" },
       { label: "Keragaman hunian", value: result.summary.access_by_walking_components.residential_mix, color: "#f06fae" },
     ],
     format: "percent",
-    note: (s) => `Access by Walking rata-rata ${s.mean_access_by_walking} dari ${s.cells} sel 250m (Siburian et al. 2020, Tabel 1). ${s.isochrone_area_ha} ha terjangkau jarak, ${s.accessible_area_ha} ha ramah kursi roda.`,
+    note: (s) => `Skor akses jalan kaki rata-rata ${s.mean_access_by_walking} dari 1, dihitung untuk ${s.cells} sel 250 m di sekitar stasiun (mengikuti metode Siburian et al. 2020). Area terjangkau: ${s.isochrone_area_ha} ha, termasuk ${s.accessible_area_ha} ha yang ramah kursi roda.`,
   },
   {
     id: "udara", label: "Kualitas udara",
@@ -61,15 +62,22 @@ const TOPICS = [
     note: (s) => `${s.tree_count} pohon (OSM natural=tree) dan ${s.green_space_count} taman/RTH terdeteksi dalam radius. Proxy kanopi, bukan indeks vegetasi tervalidasi.`,
   },
   {
-    id: "uhi", label: "UHI",
+    id: "lst", label: "LST (Suhu Permukaan)",
     rows: (result) => {
-      const f = result.uhi?.features || []
-      return f.length && countBy(f, "KELAS", { "ZONA PANAS": "#ef4444", "ZONA HANGAT": "#f97316", "ZONA NORMAL": "#22c55e" })
+      const f = result.lst?.features || []
+      return f.length && countBy(f, "KELAS", {
+        "Sangat Sejuk": "#0000FF", "Sejuk": "#00FFFF", "Sedang": "#FFFF00",
+        "Panas": "#FFA500", "Sangat Panas": "#FF0000",
+      })
     },
     format: "count",
-    note: (s, result) => (result.uhi?.features?.length
-      ? "Data MAPID Data Catalogue 2022, per kabupaten/kota (zona besar - biasanya rata dalam radius 500m)."
-      : "Tidak ada data UHI yang mencakup lokasi ini."),
+    note: (s, result) => {
+      const f = result.lst?.features || []
+      if (!f.length) return "Tidak ada data LST yang mencakup lokasi ini."
+      const avg = f.reduce((sum, ft) => sum + ft.properties.SUHU, 0) / f.length
+      const musim = result.lst_season === "kemarau" ? "kemarau" : "hujan"
+      return `Suhu permukaan rata-rata ${avg.toFixed(1)}°C di ${f.length} sel grid 250 m (citra satelit LST MAPID, musim ${musim}).`
+    },
   },
   {
     id: "ekologi_index", label: "Indeks ekologi",
@@ -82,7 +90,7 @@ const TOPICS = [
       const f = result.ecology_index?.features || []
       if (!f.length) return "Tidak ada data indeks ekologi yang mencakup lokasi ini."
       const avg = f.reduce((sum, ft) => sum + ft.properties.INDEKS, 0) / f.length
-      return `Rata-rata INDEKS ${avg.toFixed(3)} dari ${f.length} grid MAPID (2024), nilai asli tanpa dihitung ulang.`
+      return `Indeks ekologi rata-rata ${avg.toFixed(3)} dari 1, di ${f.length} sel data MAPID (2024) - nilai publikasi asli, tidak dihitung ulang.`
     },
   },
   {
@@ -149,9 +157,69 @@ function LayerToggles({
   )
 }
 
-function Ringkasan({ result, mapMode, onMapMode, ...toggles }) {
+function CurrentWeather({ weather }) {
+  if (!weather) return null
+  return (
+    <div className="section">
+      <p className="note">Suhu saat ini: {weather.temp}°C (terasa {weather.feels_like}°C, {weather.condition}).</p>
+    </div>
+  )
+}
+
+// Real field-survey photos + AI trotoar-quality overlay near this station (see
+// backend/analyze_sidewalk_quality.py) - only fetched/shown for stations the picker
+// already flagged has_survey, so most stations skip this request entirely.
+function SurveyLapangan({ stationId }) {
+  const [activities, setActivities] = useState([])
+  const [openId, setOpenId] = useState(null)
+
+  useEffect(() => {
+    setActivities([])
+    if (!stationId) return
+    let current = true
+    api.surveyForStation(stationId).then((data) => { if (current) setActivities(data) })
+    return () => { current = false }
+  }, [stationId])
+
+  if (!activities.length) return null
+
+  return (
+    <div className="section">
+      <label>Survei lapangan trotoar ({activities.length})</label>
+      <p className="note">Foto asli dari survei tim + analisis AI (deteksi objek dan segmentasi trotoar/kanopi) - lihat catatan keterbatasan model di setiap gambar.</p>
+      {activities.map((a) => (
+        <div key={a.activity_id} className="survey-activity">
+          <button className="mini" onClick={() => setOpenId(openId === a.activity_id ? null : a.activity_id)}>
+            {openId === a.activity_id ? "▾" : "▸"} {a.title} - skor {a.composite_score} ({a.label})
+          </button>
+          {openId === a.activity_id && (
+            <div className="survey-photos">
+              {a.photos.map((p, i) => (
+                <div key={i} className="survey-photo-pair">
+                  <div>
+                    <img src={p.photo_url} alt="Foto survei lapangan" loading="lazy" />
+                    <p className="note">Foto lapangan</p>
+                  </div>
+                  {p.overlay_url && (
+                    <div>
+                      <img src={p.overlay_url} alt="Analisis AI" loading="lazy" />
+                      <p className="note">Analisis AI - skor {p.composite_score} ({p.label})</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function Ringkasan({ result, stationId, mapMode, onMapMode, ...toggles }) {
   const topic = TOPICS.find((t) => t.id === mapMode) || TOPICS[0]
   const rows = topic.rows(result)
+  const radiusM = result.isochrone?.features?.[0]?.properties?.radius_m
 
   return (
     <>
@@ -166,12 +234,17 @@ function Ringkasan({ result, mapMode, onMapMode, ...toggles }) {
         </div>
       </div>
       <LayerToggles {...toggles} />
+      <CurrentWeather weather={result.weather} />
+      <SurveyLapangan stationId={stationId} />
 
       <div className="section">
         <label>{topic.label}</label>
         <p className="note">{topic.note(result.summary, result)}</p>
       </div>
       {rows && <BarChart rows={rows} format={topic.format} unit={topic.unit} />}
+      {radiusM && (
+        <p className="note">Resolusi data: buffer {radiusM} m dari stasiun, grid 250 m.</p>
+      )}
     </>
   )
 }
@@ -231,7 +304,7 @@ function GreenSearch({ result, onFocus, onRouteGreen, routingId, ...toggles }) {
   return (
     <div className="section">
       <label>Cari taman & ruang hijau ({all.length})</label>
-      <p className="note">Dari tag OSM (leisure=park/garden, landuse=grass/forest/recreation_ground) dalam radius jalan kaki. Pohon + taman/RTH ditampilkan sebagai heatmap kepadatan per grid 250m (topik "Vegetasi").</p>
+      <p className="note">Taman, kebun, lapangan, dan hutan kota dalam radius jalan kaki (data peta terbuka OSM). Titik pohon dan ruang hijau ini juga ditampilkan sebagai peta kepadatan per grid 250 m di topik "Vegetasi".</p>
       <LayerToggles {...toggles} />
       <input
         className="search-input"
@@ -329,7 +402,7 @@ export default function WalkDock({
         </div>
 
         <div className="dock-body">
-          {tab === "ringkasan" && <Ringkasan result={result} mapMode={mapMode} onMapMode={onMapMode} {...toggles} />}
+          {tab === "ringkasan" && <Ringkasan result={result} stationId={stationId} mapMode={mapMode} onMapMode={onMapMode} {...toggles} />}
           {tab === "transfer" && (
             <TransferList
               result={result} onFocus={onFocus}
