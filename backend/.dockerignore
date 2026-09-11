@@ -1,0 +1,8 @@
+.venv/
+__pycache__/
+*.pyc
+cache/
+.env
+data/survey_lapangan/photos/
+*.pt
+*.pth
