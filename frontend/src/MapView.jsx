@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import maplibregl from "maplibre-gl"
 import "maplibre-gl/dist/maplibre-gl.css"
 
@@ -29,22 +29,53 @@ function ensureStationIcons(m) {
   })
 }
 
-export default function MapView({ styleUrl, stations, activeStation, focusPoint, result, useCase, mapMode, layerToggles, onPickStation, picking, onMapPick, showLabels = true }) {
+export default function MapView({ styleUrl, stations, activeStation, focusPoint, result, useCase, mapMode, layerToggles, onPickStation, picking, onMapPick, showLabels = true, onMapStatus }) {
   const container = useRef(null)
   const map = useRef(null)
-  const loaded = useRef(false)
   const activePopup = useRef(null)
+  // Real state, not a ref - a ref's mutation doesn't retrigger the result-layer effect
+  // below, so if `result` arrived before the map's own "load" fired, that effect would
+  // bail out once and never get another chance to draw once the map actually finished
+  // loading (layers silently missing, no error). State makes "just finished loading"
+  // itself a dependency the effect reacts to.
+  const [loaded, setLoaded] = useState(false)
+  const [mapError, setMapError] = useState(false)
 
   useEffect(() => {
-    if (!styleUrl || map.current) return
-    map.current = new maplibregl.Map({ container: container.current, style: styleUrl, center: JAKARTA, zoom: 11 })
-    map.current.addControl(new maplibregl.NavigationControl(), "top-right")
-    map.current.on("load", () => { loaded.current = true })
+    if (!styleUrl) return
+    // setStyle() + waiting for some "is it really done" event (style.load, idle - both
+    // tried, both had timing edge cases where the button/redraw fired before the map
+    // was actually visibly ready) kept being fragile. Tearing the whole map down and
+    // building a fresh one is what a real page reload does and isn't ambiguous about
+    // when it's done - "load" on the new instance is the same one-shot, reliable signal
+    // the very first mount already used. Keeps the current center/zoom instead of
+    // snapping back to the Jakarta default, so switching basemap doesn't also relocate
+    // the view.
+    const prev = map.current
+    const center = prev ? prev.getCenter() : JAKARTA
+    const zoom = prev ? prev.getZoom() : 11
+    if (prev) {
+      prev.remove()
+      map.current = null
+      setLoaded(false)
+    }
+    const m = new maplibregl.Map({ container: container.current, style: styleUrl, center, zoom })
+    map.current = m
+    m.addControl(new maplibregl.NavigationControl(), "top-right")
+    m.on("load", () => setLoaded(true))
+    // A style/tile fetch failure fires "error", not a rejected promise - without this the
+    // map just sits blank forever with no signal to the user. Reported once as a status
+    // flag; the caller decides how to surface it (e.g. "reload manually"), we do NOT
+    // auto-retry here - a broken network/style URL retried in a loop just spams requests.
+    m.on("error", () => setMapError(true))
   }, [styleUrl])
 
   useEffect(() => {
-    if (map.current && loaded.current) map.current.setStyle(styleUrl)
-  }, [styleUrl])
+    // Merge, not replace - the flyTo effect below also writes to this same status object
+    // (its "moving" field) via the same setter, and a plain-object call here would wipe
+    // that field out every time load/error state ticks.
+    onMapStatus?.((s) => ({ ...s, loaded, error: mapError }))
+  }, [loaded, mapError, onMapStatus])
 
   // station points
   useEffect(() => {
@@ -93,7 +124,7 @@ export default function MapView({ styleUrl, stations, activeStation, focusPoint,
               "MRT", "station-icon-MRT", "LRT", "station-icon-LRT",
               "KRL", "station-icon-KRL", "TJ", "station-icon-TJ",
               "station-icon-default"],
-            "icon-size": 0.32,
+            "icon-size": 0.24,
             "icon-allow-overlap": true,
             "icon-ignore-placement": true,
           },
@@ -122,24 +153,24 @@ export default function MapView({ styleUrl, stations, activeStation, focusPoint,
       }
       if (m.getLayer("stations-label")) m.setLayoutProperty("stations-label", "visibility", showLabels ? "visible" : "none")
     }
-    if (loaded.current) draw()
+    if (loaded) draw()
     m.on("styledata", draw)
     return () => m.off("styledata", draw)
-  }, [stations, onPickStation, showLabels])
+  }, [stations, onPickStation, showLabels, loaded])
 
   // result layers
   useEffect(() => {
     const m = map.current
-    if (!m || !loaded.current || !useCase) return
+    if (!m || !loaded || !useCase) return
     ensureStationIcons(m)
     const ids = []
     const markers = []
     const openPopup = (lngLat, props) => {
       activePopup.current?.remove()
       const html = useCase.popup
-        .filter((k) => props[k] !== undefined)
-        .map((k) => `<div><b>${k}</b>: ${props[k]}</div>`)
-        .join("")
+        .filter((field) => field.test(props))
+        .map((field) => `<div>${field.render(props)}</div>`)
+        .join("") || "<div>Tidak ada info tambahan untuk titik ini.</div>"
       activePopup.current = new maplibregl.Popup().setLngLat(lngLat).setHTML(html).addTo(m)
     }
     let hasStationPins = false
@@ -216,17 +247,46 @@ export default function MapView({ styleUrl, stations, activeStation, focusPoint,
       })
       markers.forEach((mk) => mk.remove())
     }
-  }, [result, useCase, mapMode, layerToggles, onPickStation, showLabels])
+  }, [result, useCase, mapMode, layerToggles, onPickStation, showLabels, loaded])
 
-  // fly to station
+  // fly to station - reports "moving" via onMapStatus while the flyTo animation is in
+  // flight, so the caller can hold off letting the user run an analysis until the view
+  // has actually settled on the newly picked station instead of mid-flight. "moveend"
+  // only means the camera stopped moving - if the new station is far from the old one
+  // (e.g. picking a station from a different mode/area), the tiles for that area may
+  // still be loading and the map reads as blank right after moveend fires. "idle" only
+  // fires once the map has nothing left to load/render, so it naturally resolves fast
+  // for a nearby station (tiles already cached) and waits longer for a distant one -
+  // exactly the "instant if close, wait if far" behavior wanted, with no separate
+  // distance check needed.
   useEffect(() => {
-    if (map.current && activeStation) map.current.flyTo({ center: [activeStation.lon, activeStation.lat], zoom: 14.5 })
+    const m = map.current
+    if (!m || !activeStation) return
+    onMapStatus?.((s) => ({ ...s, moving: true }))
+    const onSettled = () => onMapStatus?.((s) => ({ ...s, moving: false }))
+    m.once("idle", onSettled)
+    m.flyTo({ center: [activeStation.lon, activeStation.lat], zoom: 14.5 })
+    return () => m.off("idle", onSettled)
   }, [activeStation])
 
   // fly to a searched point (e.g. a POI), without changing the selected station
   useEffect(() => {
     if (map.current && focusPoint) map.current.flyTo({ center: [focusPoint.lon, focusPoint.lat], zoom: 17 })
   }, [focusPoint])
+
+  // Auto-zoom to fit a newly computed route (M-UC1/M-UC2 "Rute" - result.route is a
+  // FeatureCollection with one LineString) - a route to a far destination often falls
+  // partly or fully outside the current view, so the line just silently drew off-screen
+  // without this.
+  const routeCoords = result?.route?.features?.[0]?.geometry?.coordinates
+  useEffect(() => {
+    if (!map.current || !routeCoords?.length) return
+    const bounds = routeCoords.reduce(
+      (b, c) => b.extend(c),
+      new maplibregl.LngLatBounds(routeCoords[0], routeCoords[0]),
+    )
+    map.current.fitBounds(bounds, { padding: 80, maxZoom: 17, duration: 800 })
+  }, [routeCoords])
 
   // destination picking mode (M-UC1 route tab) - click anywhere on the map to set the target
   useEffect(() => {
