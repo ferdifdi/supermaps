@@ -15,6 +15,32 @@ const MAP_MODES = [
   { id: "anchor", label: "Anchor" },
 ]
 
+// Same checkbox-list pattern as WalkDock's LayerToggles (M-UC1) - anchor pins,
+// competitor pins, and the voronoi catchment line are independent overlays here
+// regardless of which grid mode (walk_score/kompetitor/anchor) is picked above, see
+// usecases.js's U-UC1 layer "toggle" keys.
+function LayerToggles({ showAnchor, onToggleAnchor, showCompetitor, onToggleCompetitor, showCatchment, onToggleCatchment }) {
+  if (!onToggleAnchor) return null
+  const items = [
+    { label: "Anchor", show: showAnchor, onToggle: onToggleAnchor },
+    { label: "Kompetitor", show: showCompetitor, onToggle: onToggleCompetitor },
+    { label: "Catchment (voronoi)", show: showCatchment, onToggle: onToggleCatchment },
+  ]
+  return (
+    <div className="section">
+      <label>Layer di peta</label>
+      <div className="dock-actions" style={{ flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
+        {items.map((it) => (
+          <label key={it.label} className="filter-option" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <input type="checkbox" checked={it.show !== false} onChange={it.onToggle} />
+            {it.label}
+          </label>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function BarChart({ rows, format }) {
   const max = Math.max(...rows.map((r) => r.value), format === "percent" ? 1 : 1)
   return (
@@ -34,7 +60,7 @@ function BarChart({ rows, format }) {
   )
 }
 
-function Ringkasan({ result, mapMode, onMapMode }) {
+function Ringkasan({ result, mapMode, onMapMode, ...toggles }) {
   const s = result.summary
   const anchorRows = [
     { label: "Kantor (MAPID)", value: s.anchor_kantor, color: ANCHOR_TYPE_COLORS.kantor },
@@ -53,10 +79,11 @@ function Ringkasan({ result, mapMode, onMapMode }) {
           ))}
         </div>
       </div>
+      <LayerToggles {...toggles} />
 
       <div className="section">
         <label>Walk score</label>
-        <p className="note">Rata-rata <b>{s.mean_walk_score ?? "-"}</b> per grid 250m (Siburian et al. 2020) - ditampilkan berdiri sendiri, tidak digabung ke metrik lain.</p>
+        <p className="note">Rata-rata <b>{s.mean_walk_score ?? "-"}</b> dari 1, per sel grid 250 m di radius ini (mengikuti metode Siburian et al. 2020) - ditampilkan berdiri sendiri, tidak digabung ke metrik lain.</p>
       </div>
 
       <div className="section">
@@ -70,11 +97,15 @@ function Ringkasan({ result, mapMode, onMapMode }) {
           <b>{s.competitors}</b> kompetitor tipe ini ditemukan di radius (MAPID Data Catalogue, hitungan asli - bukan MAPID Missions).
         </p>
       </div>
+
+      <div className="section">
+        <p className="note">Resolusi data: grid 250 m untuk walk score/kompetitor/anchor, radius analisis 1000 m dari stasiun.</p>
+      </div>
     </>
   )
 }
 
-function AnchorSearch({ result, onFocus }) {
+function AnchorSearch({ result, onFocus, ...toggles }) {
   const [q, setQ] = useState("")
   const [typeFilter, setTypeFilter] = useState([])
   const all = result.anchors?.features || []
@@ -89,6 +120,7 @@ function AnchorSearch({ result, onFocus }) {
 
   return (
     <div className="section">
+      <LayerToggles {...toggles} />
       <label>Filter tipe anchor</label>
       <div className="dock-actions">
         {Object.keys(ANCHOR_TYPE_LABELS).map((t) => (
@@ -126,10 +158,11 @@ function AnchorSearch({ result, onFocus }) {
   )
 }
 
-function Kompetitor({ result, onFocus }) {
+function Kompetitor({ result, onFocus, ...toggles }) {
   const points = result.competitors?.features || []
   return (
     <div className="section">
+      <LayerToggles {...toggles} />
       <label>Kompetitor "{result.summary.business_type}{result.summary.subtype ? ` - ${result.summary.subtype}` : ""}" ({points.length})</label>
       <p className="note">Dari MAPID Data Catalogue - kategori persis sama dengan tipe bisnis yang dipilih.</p>
       <div className="board">
@@ -149,7 +182,11 @@ function Kompetitor({ result, onFocus }) {
   )
 }
 
-export default function SiteDock({ open, onToggle, tab, onTab, result, onFocus, mapMode, onMapMode }) {
+export default function SiteDock({
+  open, onToggle, tab, onTab, result, onFocus, mapMode, onMapMode,
+  showAnchor, onToggleAnchor, showCompetitor, onToggleCompetitor, showCatchment, onToggleCatchment,
+}) {
+  const toggles = { showAnchor, onToggleAnchor, showCompetitor, onToggleCompetitor, showCatchment, onToggleCatchment }
   return (
     <>
       <button className={open ? "dock-toggle open" : "dock-toggle"} onClick={onToggle}>
@@ -165,9 +202,9 @@ export default function SiteDock({ open, onToggle, tab, onTab, result, onFocus, 
         </div>
 
         <div className="dock-body">
-          {tab === "ringkasan" && <Ringkasan result={result} mapMode={mapMode} onMapMode={onMapMode} />}
-          {tab === "anchor" && <AnchorSearch result={result} onFocus={onFocus} />}
-          {tab === "kompetitor" && <Kompetitor result={result} onFocus={onFocus} />}
+          {tab === "ringkasan" && <Ringkasan result={result} mapMode={mapMode} onMapMode={onMapMode} {...toggles} />}
+          {tab === "anchor" && <AnchorSearch result={result} onFocus={onFocus} {...toggles} />}
+          {tab === "kompetitor" && <Kompetitor result={result} onFocus={onFocus} {...toggles} />}
         </div>
       </aside>
     </>
