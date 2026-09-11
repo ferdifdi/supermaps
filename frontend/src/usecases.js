@@ -441,33 +441,34 @@ export const USE_CASES = [
     dashboard: true,
     methodology: {
       data: [
-        { source: "OSM - daftar stasiun/halte yang di-scan", detail: "Daftar terkurasi manual (output/isochrone_*.py) - live Overpass cuma dipanggil kalau file ini hilang." },
-        { source: "OSM - jaringan jalan per stasiun", detail: "MAPID gak punya jaringan jalan. Live Overpass dulu, fallback ke cache statis (backend/data/static/) cuma kalau live gagal" },
+        { source: "OSM - daftar stasiun/halte yang di-scan", detail: "Daftar terkurasi manual (output/isochrone_*.py) - live Overpass cuma dipanggil kalau file ini hilang. KRL/MRT/LRT saja - TJ tidak masuk cakupan K-UC1 (halte terlalu banyak buat scan sekaligus, lihat catatan pemrosesan)." },
+        { source: "OSM - jaringan jalan per stasiun", detail: "MAPID gak punya jaringan jalan. Live Overpass dulu, fallback ke cache statis (backend/data/static/) cuma kalau live gagal." },
         {
           source: "OSM - POI hunian, ruang hijau, parkir per stasiun", detail:
-            "MAPID gak punya kategori parkir, gak ada layer hijau berbasis titik. Dipakai buat population_density, land_use_diversity (residential/green), car_parking, motorcycle_parking. Tiga query terpisah (osm.residential_pois()/osm.green_pois()/osm.facility_pois()) - live dulu, fallback ke cache statis (poi_residential_*.py, poi_green_*.py, poi_parking_*.py) cuma kalau live gagal.",
+            "MAPID gak punya kategori parkir, gak ada layer hijau berbasis titik. Dipakai buat population_density, land_use_diversity (residential/green), car_parking, motorcycle_parking, accessible_buildings. Query terpisah (osm.residential_pois()/osm.green_pois()/osm.facility_pois()) - live dulu, fallback ke cache statis (poi_residential_*.py, poi_green_*.py, poi_parking_*.py) cuma kalau live gagal.",
         },
         {
-          source: "OSM - POI lain (proxy keamanan/informasi/bangunan)", detail:
-            "Selalu live tiap stasiun di-scan (osm.facility_pois()) - safety, information_display, accessible_buildings. Gak punya cache statis, gak ada sumber lain. residential_diversity (non-residential) dihitung dari total retail/kantor/kebutuhan-dasar MAPID + ruang hijau OSM.",
+          source: "Keamanan, papan informasi, transportasi alternatif", detail:
+            "CONSTANT - tag OSM buat ketiganya ternyata nyaris kosong/gak konsisten di hampir semua stasiun, gak bisa jadi sinyal pembeda. Diasumsikan sama (1.0) untuk semua stasiun semua moda, sama kayak train_trips - bukan diukur, sengaja gak dihitung sebagai pembeda ranking.",
         },
         {
           source: "MAPID Data Catalogue - PERDAGANGAN DAN RETAIL, KANTOR, HALTE, STASIUN",
-          year: 2025, detail: "kepadatan komersial/bisnis, transportasi alternatif - dibaca langsung dari kategori MAPID sendiri, tidak lewat OSM sama sekali untuk indikator ini",
+          year: 2025, detail: "kepadatan komersial/bisnis - dibaca langsung dari kategori MAPID sendiri, tidak lewat OSM sama sekali untuk indikator ini",
+        },
+        {
+          source: "Cache statis per moda (backend/data/k-uc1/)", detail:
+            "Hasil precompute station_indicators() per stasiun (lihat generate_kuc1_static.py) - dipakai dulu kalau ada, live cuma buat stasiun yang belum kecover cache. Tanggal generate tiap moda ditampilkan di panel \"Sumber & metode data\" di hasil analisis.",
         },
       ],
       processing: [
         { step: "Station Composite Index (SCI)", detail: "8 kriteria/18 indikator, Siburian et al. 2020 Table 1 - skor kriteria dijumlah berbobot lalu dibagi total bobot" },
-        { step: "Sumber tiap indikator", detail: "OSM/MAPID kalau bisa diukur langsung; PROXY (kepadatan aktivitas dari MAPID/OSM) buat data penumpang & keamanan yang gak ada feed gratisnya; CONSTANT buat frekuensi perjalanan (paper menilai semua stasiun sama, 1 jalur MRT)" },
-        { step: "Transparansi sumber", detail: "Tiap indikator ditandai OSM/MAPID/MIXED/PROXY/CONSTANT - lihat badge di detail stasiun" },
+        { step: "Sumber tiap indikator", detail: "OSM/MAPID kalau bisa diukur langsung; PROXY (kepadatan aktivitas dari MAPID/OSM) buat data penumpang yang gak ada feed gratisnya; CONSTANT buat frekuensi perjalanan, keamanan, papan informasi, dan transportasi alternatif (semua stasiun dianggap sama, gak ada data terukur yang layak dipakai)" },
+        { step: "Transparansi sumber", detail: "Tiap indikator ditandai OSM/MAPID/PROXY/CONSTANT - lihat badge di detail stasiun" },
         {
-          step: "Kenapa POI keamanan/informasi/transit selalu live", detail:
-            "Beda dari indikator lain - ini scan SEMUA stasiun satu moda sekaligus (bisa ribuan halte buat TJ). Daftar stasiun pakai file terkurasi manual; jaringan jalan/POI hunian-hijau-parkir pakai live Overpass dengan fallback ke cache statis kalau live gagal; POI keamanan/informasi/transit gak punya cache sama sekali jadi selalu live. Satu stasiun diproses sekaligus (semaphore) biar gak kena rate-limit/blocklist Overpass.",
+          step: "Kenapa TJ tidak masuk K-UC1", detail:
+            "Beda dari indikator lain - ini scan SEMUA stasiun satu moda sekaligus. TJ punya ribuan halte, jauh lebih banyak drpd KRL/MRT/LRT gabungan, jadi dikeluarkan dari cakupan dashboard ini (tetap bisa dipilih di use case lain). Satu stasiun diproses sekaligus (semaphore) biar gak kena rate-limit/blocklist Overpass buat sisa moda yang di-scan.",
         },
       ],
-    },
-    options: {
-      modes: ["rail", "rail,bus"],
     },
     layers: [
       {

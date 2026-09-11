@@ -2,8 +2,10 @@
 mode, so the live dashboard endpoint loads from disk instead of recomputing every
 request (see app/main.py's tod_dashboard(), which reads these same files back). Each
 station needs several live Overpass round-trips inside station_indicators() (roads,
-residential/green/parking POI, routes) plus always-live safety/information/transit POI
-(no static equivalent exists for those).
+residential/green/parking POI, routes, accessible-buildings count). safety/
+information_display/alt_transport are CONSTANT (1.0 for every station - OSM tagging for
+these came back near-zero/inconsistent, not a usable signal) and no longer need a live
+call at all.
 
 Output per mode: backend/data/k-uc1/{mode}.json, shaped
 {"generated_at": "<ISO 8601 date>", "stations": [station_indicators() dicts]} - the RAW

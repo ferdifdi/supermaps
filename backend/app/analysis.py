@@ -56,12 +56,18 @@ SOURCES = {
     "business_density": "MAPID",  # KANTOR
     "accessible_buildings": "OSM",
     "branching": "OSM",
-    "alt_transport": "MIXED",  # OSM stations + GTFS TJ halte
+    # Was "MIXED" (OSM stations + GTFS TJ halte) - now CONSTANT, same reasoning as
+    # safety/information_display below (TJ itself is out of scope for K-UC1 entirely).
+    "alt_transport": "CONSTANT",
     "car_parking": "OSM", "motorcycle_parking": "OSM",
     # No free ridership feed: MAPID office/all-day-activity density stands in for passenger load.
     "passengers_peak": "PROXY", "passengers_offpeak": "PROXY",
-    # The paper measured these by field survey; OSM tagging is the closest automatable stand-in.
-    "safety": "PROXY", "information_display": "PROXY",
+    # The paper measured these by field survey - OSM tagging for lit/surveillance/police/
+    # crossing and departures_board/information turned out sparse/inconsistent enough
+    # (near-zero for most stations regardless of mode) that it wasn't a usable signal.
+    # Treated as CONSTANT instead, same as train_trips below - every station scores
+    # identically rather than being penalized by absent OSM tagging.
+    "safety": "CONSTANT", "information_display": "CONSTANT",
     # The paper scored every station identically here (single MRT track).
     "train_trips": "CONSTANT",
 }
@@ -820,7 +826,8 @@ async def station_indicators(station: dict):
     retail_pois = mapid_data.retail(station["lon"], station["lat"], TOD_BUFFER)
     office_pois = mapid_data.offices(station["lon"], station["lat"], TOD_BUFFER)
     basic_need_pois = mapid_data.basic_needs(station["lon"], station["lat"], TOD_BUFFER)
-    transit_pois = await _transit_points_near(station["lon"], station["lat"], TOD_BUFFER)
+    # alt_transport is CONSTANT now (see raw dict below) - no longer needs a
+    # _transit_points_near() call here at all, saving a live Overpass round-trip.
 
     mode_label = station.get("mode_label", "")
 
@@ -885,12 +892,15 @@ async def station_indicators(station: dict):
         # Commuters surge where offices are; all-day trips track food, shops and parks.
         "passengers_peak": len(office_pois) / area_ha,
         "passengers_offpeak": all_day / area_ha,
-        "safety": sum(1 for p in facility if p["lit"] == "yes" or p["surveillance"]
-                      or p["amenity"] == "police" or p["highway"] == "crossing"),
-        "information_display": sum(1 for p in facility if p["departures_board"] or p["information"]),
+        # safety/information_display/alt_transport: CONSTANT (see SOURCES) - OSM tagging
+        # for these came back near-zero/inconsistent for most stations regardless of
+        # mode, not a usable signal, so every station scores identically instead of
+        # being penalized by absent tagging. Same treatment as train_trips below.
+        "safety": 1.0,
+        "information_display": 1.0,
         "train_trips": 1.0,
         "branching": branching,
-        "alt_transport": len(transit_pois),
+        "alt_transport": 1.0,
         "accessible_buildings": sum(1 for p in facility if p["building"]),
         "car_parking": car_parking,
         "motorcycle_parking": motorcycle_parking,
@@ -906,8 +916,22 @@ async def station_indicators(station: dict):
 
 
 def tod_index(indicators: list[dict]):
-    """Standardise each indicator across stations, roll up to criteria, then to SCI."""
-    scores = {k: normalize([ind["raw"][k] for ind in indicators]) for k in INDICATOR_WEIGHT}
+    """Standardise each indicator across stations, roll up to criteria, then to SCI.
+
+    CONSTANT-sourced indicators (train_trips, safety, information_display,
+    alt_transport - see SOURCES) skip normalize() and score 1.0 for every station
+    instead. normalize() treats identical values as "no signal" and zeroes them all out
+    (geo.py: `if hi - lo < 1e-9: return zeros`) - mathematically defensible for a
+    relative ranking (nothing to differentiate on), but for a value every station is
+    DELIBERATELY given equally (the paper's own "every station scored identically"
+    treatment), showing 0.00 read as "this station has none of this" rather than "this
+    doesn't rank stations against each other" - the two are different claims, and the
+    displayed score only ever meant the first one everywhere else in this table.
+    """
+    scores = {
+        k: (np.ones(len(indicators)) if SOURCES.get(k) == "CONSTANT" else normalize([ind["raw"][k] for ind in indicators]))
+        for k in INDICATOR_WEIGHT
+    }
 
     rows = []
     for i, ind in enumerate(indicators):
