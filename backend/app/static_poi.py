@@ -3,13 +3,16 @@ loaded once so most of these lookups skip Overpass entirely - same static-first/
 fallback pattern as static_transit.py, same MODE_RADIUS_M cutoffs (800m for MRT/KRL/LRT,
 400m for TJ) and file layout (backend/data/static/).
 
-Narrower than osm.pois()'s live fetch on purpose - this only covers the 3 categories
-those output scripts actually target (parking: amenity=parking/motorcycle_parking; green:
-trees + park/garden/forest/shelter; residential: building=residential/apartments/house).
-Everything else osm.pois() covers (commercial, safety tags, crossings, transit stops,
-office/building-count, etc.) has no static equivalent yet and stays live - callers still
-need osm.pois() for those, this just lets residential/green/parking-derived numbers skip
-it when the mode/radius is covered.
+Narrower than osm.py's live queries on purpose - this only covers the 3 categories those
+output scripts actually target (parking: amenity=parking/motorcycle_parking, from
+osm.facility_pois(); green: trees + park/garden/forest/shelter, from osm.green_pois();
+residential: building=residential/apartments/house, from osm.residential_pois()).
+Commercial/basic-need/office POI have no OSM path at all anymore (MAPID Data Catalogue's
+coverage of those categories is complete across Jabodetabek, see osm_poi.py's removal
+and mapid_data.py). Safety/information-display proxy tags and building-count still have
+no static equivalent and stay live-only (osm.facility_pois(), see analysis.py's
+station_indicators()) - this file just lets residential/green/parking-derived numbers
+skip Overpass when the mode/radius is covered.
 """
 
 import json
