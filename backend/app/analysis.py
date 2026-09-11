@@ -6,13 +6,14 @@ Proxies used where a free national dataset is not available are marked PROXY.
 
 import asyncio
 
+import httpx
 import numpy as np
 from scipy.spatial import Voronoi
 from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import unary_union
 from shapely.strtree import STRtree
 
-from . import airquality, gtfs, inarisk, mapid_data, mapid_environment, network, osm, osm_poi, static_poi, static_transit
+from . import airquality, gtfs, inarisk, lst, mapid_data, mapid_environment, network, osm, static_poi, static_transit, weather
 from .geo import fc, feature, grid, hex_grid, intersections, normalize, to_deg, to_m
 
 WALK_BUFFER = 500
@@ -49,7 +50,8 @@ SOURCES = {
     "population_density": "OSM",
     "commercial_density": "MAPID",  # PERDAGANGAN DAN RETAIL
     "land_use_diversity": "MIXED",  # OSM residential/green + MAPID retail/office
-    "residential_diversity": "OSM", "road_network": "OSM", "intersection": "OSM",
+    "residential_diversity": "MIXED",  # OSM residential/green + MAPID retail/office/basic-need
+    "road_network": "OSM", "intersection": "OSM",
     "ped_shed": "OSM",
     "business_density": "MAPID",  # KANTOR
     "accessible_buildings": "OSM",
@@ -94,39 +96,48 @@ INDICATOR_CRITERION = {
 TOTAL_WEIGHT = sum(c["weight"] for c in CRITERIA.values())
 
 
-async def _roads_for(station: dict, radius: int, data_source: str = "static") -> list[dict]:
-    """Precomputed static network first (output/isochrone_*.py, no Overpass call at all)
-    - falls back to a live osm.roads() fetch when the station's mode has no static file
-    yet or radius exceeds what was precomputed for that mode (see
-    static_transit.MODE_RADIUS_M - 800m for MRT/KRL/LRT, 400m for TJ).
-
-    data_source="live" skips the static lookup entirely and always hits Overpass - the
-    "Live OSM murni" toggle, for when the user wants to see live-only results instead of
-    the cached network (e.g. to check whether the static snapshot has gone stale)."""
-    if data_source != "live":
+async def _roads_for(station: dict, radius: int) -> list[dict]:
+    """Live osm.roads() first. Falls back to the precomputed static network
+    (output/isochrone_*.py) only if that live Overpass call itself fails (network error,
+    timeout, bad/rate-limited response - see osm.py's overpass()), not merely because the
+    station's mode/radius isn't covered by the static file (static_transit.MODE_RADIUS_M -
+    800m for MRT/KRL/LRT, 400m for TJ). If the static file doesn't cover it either, the
+    failure propagates."""
+    try:
+        return await osm.roads(station["lon"], station["lat"], radius)
+    except httpx.TransportError:
         roads = static_transit.roads_near(station.get("mode_label", ""), station["lon"], station["lat"], radius)
-        if roads is not None:
-            return roads
-    return await osm.roads(station["lon"], station["lat"], radius)
+        if roads is None:
+            raise
+        return roads
 
 
-async def _context(station: dict, radius: int, data_source: str = "static"):
-    """Road graph, POIs and the station buffer, all in metric CRS.
+async def _context(station: dict, radius: int):
+    """Road graph, residential-building POIs and the station buffer, all in metric CRS.
 
     Sequential, not gathered - public Overpass instances block IPs that fire too
     many concurrent requests (this project has been blocklisted before).
+
+    residential comes from a live osm.residential_pois() call; `pois_ok` tells callers
+    whether that call actually succeeded. Callers use the live `residential` list when
+    pois_ok is True and only fall back to their static cache file when it's False - i.e.
+    when the live fetch itself failed, not just because the static file doesn't cover
+    this station/radius. Commercial/basic-need/office POIs never come through here -
+    they're MAPID Data Catalogue only now, with no OSM fallback (MAPID's coverage of
+    those categories is complete across Jabodetabek, see mapid_data.py).
     """
-    roads = await _roads_for(station, radius, data_source)
-    pois = await osm.pois(station["lon"], station["lat"], radius)
+    roads = await _roads_for(station, radius)
+    try:
+        residential = await osm.residential_pois(station["lon"], station["lat"], radius)
+        pois_ok = True
+    except httpx.TransportError:
+        residential = []
+        pois_ok = False
     graph = network.build(roads)
     origin = to_m(Point(station["lon"], station["lat"]))
     buffer_m = origin.buffer(radius)
     lines = [LineString([to_m(Point(x, y)) for x, y in r["coords"]]) for r in roads]
-    return roads, pois, graph, origin, buffer_m, lines
-
-
-def _poi_points(pois: list[dict], predicate) -> list[Point]:
-    return [to_m(Point(p["lon"], p["lat"])) for p in pois if predicate(p)]
+    return roads, residential, graph, origin, buffer_m, lines, pois_ok
 
 
 def _poi_count_grid(cells, points_m: list[Point]) -> list[int]:
@@ -136,27 +147,26 @@ def _poi_count_grid(cells, points_m: list[Point]) -> list[int]:
     return [sum(1 for p in points_m if c.contains(p)) for c in cells]
 
 
-def _residential_points_for(station: dict, radius: int, data_source: str, pois: list[dict]) -> list[Point]:
-    """Residential building points (metric CRS) for walk_score's residential_mix -
-    output/poi_residential_*.py's static file first (mode/radius covered, not live mode),
-    else classified from the already-fetched osm.pois() list."""
-    if data_source != "live":
-        static = static_poi.residential_near(station.get("mode_label", ""), station["lon"], station["lat"], radius)
-        if static is not None:
-            return [to_m(Point(p["lon"], p["lat"])) for p in static]
-    return _poi_points(pois, osm.is_residential)
+def _residential_points_for(station: dict, radius: int, residential: list[dict], pois_ok: bool) -> list[Point]:
+    """Residential building points (metric CRS) for walk_score's residential_mix - the
+    already-fetched live osm.residential_pois() list when that fetch succeeded (pois_ok),
+    else falls back to the static cached file (output/poi_residential_*.py) for this
+    mode/radius. Empty if neither is available. `residential` is already filtered to
+    building=residential/apartments/house by the query itself, so no predicate needed."""
+    if pois_ok:
+        return [to_m(Point(p["lon"], p["lat"])) for p in residential]
+    static = static_poi.residential_near(station.get("mode_label", ""), station["lon"], station["lat"], radius)
+    return [to_m(Point(p["lon"], p["lat"])) for p in static] if static is not None else []
 
 
-def _commercial_points_for(station: dict, radius: int, data_source: str, pois: list[dict]) -> list[Point]:
+def _commercial_points_for(station: dict, radius: int) -> list[Point]:
     """Commercial points (metric CRS) for walk_score's residential_mix - MAPID Data
-    Catalogue's PERDAGANGAN DAN RETAIL (same source K-UC1's commercial_density uses)
-    when data_source != "live", else classified from the already-fetched osm.pois()
-    list. MAPID has no radius/mode coverage gate like the static OSM files (it's one
-    Jabodetabek-wide file, not precomputed per station), so this never falls through
-    to OSM in "static" mode the way roads/residential/green do."""
-    if data_source != "live":
-        return [to_m(Point(p["lon"], p["lat"])) for p in mapid_data.retail(station["lon"], station["lat"], radius)]
-    return _poi_points(pois, osm.is_commercial)
+    Catalogue's PERDAGANGAN DAN RETAIL only (same source K-UC1's commercial_density
+    uses). No OSM fallback anymore: MAPID's coverage of retail/commercial categories is
+    complete across Jabodetabek, so an empty result here is a real "no retail nearby",
+    not a coverage gap to patch with OSM."""
+    mapid_retail = mapid_data.retail(station["lon"], station["lat"], radius)
+    return [to_m(Point(p["lon"], p["lat"])) for p in mapid_retail]
 
 
 def _ped_shed_ratio(cell, tree, lines, radius=100.0, grid_n=5):
@@ -205,26 +215,33 @@ def _walk_score_grid(cells, lines, nodes, residential, commercial):
 ROUTE_WEIGHTS = {"fast": "length", "accessible": "accessible"}
 
 
-async def _walk_graph(station: dict, radius: int, data_source: str = "static"):
-    """Like _context, but also fetches trees and air quality for the "Kenyamanan" tab's
-    display layers (green_grid, air_quality_grid) - those aren't routing inputs (see
-    network.py), just shown as-is, so this is the one place both get pulled.
+async def _walk_graph(station: dict, radius: int):
+    """Like _context, but also fetches green POIs, trees and air quality for the
+    "Kenyamanan" tab's display layers (green_grid, air_quality_grid, ecology_poi) - those
+    aren't routing inputs (see network.py), just shown as-is, so this is the one place
+    all three get pulled.
 
-    Trees prefer the static green-space file (output/poi_green_*.py, "tree" kind) when
-    this station's mode/radius is covered and data_source != "live" - falls back to a
-    live osm.trees() call otherwise. OpenAQ (air_quality) is unaffected by data_source
-    either way - a real-time feed with no static snapshot concept, stays live even in
-    "static" mode."""
-    roads, pois, graph, origin, buffer_m, lines = await _context(station, radius, data_source)
-    static_green = None if data_source == "live" else \
-        static_poi.green_near(station.get("mode_label", ""), station["lon"], station["lat"], radius)
-    if static_green is not None:
-        raw_trees = [{"lon": p["lon"], "lat": p["lat"]} for p in static_green if p["kind"] == "tree"]
-    else:
+    Green: live osm.green_pois() first, falling back to the static green-space file
+    (output/poi_green_*.py) only if that live call fails - MAPID has no POI-level green
+    layer (see osm.green_pois()'s docstring). Trees: same live-first pattern via
+    osm.trees(), falling back to the static file's "tree" kind. OpenAQ (air_quality) is
+    always live either way - a real-time feed with no static snapshot concept."""
+    roads, residential, graph, origin, buffer_m, lines, pois_ok = await _context(station, radius)
+    try:
+        green = await osm.green_pois(station["lon"], station["lat"], radius)
+        green_ok = True
+    except httpx.TransportError:
+        green = []
+        green_ok = False
+    try:
         raw_trees = await osm.trees(station["lon"], station["lat"], radius)
+    except httpx.TransportError:
+        static_green = static_poi.green_near(station.get("mode_label", ""), station["lon"], station["lat"], radius)
+        raw_trees = [{"lon": p["lon"], "lat": p["lat"]} for p in static_green if p["kind"] == "tree"] \
+            if static_green is not None else []
     aq = await airquality.nearby_pm25(station["lon"], station["lat"])
     graph = network.build(roads)
-    return roads, pois, graph, origin, buffer_m, lines, aq, raw_trees
+    return roads, residential, graph, origin, buffer_m, lines, aq, raw_trees, pois_ok, green, green_ok
 
 
 def _accessibility_summary(roads: list[dict]) -> dict:
@@ -250,18 +267,18 @@ def _accessibility_summary(roads: list[dict]) -> dict:
     }
 
 
-async def _transfer_points(station: dict, radius: int, data_source: str = "static") -> dict:
+async def _transfer_points(station: dict, radius: int) -> dict:
     """Transfer-efficiency layer (gap #1). TransJakarta stops get a real average headway
     from GTFS frequencies.txt (is_proxy=False). KRL/MRT/LRT points only have station
     identity, no schedule data exists for them, so they carry walking distance only and
     is_proxy=True - the frontend must show that distinction, not present them as equal.
 
-    Rail mode comes from static_transit.stations() (output/isochrone_*.py's precomputed
-    list, mode_label() resolved once at generation time from the full station=*/railway=*/
-    operator tag set - not re-derived here from a bare `railway` tag, which used to
-    mislabel MRT/LRT stations as "KRL" whenever they lacked a station=* subtag, e.g. Blok M
-    BCA). Falls back to a live osm.stations() call when data_source == "live" or no static
-    file exists yet - same pattern as _transit_points_near.
+    Rail mode comes from a live osm.stations() call first - mode_label() there resolves
+    from the full station=*/railway=*/operator tag set, not a bare `railway` tag, which
+    used to mislabel MRT/LRT stations as "KRL" whenever they lacked a station=* subtag,
+    e.g. Blok M BCA. Falls back to the static snapshot (static_transit.stations(),
+    output/isochrone_*.py) only if that live call fails - same pattern as
+    _transit_points_near.
     """
     origin_m = to_m(Point(station["lon"], station["lat"]))
     real = gtfs.nearby_stops(station["lon"], station["lat"], radius)
@@ -272,9 +289,12 @@ async def _transfer_points(station: dict, radius: int, data_source: str = "stati
     } for s in real]
     seen = {(round(s["lon"], 5), round(s["lat"], 5)) for s in real}
 
-    rail = static_transit.stations() if data_source != "live" else None
-    if rail is None:
+    try:
         rail = await osm.stations()
+    except httpx.TransportError:
+        rail = static_transit.stations()
+        if rail is None:
+            raise
 
     for st in rail:
         key = (round(st["lon"], 5), round(st["lat"], 5))
@@ -328,17 +348,19 @@ def _air_quality_grid(buffer_m, aq_stations: list[dict]) -> dict:
     return fc(features)
 
 
-async def walk_access(station: dict, radius_m: int = 800, data_source: str = "static"):
+async def walk_access(station: dict, radius_m: int = 800):
     """radius_m: 400 or 800 - selects both how far roads/POIs are pulled (static network
     covers up to static_transit.MODE_RADIUS_M per mode - 800m for MRT/KRL/LRT, 400m for
     TJ) and the isochrone cutoff itself, so the two always agree - a bigger isochrone
     than the fetched network would just clip silently at the fetch edge.
 
-    data_source="live" forces the road network/isochrone to be fetched fresh from
-    Overpass instead of the precomputed static file - POI (residential/commercial/green),
-    trees and OpenAQ air quality are already live either way (see _walk_graph), so this
-    use case can never be fully static, only "roads static, rest live" vs "everything live"."""
-    roads, pois, graph, origin, buffer_m, lines, aq, raw_trees = await _walk_graph(station, radius_m, data_source)
+    Road network/isochrone try live Overpass first, falling back to the static cache only
+    if that live call fails (see _roads_for). OSM-derived residential/green POI and trees
+    follow the same live-first pattern; commercial points come from MAPID Data Catalogue
+    only, no OSM fallback. OpenAQ air quality is always live, no static snapshot exists
+    for it (see _walk_graph)."""
+    roads, residential, graph, origin, buffer_m, lines, aq, raw_trees, pois_ok, green, green_ok = \
+        await _walk_graph(station, radius_m)
     minutes = radius_m / network.WALK_SPEED / 60
 
     # Access by Walking (Siburian et al. 2020, Table 1 weights: Road Network 40%,
@@ -350,11 +372,15 @@ async def walk_access(station: dict, radius_m: int = 800, data_source: str = "st
     cells = grid(buffer_m, CELL)
     parts = _walk_score_grid(
         cells, lines, intersections(lines),
-        _residential_points_for(station, radius_m, data_source, pois), _commercial_points_for(station, radius_m, data_source, pois),
+        _residential_points_for(station, radius_m, residential, pois_ok), _commercial_points_for(station, radius_m),
     )
     access_score = sum(parts[k] * w for k, w in WALK_WEIGHTS.items())
+    # grid_id: stable 1-based index by scan order (not a score ranking) - lets the AI
+    # insight/ask features and the map label the exact same cell consistently across the
+    # grid/green_grid/lst layers, all of which iterate this same `cells` list.
     access_features = [
         feature(c, {
+            "grid_id": i + 1,
             "access_by_walking": round(float(access_score[i]), 3),
             **{k: round(float(parts[k][i]), 3) for k in WALK_WEIGHTS},
         })
@@ -366,37 +392,37 @@ async def walk_access(station: dict, radius_m: int = 800, data_source: str = "st
     # hit when radius_m matches that mode's precomputed cutoff exactly. No static
     # equivalent exists for the wheelchair-aware variant, that's always computed live.
     static_station_id = station["id"].removeprefix("gtfs:")
-    iso_fast_static = None if data_source == "live" else \
-        static_transit.isochrone_for(station.get("mode_label", ""), static_station_id, radius_m)
+    iso_fast_static = static_transit.isochrone_for(station.get("mode_label", ""), static_station_id, radius_m)
     iso_fast = iso_fast_static if iso_fast_static is not None else network.isochrone(graph, origin, minutes, "length")
     iso_accessible = network.isochrone(graph, origin, minutes, "accessible")
-    transfer = await _transfer_points(station, radius_m, data_source)
+    transfer = await _transfer_points(station, radius_m)
     aq_stations = await airquality.nearby_stations(station["lon"], station["lat"])
     air_quality_grid = _air_quality_grid(buffer_m, aq_stations)
+    # Real-time temp/feels-like context for the walk summary - None end-to-end when
+    # OPENWEATHER_API_KEY isn't set (see weather.py), same degrade-gracefully pattern as aq.
+    current_weather = await weather.current(station["lat"], station["lon"])
 
     # "Kenyamanan" tab (comfort context): raw environmental layers only, no composite
     # score - user explicitly rejected building a comfort index on top of these. Tree
     # points themselves aren't returned raw anymore (see green_grid below) - only their
     # count, folded into the 250m green density grid together with green_area/shelter.
-    # Static green-space file (output/poi_green_*.py) first, "green_area"/"shelter" kinds
-    # (trees already counted into green_grid above) - falls back to classifying the live
-    # osm.pois() fetch when this station's mode/radius isn't covered or data_source ==
-    # "live". Static rows only carry "kind"/"name" (not the original leisure/landuse tag
-    # value the live path has), so the two paths' properties differ slightly.
-    static_green = None if data_source == "live" else \
-        static_poi.green_near(station.get("mode_label", ""), station["lon"], station["lat"], radius_m)
-    if static_green is not None:
-        green = [p for p in static_green if p["kind"] in ("green_area", "shelter")]
-        ecology_poi = fc([
-            {"type": "Feature", "geometry": {"type": "Point", "coordinates": [p["lon"], p["lat"]]},
-             "properties": {"kind": p["kind"], "name": p["name"]}}
-            for p in green
-        ])
-    else:
-        green = [p for p in pois if osm.is_green(p)]
+    # `green` is the live osm.green_pois() list from _walk_graph ("green_area"/"shelter"
+    # equivalent, trees already counted into green_grid above) when that fetch succeeded
+    # (green_ok) - falls back to the static green-space file (output/poi_green_*.py) only
+    # if it failed. Static rows only carry "kind"/"name" (not the original leisure/landuse
+    # tag value the live path has), so the two paths' properties differ slightly.
+    if green_ok:
         ecology_poi = fc([
             {"type": "Feature", "geometry": {"type": "Point", "coordinates": [p["lon"], p["lat"]]},
              "properties": {"leisure": p["leisure"], "landuse": p["landuse"], "name": p["name"]}}
+            for p in green
+        ])
+    else:
+        static_green = static_poi.green_near(station.get("mode_label", ""), station["lon"], station["lat"], radius_m)
+        green = [p for p in static_green if p["kind"] in ("green_area", "shelter")] if static_green is not None else []
+        ecology_poi = fc([
+            {"type": "Feature", "geometry": {"type": "Point", "coordinates": [p["lon"], p["lat"]]},
+             "properties": {"kind": p["kind"], "name": p["name"]}}
             for p in green
         ])
     # Green density per 250m cell (trees + green_area/shelter combined) - same grid as
@@ -405,7 +431,7 @@ async def walk_access(station: dict, radius_m: int = 800, data_source: str = "st
         [to_m(Point(p["lon"], p["lat"])) for p in green]
     green_counts = _poi_count_grid(cells, green_points_m)
     green_grid = fc([
-        feature(c, {"green_count": green_counts[i]})
+        feature(c, {"grid_id": i + 1, "green_count": green_counts[i]})
         for i, c in enumerate(cells)
     ])
 
@@ -419,9 +445,13 @@ async def walk_access(station: dict, radius_m: int = 800, data_source: str = "st
 
     # MAPID Data Catalogue - published values shown as-is (see mapid_environment.py).
     buffer_deg = to_deg(buffer_m)
-    uhi = mapid_environment.uhi(buffer_deg)
     ecology_index = mapid_environment.ecology_index(buffer_deg)
     rainfall = mapid_environment.rainfall(buffer_deg)
+    # Real LST (Land Surface Temperature) raster, replacing MAPID's coarse UHI polygon for
+    # M-UC1 only (K-UC2's resilience() keeps the old mapid_environment.uhi() untouched) -
+    # same 250m grid cells as access_by_walking, one seasonal raster picked by current month.
+    lst_season = lst.current_season()
+    lst_grid = lst.sample_grid(cells, lst_season)
 
     return {
         "grid": fc(access_features),
@@ -432,10 +462,12 @@ async def walk_access(station: dict, radius_m: int = 800, data_source: str = "st
         "transfer_points": transfer,
         "air_quality_grid": air_quality_grid,
         "air_quality_stations": aq_stations,
+        "weather": current_weather,
         "ecology_poi": ecology_poi,
         "green_grid": green_grid,
         "accessibility_roads": accessibility_roads,
-        "uhi": uhi,
+        "lst": lst_grid,
+        "lst_season": lst_season,
         "ecology_index": ecology_index,
         "rainfall": rainfall,
         "summary": {
@@ -455,9 +487,8 @@ async def walk_access(station: dict, radius_m: int = 800, data_source: str = "st
     }
 
 
-async def comfortable_route(station: dict, dest_lon: float, dest_lat: float, preference: str = "fast",
-                             data_source: str = "static"):
-    roads, _, graph, origin, _, _, _, _ = await _walk_graph(station, WALK_BUFFER * 3, data_source)
+async def comfortable_route(station: dict, dest_lon: float, dest_lat: float, preference: str = "fast"):
+    roads, _, graph, origin, _, _, _, _, _, _, _ = await _walk_graph(station, WALK_BUFFER * 3)
     dest = to_m(Point(dest_lon, dest_lat))
     weight = ROUTE_WEIGHTS.get(preference, "length")
     line, stats = network.route(graph, origin, dest, weight)
@@ -469,29 +500,24 @@ async def comfortable_route(station: dict, dest_lon: float, dest_lat: float, pre
 EQUITY_CATEGORIES = mapid_data.BASIC_NEED_CATEGORIES
 
 
-async def amenity_equity(station: dict, radius: int = WALK_BUFFER, data_source: str = "static"):
+async def amenity_equity(station: dict, radius: int = WALK_BUFFER):
     """Real walk-network reach (isochrone), not a straight-line buffer - a river or a
     highway between the station and a POI means it isn't actually reachable on foot,
     even if it's geometrically within `radius`.
 
-    data_source="static" (default): basic-need POIs come entirely from MAPID Data
-    Catalogue - Indonesia's food/health categories are far better mapped there than in
-    OSM, and roads come from the precomputed static network when available.
-    data_source="live": both roads and POIs are pulled fresh from Overpass instead, no
-    MAPID involved at all (see osm_poi.py) - expect noticeably fewer POIs, OSM's coverage
-    of these categories is sparse in Jabodetabek.
+    Basic-need POIs come from MAPID Data Catalogue only - Indonesia's food/health
+    categories are fully covered there for Jabodetabek, so there's no OSM fallback
+    anymore - and roads come from the precomputed static network when available (see
+    _roads_for). An empty MAPID result for a station/radius is a real "no basic-need POIs
+    nearby" (a desert), not a coverage gap to patch with OSM's much sparser tagging.
     """
-    roads = await _roads_for(station, radius, data_source)
+    roads = await _roads_for(station, radius)
     graph = network.build(roads)
     origin = to_m(Point(station["lon"], station["lat"]))
     minutes = radius / network.WALK_SPEED / 60
     reach = network.isochrone(graph, origin, minutes, "length")
 
-    if data_source == "live":
-        pois = await osm.pois(station["lon"], station["lat"], radius)
-        raw_pois = osm_poi.basic_needs(pois)
-    else:
-        raw_pois = mapid_data.basic_needs(station["lon"], station["lat"], radius)
+    raw_pois = mapid_data.basic_needs(station["lon"], station["lat"], radius)
     all_basic = [to_m(Point(p["lon"], p["lat"])) for p in raw_pois]
     inside = [reach.contains(p) for p in all_basic]
 
@@ -521,8 +547,8 @@ async def amenity_equity(station: dict, radius: int = WALK_BUFFER, data_source: 
     buffer_m = to_m(Point(station["lon"], station["lat"])).buffer(radius)
     cells = grid(buffer_m, CELL)
     grid_features = [
-        feature(c, {"poi_count": sum(1 for p in all_basic if c.contains(p))})
-        for c in cells
+        feature(c, {"grid_id": i + 1, "poi_count": sum(1 for p in all_basic if c.contains(p))})
+        for i, c in enumerate(cells)
     ]
 
     return {
@@ -564,20 +590,20 @@ def _voronoi_polygons(points: list[Point], clip: Polygon):
 SITE_ANCHOR_RADIUS = WALK_BUFFER * 2
 
 
-async def _transit_points_near(lon: float, lat: float, radius: int, data_source: str = "static") -> list[dict]:
+async def _transit_points_near(lon: float, lat: float, radius: int) -> list[dict]:
     """KRL/MRT/LRT stations + TJ halte (GTFS) within `radius` - replaces the old MAPID
     HALTE/STASIUN download, no longer pulled (superseded by OSM + GTFS, see osm.py's
-    mode_label() fix and data/README.md). KRL/MRT/LRT come from the static station
-    snapshot (static_transit.stations()) unless data_source == "live" or no static file
-    exists yet, in which case it's a live osm.stations() Overpass call instead - TJ always
-    comes from the local GTFS file either way, that was never live."""
+    mode_label() fix and data/README.md). KRL/MRT/LRT come from a live osm.stations() call
+    first, falling back to the static station snapshot (static_transit.stations()) only if
+    that live call fails - TJ always comes from the local GTFS file either way, that was
+    never live."""
     origin_m = to_m(Point(lon, lat))
-    if data_source != "live":
+    try:
+        rail = await osm.stations()
+    except httpx.TransportError:
         rail = static_transit.stations()
         if rail is None:
-            rail = await osm.stations()
-    else:
-        rail = await osm.stations()
+            raise
     near = [
         s for s in rail
         if to_m(Point(s["lon"], s["lat"])).distance(origin_m) <= radius
@@ -586,38 +612,31 @@ async def _transit_points_near(lon: float, lat: float, radius: int, data_source:
     return near
 
 
-async def _site_anchors(lon: float, lat: float, data_source: str = "static",
-                         radius: int = SITE_ANCHOR_RADIUS) -> list[dict]:
-    """Traffic generators near the station - office workers, daily-need POIs (MAPID in
-    "static" mode, OSM tags in "live" mode - see osm_poi.py), transit riders (static
-    station snapshot + GTFS in "static" mode, live osm.stations() + GTFS in "live" mode -
-    see _transit_points_near)."""
-    if data_source == "live":
-        pois = await osm.pois(lon, lat, radius)
-        return (
-            [{**a, "anchor_type": "kantor"} for a in osm_poi.offices(pois)]
-            + [{**a, "anchor_type": "kebutuhan_dasar"} for a in osm_poi.basic_needs(pois)]
-            + [{**a, "anchor_type": "transit"} for a in await _transit_points_near(lon, lat, radius, data_source)]
-        )
+async def _site_anchors(lon: float, lat: float, radius: int = SITE_ANCHOR_RADIUS) -> list[dict]:
+    """Traffic generators near the station - office workers and daily-need POIs from
+    MAPID Data Catalogue only (no OSM fallback: MAPID's coverage of offices/basic-need
+    categories is complete across Jabodetabek), transit riders from the static station
+    snapshot + GTFS (see _transit_points_near)."""
+    offices = mapid_data.offices(lon, lat, radius)
+    basic_needs = mapid_data.basic_needs(lon, lat, radius)
     return (
-        [{**a, "anchor_type": "kantor"} for a in mapid_data.offices(lon, lat, radius)]
-        + [{**a, "anchor_type": "kebutuhan_dasar"} for a in mapid_data.basic_needs(lon, lat, radius)]
-        + [{**a, "anchor_type": "transit"} for a in await _transit_points_near(lon, lat, radius, data_source)]
+        [{**a, "anchor_type": "kantor"} for a in offices]
+        + [{**a, "anchor_type": "kebutuhan_dasar"} for a in basic_needs]
+        + [{**a, "anchor_type": "transit"} for a in await _transit_points_near(lon, lat, radius)]
     )
 
 
 async def site_selection(station: dict, business_type: str, subtype: str | None = None,
-                          subtype2: str | None = None, radius: int = SITE_ANCHOR_RADIUS,
-                          data_source: str = "static"):
+                          subtype2: str | None = None, radius: int = SITE_ANCHOR_RADIUS):
     """business_type: one of mapid_data.BUSINESS_TYPES (e.g. "MAKANAN DAN MINUMAN").
     subtype/subtype2: optional TIPE_2/TIPE_3 narrowing (e.g. subtype="RESTORAN",
-    subtype2="RESTORAN PADANG" - see mapid_data.subtypes()/subtypes2()) - both ignored
-    when data_source="live", OSM tagging has no equivalent of MAPID's TIPE_2/TIPE_3 depth.
-    Competitors are the same-type MAPID Data Catalogue POIs already nearby (or, in "live"
-    mode, OSM-tagged equivalents - see osm_poi.py), not MAPID Missions (StrukGo/MenuGo/
-    PropertiGo) - that data was dropped here, coverage was too sparse to be usable
-    (checked: 0-2 results in a 1km radius against real stations, see docs/m-uc1-gaps.md
-    for the equivalent M-UC1 finding).
+    subtype2="RESTORAN PADANG" - see mapid_data.subtypes()/subtypes2()). Competitors are
+    the same-type MAPID Data Catalogue POIs already nearby - no OSM fallback anymore
+    (MAPID's coverage of business-type categories is complete across Jabodetabek), so an
+    empty MAPID result means genuinely no competitors here, not a coverage gap. Not MAPID
+    Missions (StrukGo/MenuGo/PropertiGo) either, that data was dropped here, coverage was
+    too sparse to be usable (checked: 0-2 results in a 1km radius against real stations,
+    see docs/m-uc1-gaps.md for the equivalent M-UC1 finding).
 
     No composite "suitability" or "market gap" score - there's no validated formula for
     weighing accessibility against competition/anchor density, so this doesn't invent
@@ -625,26 +644,24 @@ async def site_selection(station: dict, business_type: str, subtype: str | None 
     - it's the cited Siburian et al. formula, shown standalone, not fused with anything
     here) so the map shows several honest layers instead of one made-up number.
     """
-    _, pois, _, _, buffer_m, lines = await _context(station, radius, data_source)
+    _, residential, _, _, buffer_m, lines, pois_ok = await _context(station, radius)
     cells = grid(buffer_m, CELL)
-    competitors_raw = (
-        osm_poi.by_prefix(pois, business_type) if data_source == "live"
-        else mapid_data.by_prefix(station["lon"], station["lat"], radius, business_type, subtype, subtype2)
-    )
+    competitors_raw = mapid_data.by_prefix(station["lon"], station["lat"], radius, business_type, subtype, subtype2)
     comp = [to_m(Point(c["lon"], c["lat"])) for c in competitors_raw]
-    anchors_raw = await _site_anchors(station["lon"], station["lat"], data_source, radius)
+    anchors_raw = await _site_anchors(station["lon"], station["lat"], radius)
     anchors = {
         t: [to_m(Point(a["lon"], a["lat"])) for a in anchors_raw if a["anchor_type"] == t]
         for t in ("kantor", "kebutuhan_dasar", "transit")
     }
     parts = _walk_score_grid(
         cells, lines, intersections(lines),
-        _residential_points_for(station, radius, data_source, pois), _commercial_points_for(station, radius, data_source, pois),
+        _residential_points_for(station, radius, residential, pois_ok), _commercial_points_for(station, radius),
     )
     walk_score = sum(parts[k] * w for k, w in WALK_WEIGHTS.items())
 
     features = [
         feature(c, {
+            "grid_id": i + 1,
             "walk_score": round(float(walk_score[i]), 3),
             "competitor_count": sum(1 for p in comp if c.buffer(250).contains(p)),
             "anchor_kantor": sum(1 for a in anchors["kantor"] if c.buffer(250).contains(a)),
@@ -734,10 +751,11 @@ def metadata() -> dict:
 def _land_use_diversity(residential_count: int, retail_count: int, office_count: int, green_count: int) -> float:
     """Kamruzzaman & Baker: 1 - sum of squared category shares. Shares by POI count.
 
-    Residential/green come from OSM (static poi_residential_*.py/poi_green_*.py file
-    first, live osm.pois() fallback - see station_indicators()). Retail/office come
-    straight from MAPID's own categories, already filtered by mapid_data - no OSM
-    classifier involved, so this doesn't touch Overpass for what MAPID covers.
+    Residential/green come from OSM (live osm.residential_pois()/osm.green_pois() fetch
+    first, static poi_residential_*.py/poi_green_*.py file fallback only on failure -
+    see station_indicators()). Retail/office come straight from MAPID's own categories,
+    already filtered by mapid_data - no OSM classifier involved, so this doesn't touch
+    Overpass for what MAPID covers.
     """
     counts = [residential_count, retail_count, office_count, green_count]
     total = sum(counts)
@@ -755,67 +773,91 @@ def _ped_shed(graph, origin, buffer_m) -> float:
     return min(reachable.area / buffer_m.area, 1.0)
 
 
-async def station_indicators(station: dict, data_source: str = "static"):
+async def station_indicators(station: dict):
     """The paper's 18 raw indicators for one station, before cross-station standardisation.
 
     Overpass queries run one at a time (not gathered) - public instances block IPs
     that fire too many concurrent requests.
 
-    data_source="live": retail/office/basic-need POIs come from OSM tags (osm_poi.py)
-    classifying the same `pois` fetch instead of MAPID Data Catalogue, and branching
-    (route count) always hits Overpass instead of the static route file - see docstrings
-    below and on _roads_for/osm_poi.py for what that trades off.
+    Retail/office/basic-need POIs come from MAPID Data Catalogue (see data/README.md),
+    with no OSM fallback anymore - MAPID's coverage of those categories is complete
+    across Jabodetabek. OSM stays the source only for what MAPID genuinely hasn't got:
+    residential buildings, green space, parking (MAPID has no parking category at all),
+    a handful of safety/information proxy tags, and the road network itself. Each
+    OSM-sourced indicator tries live Overpass first and only falls back to its static
+    cache file if that live call fails - not when the cache lacks coverage. No
+    data_source="live" override here on purpose (never was, even before the toggle was
+    removed elsewhere) - this scans every station of a chosen mode at once (up to `limit`,
+    see main.py's tod_dashboard), still gated one station at a time by that endpoint's
+    semaphore regardless of which source (live or cache) ends up serving each indicator -
+    that's what actually keeps this from getting the project's IP rate-limited or
+    blocklisted again (has happened before, see commit 336350c).
     """
-    context = await _context(station, TOD_BUFFER, data_source)
-    if data_source == "live":
+    context = await _context(station, TOD_BUFFER)
+    _, residential_list, graph, origin, buffer_m, lines, pois_ok = context
+    try:
         branching = await osm.routes(station["lon"], station["lat"], TOD_BUFFER)
-    else:
+    except httpx.TransportError:
         branching = static_transit.routes_near(station["lon"], station["lat"], TOD_BUFFER)
-        if branching is None:  # no static route file for any mode yet - fall back live
-            branching = await osm.routes(station["lon"], station["lat"], TOD_BUFFER)
-    _, pois, graph, origin, buffer_m, lines = context
+        if branching is None:
+            raise
     area_ha = buffer_m.area / 10000
 
-    if data_source == "live":
-        # Pure OSM tags classifying the same `pois` fetch above - no extra Overpass call,
-        # no MAPID involved (see osm_poi.py). Expect thinner counts than the MAPID path.
-        retail_pois = osm_poi.retail(pois)
-        office_pois = osm_poi.offices(pois)
-        basic_need_pois = osm_poi.basic_needs(pois)
-    else:
-        # MAPID replaces OSM for categories it covers (see data/README.md); OSM stays the
-        # only source for what MAPID hasn't got (residential, green, parking, road network).
-        # Read directly from MAPID's own categories - no OSM classifier involved, so this
-        # doesn't touch Overpass at all for retail/office/basic-need.
-        retail_pois = mapid_data.retail(station["lon"], station["lat"], TOD_BUFFER)
-        office_pois = mapid_data.offices(station["lon"], station["lat"], TOD_BUFFER)
-        basic_need_pois = mapid_data.basic_needs(station["lon"], station["lat"], TOD_BUFFER)
-    transit_pois = await _transit_points_near(station["lon"], station["lat"], TOD_BUFFER, data_source)
+    # Read directly from MAPID's own categories - no OSM classifier involved, so this
+    # doesn't touch Overpass at all for retail/office/basic-need.
+    retail_pois = mapid_data.retail(station["lon"], station["lat"], TOD_BUFFER)
+    office_pois = mapid_data.offices(station["lon"], station["lat"], TOD_BUFFER)
+    basic_need_pois = mapid_data.basic_needs(station["lon"], station["lat"], TOD_BUFFER)
+    transit_pois = await _transit_points_near(station["lon"], station["lat"], TOD_BUFFER)
 
-    # Residential/green/parking counts prefer their static files (output/poi_residential_
-    # *.py, poi_green_*.py, poi_parking_*.py - mode/radius covered, not live mode) over
-    # classifying the live `pois` fetch - same static-first pattern as roads/routes.
     mode_label = station.get("mode_label", "")
-    static_residential = None if data_source == "live" else \
-        static_poi.residential_near(mode_label, station["lon"], station["lat"], TOD_BUFFER)
-    residential = len(static_residential) if static_residential is not None else \
-        sum(1 for p in pois if osm.is_residential(p))
 
-    static_green = None if data_source == "live" else \
-        static_poi.green_near(mode_label, station["lon"], station["lat"], TOD_BUFFER)
-    green_count = len(static_green) if static_green is not None else \
-        sum(1 for p in pois if osm.is_green(p))
-
-    static_parking = None if data_source == "live" else \
-        static_poi.parking_near(mode_label, station["lon"], station["lat"], TOD_BUFFER)
-    if static_parking is not None:
-        car_parking = sum(1 for p in static_parking if p["kind"] == "car")
-        motorcycle_parking = sum(1 for p in static_parking if p["kind"] == "motorcycle")
+    # Residential count comes from the live `residential_list` fetch above (via
+    # _context -> osm.residential_pois()) when it succeeded (pois_ok) - only falls back
+    # to the static cache file (output/poi_residential_*.py) if that fetch failed. Falls
+    # back to 0 if the static file doesn't cover this station/radius either.
+    if pois_ok:
+        residential = len(residential_list)
     else:
-        car_parking = sum(1 for p in pois if p["amenity"] == "parking")
-        motorcycle_parking = sum(1 for p in pois if p["amenity"] == "motorcycle_parking")
+        static_residential = static_poi.residential_near(mode_label, station["lon"], station["lat"], TOD_BUFFER)
+        residential = len(static_residential) if static_residential is not None else 0
 
-    non_residential = sum(1 for p in pois if not osm.is_residential(p))
+    # Green: live osm.green_pois() first, static poi_green_*.py file only on failure -
+    # MAPID has no POI-level green layer (see osm.green_pois()'s docstring).
+    try:
+        green_count = len(await osm.green_pois(station["lon"], station["lat"], TOD_BUFFER))
+    except httpx.TransportError:
+        static_green = static_poi.green_near(mode_label, station["lon"], station["lat"], TOD_BUFFER)
+        green_count = len(static_green) if static_green is not None else 0
+
+    # Parking, safety and information-display all come from osm.facility_pois() - MAPID
+    # has no parking category, and safety/information are PROXY indicators with no
+    # static-cache equivalent (only parking has one: output/poi_parking_*.py).
+    try:
+        facility = await osm.facility_pois(station["lon"], station["lat"], TOD_BUFFER)
+        facility_ok = True
+    except httpx.TransportError:
+        facility = []
+        facility_ok = False
+
+    if facility_ok:
+        car_parking = sum(1 for p in facility if p["amenity"] == "parking")
+        motorcycle_parking = sum(1 for p in facility if p["amenity"] == "motorcycle_parking")
+    else:
+        static_parking = static_poi.parking_near(mode_label, station["lon"], station["lat"], TOD_BUFFER)
+        if static_parking is not None:
+            car_parking = sum(1 for p in static_parking if p["kind"] == "car")
+            motorcycle_parking = sum(1 for p in static_parking if p["kind"] == "motorcycle")
+        else:
+            car_parking = motorcycle_parking = 0
+
+    # residential_diversity's "non-residential" side used to be a raw count of every
+    # non-residential element from the old combined osm.pois() query (amenity, shop,
+    # office, other buildings, ...). Now that MAPID carries retail/office/basic-need
+    # (and OSM still carries green), those are a strictly better proxy for the same
+    # concept than OSM's own sparse amenity/shop tagging ever was - so this sums those
+    # instead of re-adding a broad OSM query just to re-derive what MAPID already gives.
+    non_residential = len(retail_pois) + len(office_pois) + len(basic_need_pois) + green_count
     all_day = len(basic_need_pois) + green_count
 
     raw = {
@@ -831,13 +873,13 @@ async def station_indicators(station: dict, data_source: str = "static"):
         # Commuters surge where offices are; all-day trips track food, shops and parks.
         "passengers_peak": len(office_pois) / area_ha,
         "passengers_offpeak": all_day / area_ha,
-        "safety": sum(1 for p in pois if p["lit"] == "yes" or p["surveillance"]
+        "safety": sum(1 for p in facility if p["lit"] == "yes" or p["surveillance"]
                       or p["amenity"] == "police" or p["highway"] == "crossing"),
-        "information_display": sum(1 for p in pois if p["departures_board"] or p["information"]),
+        "information_display": sum(1 for p in facility if p["departures_board"] or p["information"]),
         "train_trips": 1.0,
         "branching": branching,
         "alt_transport": len(transit_pois),
-        "accessible_buildings": sum(1 for p in pois if p["building"]),
+        "accessible_buildings": sum(1 for p in facility if p["building"]),
         "car_parking": car_parking,
         "motorcycle_parking": motorcycle_parking,
     }
@@ -994,32 +1036,47 @@ HAZARD_SAMPLE_SIZE = 120  # meters, center-to-vertex - coarser than AQ_HEX_SIZE 
 # each cell is a live InaRISK HTTP call (~4-5s), so this trades resolution for speed.
 
 
-async def resilience(station: dict, data_source: str = "static"):
+async def resilience(station: dict):
     """No composite "vulnerability" score - the old version blended a green-cover heat
     proxy with a waterway-distance flood proxy into one number (0.5/0.5), which was two
     stand-ins invented for this project multiplied together. Replaced with real published
     hazard data per corridor. Plus MAPID's UHI/rainfall/ecology-index layers for the
     buffer (already downloaded for M-UC1's Kenyamanan tab, shown as-is here too - see
-    mapid_environment.py, unaffected by data_source, no live equivalent exists for those).
-    Every layer stands alone; nothing is fused.
+    mapid_environment.py, no live equivalent exists for those). Every layer stands alone;
+    nothing is fused.
 
-    data_source="static" (default): banjir per corridor from MAPID's downloaded flood-risk
-    zoning (mapid_environment.flood_class_at - exact point-in-polygon, no live call, no
-    auth, never down). 5-level Kelas (Sangat Rendah..Tinggi), MAPID's own scheme. No
-    landslide (longsor) layer in this mode - MAPID doesn't publish that.
-
-    data_source="live": banjir AND longsor per corridor from BNPB InaRISK (gis.bnpb.go.id,
-    see inarisk.py) instead - real government hazard rasters, but a live external server
-    this project doesn't control, ~4-5s per "identify" call. Sampled on a coarse hex grid
-    (HAZARD_SAMPLE_SIZE) rather than once per corridor - a 500m buffer can have 500+ road
-    segments, querying every one individually took over 10 minutes end to end; each
-    corridor just takes its nearest sample's value instead. 3-level class (rendah/sedang/
-    tinggi), BNPB's own scheme - not the same scale as MAPID's 5-level Kelas, don't
-    compare the two modes' numbers directly.
+    Banjir per corridor is tried first from MAPID's downloaded flood-risk zoning
+    (mapid_environment.flood_class_at - exact point-in-polygon, no live call, no auth,
+    never down; 5-level Kelas Sangat Rendah..Tinggi, MAPID's own scheme). If MAPID's
+    zoning has literally no polygon covering any corridor in this station's buffer (no
+    coverage for this area at all, not just "risk unclassified for some roads"), this
+    automatically falls back to BNPB InaRISK (gis.bnpb.go.id, see inarisk.py) for BOTH
+    banjir and longsor instead - real government hazard rasters, but a live external
+    server this project doesn't control, ~4-5s per "identify" call. Sampled on a coarse
+    hex grid (HAZARD_SAMPLE_SIZE) rather than once per corridor - a 500m buffer can have
+    500+ road segments, querying every one individually took over 10 minutes end to end;
+    each corridor just takes its nearest sample's value instead. 3-level class (rendah/
+    sedang/tinggi), BNPB's own scheme - not the same scale as MAPID's 5-level Kelas, don't
+    compare the two schemes' numbers directly. No landslide (longsor) layer at all when
+    MAPID coverage is used - MAPID doesn't publish that; only InaRISK's automatic fallback
+    ever populates it. No user-facing choice either way.
     """
-    roads, _pois, graph, origin, buffer_m, lines = await _context(station, WALK_BUFFER, data_source)
+    roads, _pois, graph, origin, buffer_m, lines, _pois_ok = await _context(station, WALK_BUFFER)
 
-    if data_source == "live":
+    def _banjir_kelas(point_m):
+        lon, lat = to_deg(point_m).coords[0]
+        return mapid_environment.flood_class_at(lon, lat)
+
+    static_corridors = [
+        {
+            "poly": line.buffer(CORRIDOR_BUFFER), "index": i, "highway": road["highway"],
+            "banjir_kelas": _banjir_kelas(line.centroid),
+        }
+        for i, (road, line) in enumerate(zip(roads, lines))
+    ]
+    static_coverage = any(c["banjir_kelas"] for c in static_corridors)
+
+    if not static_coverage:
         sample_cells = hex_grid(buffer_m, HAZARD_SAMPLE_SIZE)
         sem = asyncio.Semaphore(8)
         errors = 0
@@ -1075,17 +1132,7 @@ async def resilience(station: dict, data_source: str = "static"):
             "longsor_tinggi": sum(1 for c in corridors if c["longsor"] and c["longsor"]["class"] == "tinggi"),
         }
     else:
-        def _banjir_kelas(point_m):
-            lon, lat = to_deg(point_m).coords[0]
-            return mapid_environment.flood_class_at(lon, lat)
-
-        corridors = [
-            {
-                "poly": line.buffer(CORRIDOR_BUFFER), "index": i, "highway": road["highway"],
-                "banjir_kelas": _banjir_kelas(line.centroid),
-            }
-            for i, (road, line) in enumerate(zip(roads, lines))
-        ]
+        corridors = static_corridors
         # Hard avoidance, not a blended score - same pattern as M-UC1's wheelchair=no
         # routing: a corridor MAPID classifies "Tinggi"/"Cukup Tinggi" banjir gets routing
         # steered around it.
@@ -1115,10 +1162,10 @@ async def resilience(station: dict, data_source: str = "static"):
     uhi = mapid_environment.uhi(buffer_wgs84)
     ecology_index = mapid_environment.ecology_index(buffer_wgs84)
     rainfall = mapid_environment.rainfall(buffer_wgs84)
-    # Same MAPID flood data as static mode's corridors' banjir_kelas above, here as the
-    # raw zone polygons (broader area context, like uhi/ecology_index/rainfall) rather
-    # than clipped to road corridors - shown regardless of data_source, for comparison
-    # against whichever live/static banjir layer the corridors are using.
+    # Same MAPID flood data as the static-coverage corridors' banjir_kelas above, here as
+    # the raw zone polygons (broader area context, like uhi/ecology_index/rainfall) rather
+    # than clipped to road corridors - shown regardless of which banjir source the
+    # corridors ended up using, for comparison against it.
     flood_risk_mapid = mapid_environment.flood_risk(buffer_wgs84)
 
     return {
