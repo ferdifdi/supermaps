@@ -39,7 +39,7 @@ export const USE_CASES = [
     persona: "komuter",
     title: "Navigasi Transit & Akses Jalan Kaki",
     description: "Navigasi jalan kaki dari stasiun/halte secara lengkap: skor akses jalan kaki per grid 250m (Siburian et al. 2020), isochrone & rute (tercepat/ramah kursi roda), efisiensi transfer ke moda lain (headway TransJakarta, proxy KRL/MRT/LRT), akses ruang hijau (taman, RTH, kanopi pohon), kualitas udara (PM2.5), suhu permukaan (LST), indeks ekologi, dan curah hujan.",
-    expectedWait: "Biasanya 3-6 detik, kadang sampai ~25 detik di permintaan pertama ke suatu stasiun.",
+    expectedWait: 6,
     extras: "walk",
     methodology: {
       data: [
@@ -243,7 +243,7 @@ export const USE_CASES = [
     persona: "komuter",
     title: "Basic Needs untuk Komuter",
     description: "Ketersediaan pangan, pusat perbelanjaan/pasar, keuangan, retail, dan kesehatan dalam jangkauan jalan kaki dari stasiun (MAPID Data Catalogue).",
-    expectedWait: "Biasanya 5-15 detik, kadang lebih lama di permintaan pertama ke suatu stasiun.",
+    expectedWait: 15,
     extras: "equity",
     methodology: {
       data: [
@@ -332,7 +332,7 @@ export const USE_CASES = [
     persona: "usaha",
     title: "Site Selection & Market Gap",
     description: "Pilih tipe bisnis, lihat kompetitor setipe (MAPID Data Catalogue) dan anchor demand di sekitar stasiun.",
-    expectedWait: "Biasanya 5-15 detik, kadang sampai ~20 detik di permintaan pertama ke suatu stasiun.",
+    expectedWait: 15,
     extras: "site",
     methodology: {
       data: [
@@ -436,7 +436,7 @@ export const USE_CASES = [
     persona: "kebijakan",
     title: "Indeks TOD & Prioritas Pengembangan",
     description: "Station Composite Index, ranking stasiun, dan tipologi rekomendasi pengembangan.",
-    expectedWait: "10-30 detik - dashboard ini men-scan semua stasiun sekaligus.",
+    expectedWait: 30,
     // Scores every station at once, so App drives it through the dashboard instead of `run`.
     dashboard: true,
     methodology: {
@@ -529,7 +529,7 @@ export const USE_CASES = [
     persona: "kebijakan",
     title: "Climate & Environmental Resilience",
     description: "Risiko banjir per koridor (MAPID Data Catalogue, otomatis fallback ke BNPB InaRISK kalau MAPID sama sekali tidak punya zona banjir di buffer stasiun ini) plus konteks UHI/ekologi/curah hujan (MAPID).",
-    expectedWait: "Biasanya 3-6 detik, kadang sampai ~35 detik untuk stasiun yang butuh data BNPB tambahan.",
+    expectedWait: 6,
     methodology: {
       data: [
         {

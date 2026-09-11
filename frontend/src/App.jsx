@@ -586,11 +586,6 @@ export default function App() {
                   </label>
                 ))}
               </div>
-              <p className="note">Satu moda per analisis - gabungan beberapa moda bikin Overpass lambat.</p>
-              <p className="note">
-                Indeks bersifat relatif: setiap stasiun distandardisasi terhadap stasiun lain dalam
-                tabel yang sama.
-              </p>
             </>
           ) : (
             <>
@@ -658,7 +653,11 @@ export default function App() {
               <span className="spinner" />
               <span className="loading-text">
                 <b>Menjalankan analisis… {loadingSeconds}s</b>
-                {useCase.expectedWait && <span className="note">Perkiraan: {useCase.expectedWait}</span>}
+                {useCase.expectedWait && (
+                  <span className="note">
+                    Perkiraan: {Math.max(0, useCase.expectedWait - loadingSeconds)}s lagi
+                  </span>
+                )}
               </span>
             </div>
           )}

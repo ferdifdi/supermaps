@@ -1,4 +1,5 @@
 import asyncio
+import json
 import time
 from pathlib import Path
 
@@ -24,6 +25,25 @@ app.add_middleware(
 _SURVEY_DIR = Path(__file__).parent.parent / "data" / "survey_lapangan"
 if _SURVEY_DIR.exists():
     app.mount("/static/survey", StaticFiles(directory=str(_SURVEY_DIR)), name="survey-static")
+
+# K-UC1 precomputed station indicators (see generate_kuc1_static.py) - one JSON per mode,
+# {"generated_at": <ISO date>, "stations": [station_indicators() dicts]}. Read fresh each
+# time (not cached in memory) since these are meant to be regenerated occasionally and
+# the dashboard is requested rarely enough that re-reading a small JSON file costs nothing.
+_KUC1_STATIC_DIR = Path(__file__).parent.parent / "data" / "k-uc1"
+
+# Jakarta Airport Skytrain (APM) between the Soekarno-Hatta terminals - OSM tags it
+# railway=light_rail same as LRT Jabodebek, but it's a separate airport people-mover
+# system, not part of the LRT network the rest of K-UC1's LRT comparison represents.
+# K-UC1-specific: other use cases' station picker still shows these under "LRT".
+_KUC1_EXCLUDED_LRT_IDS = {"13257085881", "13257085882", "13257085883", "13257085884"}
+
+
+def _load_kuc1_static(mode: str) -> dict | None:
+    path = _KUC1_STATIC_DIR / f"{mode.lower()}.json"
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 @app.on_event("startup")
@@ -280,22 +300,44 @@ async def tod_dashboard(modes: str = "KRL,MRT,LRT", limit: int = 25):
     """
     wanted = [m for m in modes.split(",") if m]
     all_stations = await _rail_stations() + (_tj_stations() if "TJ" in wanted else [])
-    stations = [s for s in all_stations if s["mode_label"] in wanted][:limit]
+    stations = [
+        s for s in all_stations
+        if s["mode_label"] in wanted and s["id"] not in _KUC1_EXCLUDED_LRT_IDS
+    ][:limit]
     if not stations:
         raise HTTPException(404, "no stations match those modes")
 
+    # Precomputed cache first (backend/data/k-uc1/{mode}.json, see
+    # generate_kuc1_static.py) - a station whose mode has a cache skips the live Overpass
+    # scan entirely. Per-mode, not per-station: if a mode's file exists it's trusted for
+    # every station currently in that mode's list, missing individual stations just fall
+    # through to live (e.g. one added since the cache was generated).
+    cached_by_mode: dict[str, dict[str, dict]] = {}
+    static_generated_at: dict[str, str] = {}
+    for mode in set(wanted):
+        data = _load_kuc1_static(mode)
+        if data:
+            cached_by_mode[mode] = {r["station_id"]: r for r in data["stations"]}
+            static_generated_at[mode] = data.get("generated_at")
+
     # Public Overpass instances block IPs that send too many concurrent requests
     # (this project has been blocklisted before - see commit 336350c). One station
-    # at a time keeps us well under that, at the cost of a slower first load.
+    # at a time keeps us well under that, at the cost of a slower first load. Only
+    # stations actually missing from a cached mode ever reach this gate.
     gate = asyncio.Semaphore(1)
 
     async def one(station):
+        cached = cached_by_mode.get(station["mode_label"], {}).get(station["id"])
+        if cached is not None:
+            return cached
         async with gate:
             return await analysis.station_indicators(station)
 
     indicators = await asyncio.gather(*(one(s) for s in stations))
     _dashboard[:] = analysis.tod_index(list(indicators))
-    return {"rows": _dashboard, "metadata": analysis.metadata()}
+    meta = analysis.metadata()
+    meta["static_generated_at"] = static_generated_at
+    return {"rows": _dashboard, "metadata": meta}
 
 
 class WhatIfBody(BaseModel):

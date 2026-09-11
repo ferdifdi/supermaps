@@ -73,6 +73,15 @@ function Metadata({ metadata }) {
         <>
           <p className="note">{metadata.method}</p>
           <p className="note">Resolusi data: buffer {metadata.buffer_m} m dari stasiun.</p>
+          {metadata.static_generated_at && Object.keys(metadata.static_generated_at).length > 0 && (
+            <p className="note">
+              Data statis (backend/data/k-uc1/) digenerate:{" "}
+              {Object.entries(metadata.static_generated_at)
+                .map(([mode, ts]) => `${mode} ${new Date(ts).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}`)
+                .join(", ")}
+              . Moda lain dihitung live.
+            </p>
+          )}
           <label>Indikator tanpa data terukur</label>
           <ul className="note-list">
             {metadata.no_data.map((d) => (
