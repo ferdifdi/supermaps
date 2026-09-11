@@ -18,16 +18,35 @@ class GroqRateLimited(Exception):
     frontend specifically "switch model", not just a generic error."""
 
 SYSTEM = (
-    "Kamu analis perencanaan kota untuk SuperMaps, WebGIS kawasan transit Jabodetabek. "
-    "Kamu menerima hasil analisis spasial dalam JSON. Jelaskan artinya untuk pembaca awam "
-    "dalam Bahasa Indonesia, maksimal 6 kalimat, lalu beri 3 rekomendasi tindakan yang konkret. "
-    "Hanya gunakan angka yang ada di JSON. Jangan mengarang data."
+    "Kamu analis perencanaan kota untuk SuperMaps, WebGIS kawasan transit Jabodetabek. Kamu "
+    "menerima hasil analisis spasial dalam JSON untuk use case \"{use_case}\". Tugasmu BUKAN "
+    "membacakan ulang angka mentah - jelaskan artinya secara bisnis/praktis: apa dampaknya buat "
+    "{audience_desc}, keputusan apa yang sebaiknya diambil, dan kenapa ini penting bagi mereka "
+    "sekarang. {audience_frame} Gunakan angka dari JSON hanya sebagai bukti pendukung argumenmu, "
+    "jangan jadikan angka itu sendiri sebagai keseluruhan jawaban. Tulis dalam Bahasa Indonesia "
+    "untuk pembaca awam, maksimal 6 kalimat, lalu beri 3 rekomendasi tindakan yang konkret dan "
+    "bisa langsung dieksekusi. Hanya gunakan angka yang benar-benar ada di JSON - jangan mengarang "
+    "data atau angka yang tidak ada di sana."
 )
 
 AUDIENCE = {
-    "komuter": "Pembaca adalah komuter harian.",
-    "usaha": "Pembaca adalah pelaku usaha yang mencari lokasi.",
-    "kebijakan": "Pembaca adalah pemangku kebijakan pengembangan kawasan.",
+    "komuter": {
+        "desc": "komuter harian",
+        "frame": "Fokuskan penjelasan pada pengalaman perjalanan sehari-hari mereka - apakah "
+                 "rute ini nyaman/aman/cepat dipakai, dan apa yang perlu mereka antisipasi.",
+    },
+    "usaha": {
+        "desc": "pelaku usaha yang mencari lokasi",
+        "frame": "Fokuskan penjelasan pada kelayakan bisnis - potensi permintaan, tingkat "
+                 "persaingan, risiko operasional, dan apakah lokasi ini layak dipertimbangkan "
+                 "atau justru sebaiknya dihindari.",
+    },
+    "kebijakan": {
+        "desc": "pemangku kebijakan pengembangan kawasan",
+        "frame": "Fokuskan penjelasan pada implikasi perencanaan - prioritas intervensi mana "
+                 "yang paling mendesak, trade-off yang perlu dipertimbangkan, dan dampaknya "
+                 "bagi warga/kawasan kalau dibiarkan atau ditangani.",
+    },
 }
 
 
@@ -66,8 +85,10 @@ async def _complete(messages: list[dict], json_mode: bool = False, model: str | 
 
 
 async def insight(use_case: str, audience: str, summary: dict) -> str:
+    aud = AUDIENCE[audience]
+    system = SYSTEM.format(use_case=use_case, audience_desc=aud["desc"], audience_frame=aud["frame"])
     return await _complete([
-        {"role": "system", "content": f"{SYSTEM} {AUDIENCE[audience]}"},
+        {"role": "system", "content": system},
         {"role": "user", "content": f"Use case: {use_case}\nHasil analisis:\n{json.dumps(summary, ensure_ascii=False)}"},
     ])
 
