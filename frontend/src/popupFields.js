@@ -47,7 +47,7 @@ const ANCHOR_LABELS = { kantor: "Kantor", kebutuhan_dasar: "Kebutuhan dasar", tr
 export const accessByWalkingField = {
   test: (p) => p.access_by_walking != null,
   render: (p) =>
-    `<b>Skor akses jalan kaki: ${p.access_by_walking.toFixed(2)} dari 1</b><br/>` +
+    `<b>Sel #${p.grid_id} - Skor akses jalan kaki: ${p.access_by_walking.toFixed(2)} dari 1</b><br/>` +
     `Dibandingkan sel-sel lain dalam radius ini - gabungan kepadatan jaringan jalan, jangkauan layan pejalan kaki, jumlah persimpangan, dan keragaman hunian di sekitar sel 250 m ini.`,
 }
 
@@ -58,7 +58,7 @@ export const siteGridField = {
   render: (p) => {
     const anchorTotal = (p.anchor_kantor || 0) + (p.anchor_kebutuhan_dasar || 0) + (p.anchor_transit || 0)
     return (
-      `<b>Sel ini (250 m persegi)</b><br/>` +
+      `<b>Sel #${p.grid_id} (250 m persegi)</b><br/>` +
       `Walk score: ${p.walk_score.toFixed(2)} dari 1 (dibanding sel lain di radius ini).<br/>` +
       `Kompetitor sejenis dalam sel: ${p.competitor_count} titik.<br/>` +
       `Anchor demand (kantor, kebutuhan dasar, transit): ${anchorTotal} titik - ` +
@@ -112,7 +112,7 @@ export const pm25Field = {
 
 export const greenGridField = {
   test: (p) => p.green_count != null,
-  render: (p) => `Jumlah titik hijau (pohon, taman, RTH) dalam sel ini: ${p.green_count} titik.`,
+  render: (p) => `<b>Sel #${p.grid_id}</b><br/>Jumlah titik hijau (pohon, taman, RTH) dalam sel ini: ${p.green_count} titik.`,
 }
 
 export const greenPoiField = {
@@ -140,7 +140,7 @@ export const roadAccessField = {
 // (see usecases.js "LST (Suhu Permukaan)" processing note).
 export const lstField = {
   test: (p) => p.SUHU != null,
-  render: (p) => `<b>Suhu permukaan: ${p.SUHU}°C</b> - kelas ${p.CLASS || p.KELAS} (musim berjalan, citra satelit LST MAPID).`,
+  render: (p) => `<b>Sel #${p.grid_id} - Suhu permukaan: ${p.SUHU}°C</b> - kelas ${p.CLASS || p.KELAS} (musim berjalan, citra satelit LST MAPID).`,
 }
 
 // K-UC2's UHI zone - MAPID's own class + published temperature range, shown as-is.
