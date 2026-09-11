@@ -2,13 +2,21 @@
 # dynamically links a few system C libraries at runtime instead of bundling everything -
 # libexpat.so.1 (XML parsing) is one of them. Nixpacks' default Python image doesn't
 # include it, so `import rasterio` crashed the whole app on startup (ImportError:
-# libexpat.so.1: cannot open shared object file). geos/proj listed too since GDAL/rasterio
-# commonly need those as well and it's cheaper to add them now than debug one missing .so
-# at a time on the next deploy.
+# libexpat.so.1: cannot open shared object file).
 #
-# IMPORTANT: setting phases.setup.nixPkgs REPLACES Nixpacks' auto-detected setup packages
-# instead of adding to them - the first attempt at this file only listed expat/geos/proj
-# and broke the build entirely ("python: command not found") because python itself was no
-# longer in the package list. python312 has to be listed explicitly alongside them.
+# Two things had to be fixed to get here:
+# 1. phases.setup.nixPkgs REPLACES Nixpacks' auto-detected setup packages instead of
+#    adding to them - the first attempt only listed expat/geos/proj and broke the build
+#    entirely ("python: command not found") since python itself fell out of the list.
+#    python312 now listed alongside them.
+# 2. Adding "expat" as a nixPkg fixed the BUILD but not the RUNTIME - the build succeeded
+#    and pip install worked, but the deployed container still crashed with the exact same
+#    libexpat.so.1 error. Nix-installed packages land in the Nix store, which isn't
+#    necessarily on the running container's linker search path unless Nixpacks wires that
+#    up for the runtime stage too. The base image is Ubuntu
+#    (ghcr.io/railwayapp/nixpacks:ubuntu-...), so aptPkgs installs to the normal system
+#    lib paths (/usr/lib/...) instead, which the dynamic linker always searches - more
+#    reliable than depending on Nix store paths surviving into the runtime image.
 [phases.setup]
-nixPkgs = ["python312", "expat", "geos", "proj"]
+nixPkgs = ["python312"]
+aptPkgs = ["libexpat1", "libgeos-dev", "libproj-dev"]
