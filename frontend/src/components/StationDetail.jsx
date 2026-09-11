@@ -56,7 +56,7 @@ function WhatIf({ row, whatIf, onWhatIf }) {
     <div className="section">
       <label>Simulasi what-if</label>
       <p className="note">
-        Geser skor indikator ke target yang diinginkan untuk melihat proyeksi SCI dan peringkat.
+        Geser skor indikator ke target yang diinginkan untuk melihat proyeksi indeks TOD dan peringkat.
       </p>
       {top.map((p) => (
         <div key={p.indicator} className="slider-row">
@@ -76,7 +76,7 @@ function WhatIf({ row, whatIf, onWhatIf }) {
       ))}
       {whatIf && whatIf.station === row.station && (
         <p className="whatif">
-          SCI {whatIf.sci_before} → <b>{whatIf.sci_after}</b> ({whatIf.delta >= 0 ? "+" : ""}
+          Indeks TOD {whatIf.sci_before} → <b>{whatIf.sci_after}</b> ({whatIf.delta >= 0 ? "+" : ""}
           {whatIf.delta}), peringkat {whatIf.rank_before} → <b>{whatIf.rank_after}</b>
         </p>
       )}
@@ -113,7 +113,7 @@ export default function StationDetail({ row, whatIf, onWhatIf }) {
       </div>
 
       <div className="section">
-        <label>Breakdown skor per kriteria</label>
+        <label>Rincian skor per kriteria</label>
         {Object.entries(row.criteria).map(([name, score]) => (
           <Criterion key={name} name={name} score={score} priorities={row.priorities} />
         ))}
@@ -121,7 +121,7 @@ export default function StationDetail({ row, whatIf, onWhatIf }) {
 
       <div className="section">
         <label>Prioritas perbaikan</label>
-        <p className="note">Diurutkan dari kenaikan SCI terbesar bila indikator dibawa ke skor 1.</p>
+        <p className="note">Diurutkan dari kenaikan indeks TOD terbesar bila indikator dibawa ke skor 1.</p>
         {row.priorities.slice(0, 6).map((p) => (
           <div key={p.indicator} className="priority">
             <span>
