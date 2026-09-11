@@ -6,6 +6,7 @@ const TABS = [
   { id: "transfer", label: "Transfer" },
   { id: "hijau", label: "Hijau" },
   { id: "rute", label: "Rute" },
+  { id: "survei", label: "Survei" },
 ]
 
 const GREEN_TYPE_LABELS = { park: "Taman", garden: "Taman", grass: "Rumput/RTH", forest: "Hutan kota", recreation_ground: "Lapangan/RTH" }
@@ -235,7 +236,6 @@ function Ringkasan({ result, stationId, mapMode, onMapMode, ...toggles }) {
       </div>
       <LayerToggles {...toggles} />
       <CurrentWeather weather={result.weather} />
-      <SurveyLapangan stationId={stationId} />
 
       <div className="section">
         <label>{topic.label}</label>
@@ -416,6 +416,7 @@ export default function WalkDock({
               {...toggles}
             />
           )}
+          {tab === "survei" && <SurveyLapangan stationId={stationId} />}
           {tab === "rute" && (
             <Rute
               stationId={stationId} picking={picking} onTogglePick={onTogglePick}
