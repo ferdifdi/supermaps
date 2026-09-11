@@ -42,8 +42,10 @@ export default function StationPicker({ stations, value, onChange }) {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return pool
-    return pool.filter((s) => s.name.toLowerCase().includes(q))
+    const matches = q ? pool.filter((s) => s.name.toLowerCase().includes(q)) : pool
+    // Stations/halte with real field-survey trotoar data float to the top - survey.py's
+    // has_survey flag, joined server-side in /api/stations.
+    return [...matches].sort((a, b) => (b.has_survey ? 1 : 0) - (a.has_survey ? 1 : 0))
   }, [pool, query])
 
   function pick(station) {
@@ -114,6 +116,7 @@ export default function StationPicker({ stations, value, onChange }) {
               onMouseDown={() => pick(s)}
               onMouseEnter={() => setHighlight(i)}
             >
+              {s.has_survey && <span title={`${s.survey_count} survei lapangan di sekitar`}>📷 </span>}
               {s.name} <span>({s.mode_label})</span>
             </div>
           ))}
