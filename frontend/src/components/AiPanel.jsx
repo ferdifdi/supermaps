@@ -234,6 +234,11 @@ export default function AiPanel({ useCaseId, label, persona, result }) {
             {m.label}
           </button>
         ))}
+        {Boolean(messages.length) && (
+          <button className="mini" onClick={() => setMessages([])} title="Hapus riwayat obrolan, tampilkan saran pertanyaan lagi">
+            ↺ Reset
+          </button>
+        )}
       </div>
 
       <div className="chat-body">

@@ -853,15 +853,23 @@ export default function App() {
         />
       )}
 
-      {resultView === "ai" && (useCase.dashboard ? todRows.length > 0 : result) && (
-        <AiDock
-          open={dockOpen}
-          onToggle={() => setDockOpen((v) => !v)}
-          useCaseId={useCaseId}
-          label={useCase.title}
-          persona={persona}
-          result={useCase.dashboard ? aiDashboardResult : result}
-        />
+      {/* Kept mounted (hidden via CSS, not removed from the tree) whenever there's a
+          result to ask about - conditionally rendering on resultView === "ai" used to
+          unmount AiDock/AiPanel every time the user switched to "Hasil" and back, which
+          destroyed the chat's useState history. AiDock already has its own open-class
+          show/hide mechanism (same as every other dock), it just needed to actually be
+          used here instead of full removal. */}
+      {(useCase.dashboard ? todRows.length > 0 : result) && (
+        <div style={resultView === "ai" ? undefined : { display: "none" }}>
+          <AiDock
+            open={dockOpen}
+            onToggle={() => setDockOpen((v) => !v)}
+            useCaseId={useCaseId}
+            label={useCase.title}
+            persona={persona}
+            result={useCase.dashboard ? aiDashboardResult : result}
+          />
+        </div>
       )}
 
       {(resultView === "hasil" || resultView === "ai") && !loading && !(useCase.dashboard ? todRows.length > 0 : result) && (
