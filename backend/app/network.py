@@ -12,7 +12,7 @@ import networkx as nx
 from shapely.geometry import LineString, Point
 from shapely.ops import unary_union
 
-from .geo import to_m
+from .geo import to_m_points
 
 # wheelchair=no is a hard, OSM-authored fact about the segment - not an invented weight -
 # so it's read directly and used to steer routing away from it. Missing/yes/limited all
@@ -35,8 +35,20 @@ def build(roads: list[dict]) -> nx.Graph:
     WHEELCHAIR_BLOCK_FACTOR wherever wheelchair=no).
     """
     g = nx.Graph()
+    # One vectorized reprojection for every coordinate across all roads, instead of
+    # to_m(Point(...)) per point (each call pays its own pyproj+shapely.ops.transform
+    # wrapper overhead - profiled at ~1-1.5s of walk_access's warm-cache runtime for a
+    # station with ~780 roads, same root cause as mapid_data.py's earlier fix).
+    lons, lats, bounds = [], [], [0]
     for road in roads:
-        pts = [to_m(Point(lon, lat)) for lon, lat in road["coords"]]
+        for lon, lat in road["coords"]:
+            lons.append(lon)
+            lats.append(lat)
+        bounds.append(len(lons))
+    all_pts = to_m_points(lons, lats) if lons else []
+
+    for i, road in enumerate(roads):
+        pts = all_pts[bounds[i]:bounds[i + 1]]
         blocked = road.get("wheelchair") == "no"
         for a, b in zip(pts, pts[1:]):
             na, nb = (round(a.x), round(a.y)), (round(b.x), round(b.y))
