@@ -106,11 +106,16 @@ export default function App() {
   const [subtype2, setSubtype2] = useState("")
   const [subtype2Options, setSubtype2Options] = useState([])
   const [radius, setRadius] = useState(800)
-  const [dataSource, setDataSource] = useState("static")
   const [result, setResult] = useState(null)
   const [insight, setInsight] = useState("")
   const [status, setStatus] = useState("")
   const [loading, setLoading] = useState(false)
+  // MapView reports its own maplibre load/error state up here so "Jalankan analisis" can
+  // wait for the map instead of racing it - running an analysis whose result then gets
+  // handed to a still-loading map used to just draw nothing, silently. On error we do NOT
+  // auto-reload (a broken style URL retried in a loop just spams requests) - we tell the
+  // user to reload manually instead.
+  const [mapStatus, setMapStatus] = useState({ loaded: false, error: false, moving: false })
   const [loadingSeconds, setLoadingSeconds] = useState(0)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   // Mobile: a Gojek-style bottom sheet with three switchable sections instead of the
@@ -153,20 +158,69 @@ export default function App() {
   const [showPoiHijau, setShowPoiHijau] = useState(true)
   const [showJalan, setShowJalan] = useState(true)
   const [showHeatmap, setShowHeatmap] = useState(true)
+  // M-UC2 layer toggles (EquityDock) - same idea as M-UC1's checklist above, scoped to
+  // what M-UC2 actually draws: isochrone outline/fill, basic-need POI pins, and the
+  // heatmap_poi grid choropleth (+ its grid_id labels, toggled together with it).
+  const [showEqIsochrone, setShowEqIsochrone] = useState(true)
+  const [showEqPoi, setShowEqPoi] = useState(true)
+  const [showEqHeatmap, setShowEqHeatmap] = useState(true)
+  // U-UC1 layer toggles (SiteDock) - anchor pins, competitor pins, and the voronoi
+  // catchment line are each independent overlays on top of whichever grid mode is picked.
+  const [showSiteAnchor, setShowSiteAnchor] = useState(true)
+  const [showSiteCompetitor, setShowSiteCompetitor] = useState(true)
+  const [showSiteCatchment, setShowSiteCatchment] = useState(true)
+  // K-UC2 layer toggle (ResilienceDock) - unlike M-UC1/M-UC2, every K-UC2 fill is
+  // mode-gated (one topic visible at a time via the TOPICS picker), so there's just one
+  // "hide whichever topic fill is active" checkbox to add, shared across all of them.
+  const [showResilienceHeatmap, setShowResilienceHeatmap] = useState(true)
   // Off by default - POI/station name pills are opaque DOM markers that always float
   // above the map canvas (browser stacking, not a maplibre layer-order thing), so with
   // labels on they visually bury the isochrone/heatmap coloring underneath. Icon badges
   // alone stay small enough not to.
   const [showPoiLabels, setShowPoiLabels] = useState(false)
   const layerToggles = useMemo(
-    () => ({ isochrone: showIsochrone, poi_transfer: showPoiTransfer, poi_hijau: showPoiHijau, jalan: showJalan, heatmap: showHeatmap }),
-    [showIsochrone, showPoiTransfer, showPoiHijau, showJalan, showHeatmap],
+    () => ({
+      isochrone: showIsochrone, poi_transfer: showPoiTransfer, poi_hijau: showPoiHijau, jalan: showJalan, heatmap: showHeatmap,
+      poi_isochrone: showEqIsochrone, poi_pins: showEqPoi, poi_heatmap: showEqHeatmap,
+      site_anchor: showSiteAnchor, site_competitor: showSiteCompetitor, site_catchment: showSiteCatchment,
+      resilience_heatmap: showResilienceHeatmap,
+    }),
+    [
+      showIsochrone, showPoiTransfer, showPoiHijau, showJalan, showHeatmap,
+      showEqIsochrone, showEqPoi, showEqHeatmap,
+      showSiteAnchor, showSiteCompetitor, showSiteCatchment,
+      showResilienceHeatmap,
+    ],
   )
 
   useEffect(() => {
     api.styles().then((s) => { setStyles(s); setStyleUrl(s[0].url) })
-    api.stations().then(setStations)
+    // TJ halte were missing from this list entirely (only StationPicker fetched them,
+    // locally, for its own dropdown) - so picking a TJ halte set stationId to something
+    // `stations.find()` below could never match, silently leaving `station` undefined:
+    // no flyTo (map just sat wherever it was), and `run()` rejected with "Pilih stasiun
+    // dulu" despite a halte visibly being selected. TJ comes from local GTFS (no
+    // Overpass involved), so fetching it here too is instant - no lazy-load tradeoff
+    // to preserve like there would be for an Overpass-backed mode.
+    Promise.all([api.stations(), api.stations("TJ")]).then(([rail, tj]) => setStations([...rail, ...tj]))
   }, [])
+
+  // Switching stations/halte used to leave the previous station's result layers drawn
+  // on the map (isochrone/heatmap/POI pins from wherever was selected before) since
+  // nothing ever cleared `result` - it looked like the map "didn't refresh" even though
+  // the picker had moved on. Clearing on every stationId change forces a real re-run
+  // before anything is shown for the new point, for both the map-click and dropdown
+  // picker paths (both end up changing stationId).
+  useEffect(() => {
+    setResult(null)
+    setRouteResult(null)
+    setRouteStats(null)
+    setRouteStatus("")
+    setFocusPoint(null)
+    setPoiCategoryFilter([])
+    setInsight("")
+    setStatus("")
+  }, [stationId])
 
   // Loading feedback (Shneiderman: informative feedback) - ticks every second while an
   // analysis runs so the wait isn't a silent freeze, alongside expectedWait per use case.
@@ -180,11 +234,10 @@ export default function App() {
   // U-UC1: MAPID's business categories have 2 levels of subcategory - TIPE_2 (coarse,
   // e.g. MAKANAN DAN MINUMAN -> RESTORAN/MINUMAN/ROTI DAN KUE/BAR) and TIPE_3 (fine, e.g.
   // RESTORAN -> RESTORAN PADANG/SEAFOOD/... or MINUMAN -> COFFEESHOP/...). Both refetch
-  // whenever their parent selection changes, only in "static" mode - OSM (live mode) has
-  // no equivalent depth, see SearchableSelect's sibling note in the JSX below.
+  // whenever their parent selection changes.
   useEffect(() => {
     setSubtype(""); setSubtype2("")
-    if (useCaseId !== "U-UC1" || dataSource === "live") { setSubtypeOptions([]); return }
+    if (useCaseId !== "U-UC1") { setSubtypeOptions([]); return }
     // Guard against out-of-order responses - switching category fires a new fetch before
     // the previous one's response lands, and network timing doesn't guarantee the earlier
     // request resolves first. Without this, picking a new category quickly could have the
@@ -194,15 +247,15 @@ export default function App() {
     let current = true
     api.businessSubtypes(category).then((opts) => { if (current) setSubtypeOptions(opts) })
     return () => { current = false }
-  }, [category, useCaseId, dataSource])
+  }, [category, useCaseId])
 
   useEffect(() => {
     setSubtype2("")
-    if (useCaseId !== "U-UC1" || dataSource === "live") { setSubtype2Options([]); return }
+    if (useCaseId !== "U-UC1") { setSubtype2Options([]); return }
     let current = true
     api.businessSubtypes2(category, subtype || undefined).then((opts) => { if (current) setSubtype2Options(opts) })
     return () => { current = false }
-  }, [category, subtype, useCaseId, dataSource])
+  }, [category, subtype, useCaseId])
 
   const useCase = USE_CASES.find((u) => u.id === useCaseId)
   const isDashboard = Boolean(useCase.dashboard)
@@ -263,6 +316,9 @@ export default function App() {
   }, [useCase, result, poiCategoryFilter, routeResult])
 
   async function run() {
+    if (mapStatus.error) return setStatus("Peta gagal dimuat. Reload halaman (F5), lalu coba lagi.")
+    if (!mapStatus.loaded) return setStatus("Peta masih memuat, tunggu sebentar lalu coba lagi.")
+    if (mapStatus.moving) return setStatus("Peta masih pindah ke stasiun, tunggu sebentar lalu coba lagi.")
     setStatus("")
     setLoading(true)
     setInsight("")
@@ -283,18 +339,14 @@ export default function App() {
         setRouteResult(null)
         setRouteStats(null)
         setPicking(false)
-        setResult(await useCase.run(station, { category, businessType: category, subtype, subtype2, radius, dataSource }))
+        setResult(await useCase.run(station, { category, businessType: category, subtype, subtype2, radius }))
         if (["equity", "walk", "site", "resilience"].includes(useCase.extras)) {
           setDockTab("ringkasan"); setDockOpen(true); setResultView("hasil")
         }
       }
       setStatus("")
     } catch (e) {
-      // Live OSM (Overpass) is the flaky external dependency here - static mode reads
-      // from a local cache and basically can't fail this way, so on a live-mode error
-      // the fix is almost always "switch back to Statis", not "try again".
-      const hint = dataSource === "live" ? " Coba pindah ke sumber data \"Statis\"." : ""
-      setStatus(`Gagal: ${e.message}${hint}`)
+      setStatus(`Gagal: ${e.message}`)
     }
     setLoading(false)
   }
@@ -312,7 +364,7 @@ export default function App() {
     setRoutingId(index)
     try {
       const [lon, lat] = feature.geometry.coordinates
-      const data = await api.route(stationId, lon, lat, "fast", dataSource)
+      const data = await api.route(stationId, lon, lat, "fast")
       setRouteResult(data.route)
     } catch (e) {
       setStatus(`Gagal ambil rute: ${e.message}`)
@@ -326,7 +378,7 @@ export default function App() {
     setRouteResult(null)
     setRouteStats(null)
     try {
-      const data = await api.route(stationId, lon, lat, routePreference, dataSource)
+      const data = await api.route(stationId, lon, lat, routePreference)
       setRouteResult(data.route)
       setRouteStats(data.summary)
       setRouteStatus("")
@@ -436,8 +488,9 @@ export default function App() {
         {sidebarOpen ? "‹" : "›"}
       </button>
 
-      <button className="panel-back" onClick={() => setRoleChosen(false)} title="Kembali" aria-label="Kembali">
-        ←
+      <button className="panel-back" onClick={() => setRoleChosen(false)} title="Ganti Peran" aria-label="Ganti Peran">
+        <span className="panel-back-icon">←</span>
+        <span className="panel-back-label">Ganti Peran</span>
       </button>
 
       <div className="sheet-bar">
@@ -485,31 +538,6 @@ export default function App() {
 
         <MethodologyInfo methodology={useCase.methodology} />
 
-        {useCase.options?.dataSource && (
-          <div className="section">
-            <label>Sumber data</label>
-            <div className="mode-toggles">
-              {useCase.options.dataSource.map((opt) => (
-                <label key={opt.value} className="filter-option">
-                  <input
-                    type="radio"
-                    name="data-source"
-                    checked={dataSource === opt.value}
-                    onChange={() => setDataSource(opt.value)}
-                  />
-                  {opt.label}
-                </label>
-              ))}
-            </div>
-            <details className="note-details">
-              <summary>Keterangan</summary>
-              <p className="note">
-                {useCase.options.dataSource.find((o) => o.value === dataSource)?.note}
-              </p>
-            </details>
-          </div>
-        )}
-
         <div className="section">
           {useCase.dashboard ? (
             <>
@@ -547,28 +575,22 @@ export default function App() {
                     id="business-type" value={category} onChange={setCategory}
                     options={useCase.options.businessType}
                   />
-                  {dataSource === "live" ? (
-                    <p className="note">Mode Live: kompetitor dari tag OSM, gak ada sub-tipe sedetail MAPID - satu tingkat kategori saja.</p>
-                  ) : (
+                  {subtypeOptions.length > 0 && (
                     <>
-                      {subtypeOptions.length > 0 && (
-                        <>
-                          <label>Sub-tipe (TIPE_2)</label>
-                          <SearchableSelect
-                            id="subtype" value={subtype} onChange={setSubtype}
-                            options={subtypeOptions} allowEmpty="— semua sub-tipe —"
-                          />
-                        </>
-                      )}
-                      {subtype2Options.length > 0 && (
-                        <>
-                          <label>Sub-tipe detail (TIPE_3)</label>
-                          <SearchableSelect
-                            id="subtype2" value={subtype2} onChange={setSubtype2}
-                            options={subtype2Options} allowEmpty="— semua sub-tipe detail —"
-                          />
-                        </>
-                      )}
+                      <label>Sub-tipe (TIPE_2)</label>
+                      <SearchableSelect
+                        id="subtype" value={subtype} onChange={setSubtype}
+                        options={subtypeOptions} allowEmpty="— semua sub-tipe —"
+                      />
+                    </>
+                  )}
+                  {subtype2Options.length > 0 && (
+                    <>
+                      <label>Sub-tipe detail (TIPE_3)</label>
+                      <SearchableSelect
+                        id="subtype2" value={subtype2} onChange={setSubtype2}
+                        options={subtype2Options} allowEmpty="— semua sub-tipe detail —"
+                      />
                     </>
                   )}
                 </>
@@ -587,7 +609,18 @@ export default function App() {
               )}
             </>
           )}
-          <button className="primary" onClick={run} disabled={loading}>Jalankan analisis</button>
+          <button
+            className="primary" onClick={run}
+            disabled={loading || !mapStatus.loaded || mapStatus.moving}
+            title={
+              mapStatus.error ? "Peta gagal dimuat - reload halaman"
+                : !mapStatus.loaded ? "Menunggu peta selesai dimuat..."
+                : mapStatus.moving ? "Menunggu peta selesai pindah ke stasiun..."
+                : undefined
+            }
+          >
+            {mapStatus.error ? "Peta gagal dimuat" : !mapStatus.loaded ? "Memuat peta..." : mapStatus.moving ? "Memindahkan peta..." : "Jalankan analisis"}
+          </button>
           <label className="filter-option">
             <input type="checkbox" checked={showPoiLabels} onChange={(e) => setShowPoiLabels(e.target.checked)} />
             Tampilkan teks POI &amp; stasiun
@@ -650,6 +683,7 @@ export default function App() {
             picking={picking}
             onMapPick={pickDestination}
             showLabels={showPoiLabels}
+            onMapStatus={setMapStatus}
           />
         )}
 
@@ -723,6 +757,12 @@ export default function App() {
           routingId={routingId}
           mapMode={mapMode}
           onMapMode={setMapMode}
+          showIsochrone={showEqIsochrone}
+          onToggleIsochrone={() => setShowEqIsochrone((v) => !v)}
+          showPoi={showEqPoi}
+          onTogglePoi={() => setShowEqPoi((v) => !v)}
+          showHeatmap={showEqHeatmap}
+          onToggleHeatmap={() => setShowEqHeatmap((v) => !v)}
         />
       )}
 
@@ -770,6 +810,12 @@ export default function App() {
           onFocus={focusTransferPoint}
           mapMode={mapMode}
           onMapMode={setMapMode}
+          showAnchor={showSiteAnchor}
+          onToggleAnchor={() => setShowSiteAnchor((v) => !v)}
+          showCompetitor={showSiteCompetitor}
+          onToggleCompetitor={() => setShowSiteCompetitor((v) => !v)}
+          showCatchment={showSiteCatchment}
+          onToggleCatchment={() => setShowSiteCatchment((v) => !v)}
         />
       )}
 
@@ -783,6 +829,8 @@ export default function App() {
           onFocus={focusPolygon}
           mapMode={mapMode}
           onMapMode={setMapMode}
+          showHeatmap={showResilienceHeatmap}
+          onToggleHeatmap={() => setShowResilienceHeatmap((v) => !v)}
         />
       )}
 
