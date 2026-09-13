@@ -3,7 +3,7 @@ import { CLASS_COLORS } from "./tod"
 import { CATEGORIES, CATEGORY_COLORS, CATEGORY_ICONS, CATEGORY_LABELS } from "./equity"
 import {
   accessByWalkingField, siteGridField, transferPointField, routeField, isochroneMinutesField,
-  pm25Field, greenGridField, greenPoiField, roadAccessField, lstField, uhiField,
+  pm25Field, greenGridField, greenPoiField, roadAccessField, lstField, astField, uhiField,
   ecologyIndexField, rainfallField, floodRiskMapidField, corridorHazardField, sciField,
   anchorPinField, competitorPinField, basicNeedPoiField,
 } from "./popupFields"
@@ -608,6 +608,28 @@ export const USE_CASES = [
             "Cukup Tinggi", "#f97316", "Tinggi", "#ef4444", "#9ca3af"],
         },
       },
+      {
+        // Same raster/palette as M-UC1's LST layer (lst.py's sample_grid).
+        source: "lst", type: "fill", mode: "lst", toggle: "resilience_heatmap",
+        paint: {
+          "fill-opacity": 0.65,
+          "fill-color": ["match", ["get", "CLASS"],
+            "Sangat Sejuk", "#0000FF", "Sejuk", "#00FFFF", "Sedang", "#FFFF00",
+            "Panas", "#FFA500", "Sangat Panas", "#FF0000", "#9ca3af"],
+        },
+      },
+      {
+        // AST estimate (Arridha et al. 2023), classified on its own CLASS_AST (see
+        // lst.py's classify_ast - same bins as LST, just evaluated on the AST-to-LST
+        // inverse) - a separate layer/topic from LST above, not folded into it.
+        source: "lst", type: "fill", mode: "ast", toggle: "resilience_heatmap",
+        paint: {
+          "fill-opacity": 0.65,
+          "fill-color": ["match", ["get", "CLASS_AST"],
+            "Sangat Sejuk", "#0000FF", "Sejuk", "#00FFFF", "Sedang", "#FFFF00",
+            "Panas", "#FFA500", "Sangat Panas", "#FF0000", "#9ca3af"],
+        },
+      },
     ],
     legends: {
       banjir: {
@@ -625,7 +647,15 @@ export const USE_CASES = [
         title: "Wilayah Bahaya/Terancam Banjir (MAPID)",
         stops: [["sangat rendah", "#22c55e"], ["cukup rendah", "#84cc16"], ["sedang", "#f59e0b"], ["cukup tinggi", "#f97316"], ["tinggi", "#ef4444"]],
       },
+      lst: {
+        title: "LST (Suhu Permukaan) per grid 250m",
+        stops: [["sangat sejuk", "#0000FF"], ["sejuk", "#00FFFF"], ["sedang", "#FFFF00"], ["panas", "#FFA500"], ["sangat panas", "#FF0000"]],
+      },
+      ast: {
+        title: "AST (estimasi, Arridha et al. 2023) per grid 250m",
+        stops: [["sangat sejuk", "#0000FF"], ["sejuk", "#00FFFF"], ["sedang", "#FFFF00"], ["panas", "#FFA500"], ["sangat panas", "#FF0000"]],
+      },
     },
-    popup: [corridorHazardField, uhiField, ecologyIndexField, rainfallField, floodRiskMapidField],
+    popup: [corridorHazardField, uhiField, ecologyIndexField, rainfallField, floodRiskMapidField, lstField, astField],
   },
 ]

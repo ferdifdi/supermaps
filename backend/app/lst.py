@@ -81,6 +81,26 @@ def classify(temp_c: float, season: str) -> dict:
     return {"kelas": kelas, "label": label, "color": color}
 
 
+# Arridha et al. (2023): AST (Air Surface Temperature) as a linear estimate from LST -
+# used by K-UC2 only (M-UC1's LST layer explicitly doesn't use AST, see usecases.js).
+AST_SLOPE = 0.9756
+AST_INTERCEPT = 1.7311
+
+
+def estimate_ast(lst_c: float) -> float:
+    return AST_SLOPE * lst_c + AST_INTERCEPT
+
+
+def classify_ast(ast_c: float, season: str) -> dict:
+    """AST has no independently published class scheme, so this classifies it on LST's
+    own bins by inverting the linear estimate back to the equivalent LST value first -
+    exact given the estimate is linear, and keeps AST and LST classified on the same
+    physical basis (K-UC2 shows them as two separate layers/legends) instead of
+    inventing separate AST-specific bins."""
+    lst_equivalent = (ast_c - AST_INTERCEPT) / AST_SLOPE
+    return classify(lst_equivalent, season)
+
+
 def _sample(season: str, lon: float, lat: float) -> float | None:
     """Sample the season's raster at a WGS84 lon/lat, reprojecting first if that raster's
     CRS isn't EPSG:4326. Returns None if the point falls outside the raster's bounds/array."""
@@ -103,12 +123,14 @@ def _sample(season: str, lon: float, lat: float) -> float | None:
     return float(value)
 
 
-def sample_grid(cells: list, season: str | None = None) -> dict:
+def sample_grid(cells: list, season: str | None = None, include_ast: bool = False) -> dict:
     """cells: metric-CRS polygons (e.g. from geo.grid()) - one Feature per cell whose
     centroid falls inside the season's raster, geometry is the cell polygon (reprojected
     to WGS84 like every other analysis.py grid), properties carry SUHU/KELAS/CLASS/
     kelas_num so both the fill-color match expression (CLASS) and the dock's grouping
-    logic (KELAS) work off the same feature."""
+    logic (KELAS) work off the same feature. include_ast (K-UC2 only) adds AST/KELAS_AST/
+    CLASS_AST/kelas_num_ast/color_ast - AST is shown as its own separate layer/legend
+    there, not folded into LST's."""
     season = season or current_season()
     features = []
     for i, c in enumerate(cells):
@@ -118,7 +140,7 @@ def sample_grid(cells: list, season: str | None = None) -> dict:
         if temp_c is None:
             continue
         info = classify(temp_c, season)
-        features.append(feature(c, {
+        props = {
             "grid_id": i + 1,  # same scan-order index as analysis.py's grid/green_grid,
             # so a cell number means the same thing across every 250m-grid layer
             "SUHU": round(temp_c, 1),
@@ -126,5 +148,14 @@ def sample_grid(cells: list, season: str | None = None) -> dict:
             "CLASS": info["label"],
             "kelas_num": info["kelas"],
             "color": info["color"],
-        }))
+        }
+        if include_ast:
+            ast_c = estimate_ast(temp_c)
+            ast_info = classify_ast(ast_c, season)
+            props["AST"] = round(ast_c, 1)
+            props["KELAS_AST"] = ast_info["label"]
+            props["CLASS_AST"] = ast_info["label"]
+            props["kelas_num_ast"] = ast_info["kelas"]
+            props["color_ast"] = ast_info["color"]
+        features.append(feature(c, props))
     return fc(features)

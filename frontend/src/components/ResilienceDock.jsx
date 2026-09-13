@@ -33,6 +33,12 @@ const MAPID_HAZARD_COLORS = {
   "Sangat Rendah": "#22c55e", "Cukup Rendah": "#84cc16", "Sedang": "#f59e0b",
   "Cukup Tinggi": "#f97316", "Tinggi": "#ef4444",
 }
+// Same LST palette as M-UC1's lst.py classify() bins - "sangat panas" reuses the same
+// red MAPID_HAZARD_COLORS.Tinggi already sits at, both mean "worst" on their own scale.
+const LST_COLORS = {
+  "Sangat Sejuk": "#0000FF", "Sejuk": "#00FFFF", "Sedang": "#FFFF00",
+  "Panas": "#FFA500", "Sangat Panas": "#FF0000",
+}
 
 // Same "one selector drives map + stats" pattern as M-UC1's WalkDock - avoids a separate
 // map-mode picker and chart picker showing the same topic names twice.
@@ -110,6 +116,36 @@ const TOPICS = [
     note: (s, result) => (result.flood_risk_mapid?.features?.length
       ? "Data MAPID \"Wilayah Bahaya/Terancam Banjir\" - sumber & skema klasifikasi beda dari InaRISK di atas, ditampilkan terpisah, bukan digabung jadi satu angka."
       : "Tidak ada data wilayah banjir MAPID yang mencakup lokasi ini."),
+  },
+  {
+    id: "lst", label: "LST",
+    rows: (result) => {
+      const f = result.lst?.features || []
+      return f.length && countByCorridorClass(f, "CLASS", LST_COLORS)
+    },
+    format: "count",
+    note: (s, result) => {
+      const f = result.lst?.features || []
+      if (!f.length) return "Tidak ada data LST yang mencakup lokasi ini."
+      const avg = f.reduce((sum, ft) => sum + ft.properties.SUHU, 0) / f.length
+      const musim = s.lst_season === "kemarau" ? "kemarau" : "hujan"
+      return `Musim ${musim} - rata-rata LST ${avg.toFixed(1)}°C, dari ${f.length} sel grid 250 m (citra satelit LST MAPID).`
+    },
+  },
+  {
+    id: "ast", label: "AST",
+    rows: (result) => {
+      const f = result.lst?.features || []
+      return f.length && countByCorridorClass(f, "CLASS_AST", LST_COLORS)
+    },
+    format: "count",
+    note: (s, result) => {
+      const f = result.lst?.features || []
+      if (!f.length) return "Tidak ada data AST yang mencakup lokasi ini."
+      const avg = f.reduce((sum, ft) => sum + ft.properties.AST, 0) / f.length
+      const musim = s.lst_season === "kemarau" ? "kemarau" : "hujan"
+      return `Musim ${musim} - rata-rata AST (estimasi, Arridha et al. 2023) ${avg.toFixed(1)}°C, dari ${f.length} sel grid 250 m.`
+    },
   },
 ]
 

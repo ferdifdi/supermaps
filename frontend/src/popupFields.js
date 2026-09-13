@@ -143,6 +143,14 @@ export const lstField = {
   render: (p) => `<b>Sel #${p.grid_id} - Suhu permukaan: ${p.SUHU}°C</b> - kelas ${p.CLASS || p.KELAS} (musim berjalan, citra satelit LST MAPID).`,
 }
 
+// K-UC2 only - AST estimate (Arridha et al. 2023 linear fit from LST, classified on its
+// own CLASS_AST/KELAS_AST - see lst.py's classify_ast) that M-UC1's LST layer explicitly
+// doesn't compute. A separate field/layer from lstField above, not combined with it.
+export const astField = {
+  test: (p) => p.AST != null,
+  render: (p) => `<b>Sel #${p.grid_id} - AST (estimasi): ${p.AST}°C</b> - kelas ${p.CLASS_AST || p.KELAS_AST} (musim berjalan).`,
+}
+
 // K-UC2's UHI zone - MAPID's own class + published temperature range, shown as-is.
 export const uhiField = {
   test: (p) => p.TEMPERATUR != null,

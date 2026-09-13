@@ -1203,6 +1203,13 @@ async def resilience(station: dict):
     # than clipped to road corridors - shown regardless of which banjir source the
     # corridors ended up using, for comparison against it.
     flood_risk_mapid = mapid_environment.flood_risk(buffer_wgs84)
+    # Real LST raster (same source/seasons as M-UC1's Kenyamanan tab) plus an AST estimate
+    # per cell (Arridha et al. 2023 linear fit - K-UC2 only, M-UC1 explicitly skips AST).
+    # Own 250m grid, not the corridor buffer - LST/UHI/ecology/rainfall are all area
+    # context here, independent of the road-corridor hazard analysis above.
+    lst_cells = grid(buffer_m, CELL)
+    lst_season = lst.current_season()
+    lst_grid = lst.sample_grid(lst_cells, lst_season, include_ast=True)
 
     return {
         "corridors": fc(features),
@@ -1210,9 +1217,11 @@ async def resilience(station: dict):
         "ecology_index": ecology_index,
         "rainfall": rainfall,
         "flood_risk_mapid": flood_risk_mapid,
+        "lst": lst_grid,
         "summary": {
             "station": station["name"],
             "corridors": len(corridors),
+            "lst_season": lst_season,
             **hazard_summary,
         },
         "graph": graph,
