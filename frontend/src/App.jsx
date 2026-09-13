@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import MapView from "./MapView"
+import MapView, { STATION_COLORS, STATION_ICONS, STATION_LEGEND_ORDER } from "./MapView"
 import AiDock from "./components/AiDock"
 import EquityDock from "./components/EquityDock"
 import FilterBar from "./components/FilterBar"
@@ -13,7 +13,7 @@ import WalkDock from "./components/WalkDock"
 import { api } from "./api"
 import * as equity from "./equity"
 import * as tod from "./tod"
-import { USE_CASES } from "./usecases"
+import { USE_CASES, ANCHOR_LEGEND_ITEMS } from "./usecases"
 
 const TOD_GROUPS = [
   { key: "modes", label: "Moda", options: tod.MODES },
@@ -97,6 +97,7 @@ export default function App() {
   const [styles, setStyles] = useState([])
   const [styleUrl, setStyleUrl] = useState(null)
   const [stations, setStations] = useState([])
+  const [railLines, setRailLines] = useState(null)
   const [persona, setPersona] = useState("komuter")
   const [useCaseId, setUseCaseId] = useState("M-UC1")
   const [stationId, setStationId] = useState("")
@@ -187,6 +188,19 @@ export default function App() {
   // labels on they visually bury the isochrone/heatmap coloring underneath. Icon badges
   // alone stay small enough not to.
   const [showPoiLabels, setShowPoiLabels] = useState(false)
+  // Per-mode station visibility (sidebar checklist below "Tampilkan Nama Stasiun dan
+  // POI") - independent of showPoiLabels, which only toggles name text, not the markers
+  // themselves. RUTE gates the always-on rail-line (garis rel) layer, not the M-UC1
+  // walking-route feature - unrelated to which station/tab is active.
+  const [showStationMRT, setShowStationMRT] = useState(true)
+  const [showStationLRT, setShowStationLRT] = useState(true)
+  const [showStationKRL, setShowStationKRL] = useState(true)
+  const [showStationRute, setShowStationRute] = useState(true)
+  const [showStationTJ, setShowStationTJ] = useState(false)
+  const stationToggles = useMemo(
+    () => ({ MRT: showStationMRT, LRT: showStationLRT, KRL: showStationKRL, RUTE: showStationRute, TJ: showStationTJ }),
+    [showStationMRT, showStationLRT, showStationKRL, showStationRute, showStationTJ],
+  )
   const layerToggles = useMemo(
     () => ({
       isochrone: showIsochrone, poi_transfer: showPoiTransfer, poi_hijau: showPoiHijau, jalan: showJalan, heatmap: showHeatmap,
@@ -202,6 +216,10 @@ export default function App() {
       showResilienceHeatmap,
     ],
   )
+
+  useEffect(() => {
+    api.railLines().then(setRailLines)
+  }, [])
 
   useEffect(() => {
     api.styles().then((s) => { setStyles(s); setStyleUrl(s[0].url) })
@@ -646,8 +664,30 @@ export default function App() {
           </button>
           <label className="filter-option">
             <input type="checkbox" checked={showPoiLabels} onChange={(e) => setShowPoiLabels(e.target.checked)} />
-            Tampilkan teks POI &amp; stasiun
+            Tampilkan Nama Stasiun dan POI
           </label>
+          <div className="mode-toggles">
+            <label className="filter-option">
+              <input type="checkbox" disabled={!mapStatus.loaded} checked={showStationMRT} onChange={(e) => setShowStationMRT(e.target.checked)} />
+              MRT
+            </label>
+            <label className="filter-option">
+              <input type="checkbox" disabled={!mapStatus.loaded} checked={showStationLRT} onChange={(e) => setShowStationLRT(e.target.checked)} />
+              LRT
+            </label>
+            <label className="filter-option">
+              <input type="checkbox" disabled={!mapStatus.loaded} checked={showStationKRL} onChange={(e) => setShowStationKRL(e.target.checked)} />
+              KRL
+            </label>
+            <label className="filter-option" title="Garis rel MRT/LRT/KRL di peta">
+              <input type="checkbox" disabled={!mapStatus.loaded} checked={showStationRute} onChange={(e) => setShowStationRute(e.target.checked)} />
+              RUTE
+            </label>
+            <label className="filter-option">
+              <input type="checkbox" disabled={!mapStatus.loaded} checked={showStationTJ} onChange={(e) => setShowStationTJ(e.target.checked)} />
+              TJ
+            </label>
+          </div>
           {loading && (
             <div className="loading-status">
               <span className="spinner" />
@@ -700,12 +740,14 @@ export default function App() {
           <MapView
             styleUrl={styleUrl}
             stations={stations}
+            railLines={railLines}
             activeStation={station}
             focusPoint={focusPoint}
             result={useCase.dashboard ? dashboardResult : mapResult}
             useCase={useCase}
             mapMode={mapMode}
             layerToggles={layerToggles}
+            stationToggles={stationToggles}
             onPickStation={selectStation}
             picking={picking}
             onMapPick={pickDestination}
@@ -724,6 +766,31 @@ export default function App() {
             total={todRows.length}
           />
         )}
+
+        <div className="top-legends">
+          {!useCase.dashboard && stations.length > 0 && (
+            <div className="legend-box">
+              <b>Moda Transit</b>
+              {STATION_LEGEND_ORDER.map((mode) => (
+                <div key={mode} className="legend-row">
+                  <span className="swatch" style={{ background: STATION_COLORS[mode] }} />
+                  {STATION_ICONS[mode]} {mode}
+                </div>
+              ))}
+            </div>
+          )}
+          {useCase.id === "U-UC1" && result && (
+            <div className="legend-box">
+              <b>Anchor & Kompetitor</b>
+              {ANCHOR_LEGEND_ITEMS.map((item) => (
+                <div key={item.label} className="legend-row">
+                  <span className="swatch" style={{ background: item.color }} />
+                  {item.icon} {item.label}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {(useCase.dashboard ? dashboardResult : result) && (() => {
           const activeLegend = useCase.legends ? useCase.legends[mapMode] : useCase.legend

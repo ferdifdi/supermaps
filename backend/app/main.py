@@ -178,6 +178,14 @@ async def list_stations(mode: str | None = None):
     return await _with_survey_flags(stations)
 
 
+@app.get("/api/rail-lines")
+async def rail_lines():
+    """Full-line MRT/KRL/LRT track geometry (see static_transit.rail_lines_geojson) for
+    an always-on map layer - not query-specific, so unlike every other /api/analysis/*
+    endpoint this doesn't take a station_id."""
+    return static_transit.rail_lines_geojson()
+
+
 @app.get("/api/survey/station/{station_id}")
 async def survey_for_station(station_id: str):
     """Full field-survey detail (title/score/label + every analyzed photo and its AI

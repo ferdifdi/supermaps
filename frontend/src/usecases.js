@@ -33,48 +33,59 @@ export const PERSONAS = [
   },
 ]
 
+// U-UC1's anchor/competitor icon legend - always-on (App.jsx renders it whenever a
+// site-selection result is loaded, not gated by mapMode like the grid-fill legends
+// below) since these pins draw independently of whichever grid heatmap is toggled.
+export const ANCHOR_LEGEND_ITEMS = [
+  { label: "Kantor", icon: "🏢", color: "#4a90e2" },
+  { label: "Transit", icon: "🚌", color: "#f59e0b" },
+  { label: "Kompetitor", icon: "🏪", color: "#7c3aed" },
+  ...CATEGORIES.map((c) => ({ label: CATEGORY_LABELS[c], icon: CATEGORY_ICONS[c], color: CATEGORY_COLORS[c] })),
+]
+
 export const USE_CASES = [
   {
     id: "M-UC1",
     persona: "komuter",
     title: "Navigasi Transit & Akses Jalan Kaki",
-    description: "Navigasi jalan kaki dari stasiun/halte secara lengkap: skor akses jalan kaki per grid 250m (Siburian et al. 2020), isochrone & rute (tercepat/ramah kursi roda), efisiensi transfer ke moda lain (headway TransJakarta, proxy KRL/MRT/LRT), akses ruang hijau (taman, RTH, kanopi pohon), kualitas udara (PM2.5), suhu permukaan (LST), indeks ekologi, dan curah hujan.",
+    description: "Analisis kemudahan jalan kaki dari stasiun/halte, rute navigasi (tercepat & inklusif), kemudahan transfer antar-moda, hingga kondisi lingkungan sekitar (ruang hijau, suhu, & kualitas udara).",
     expectedWait: 6,
     extras: "walk",
     methodology: {
       data: [
-        { source: "OSM - jaringan jalan & isochrone", detail: "MAPID gak punya jaringan jalan. Live Overpass dulu, fallback ke cache statis (backend/data/static/) cuma kalau live gagal." },
-        { source: "OSM - POI hunian & pohon/ruang hijau", detail: "Dipakai buat residential_mix, canopy, ecology_poi. Live osm.residential_pois()/osm.green_pois()/osm.trees() dulu, fallback ke cache statis (poi_residential_*.py, poi_green_*.py) cuma kalau live gagal." },
-        { source: "MAPID Data Catalogue - POI komersial (PERDAGANGAN DAN RETAIL, buat residential_mix)", detail: "Satu file Jabodetabek, gak ada gap radius/mode. Gak ada fallback OSM." },
-        { source: "OSM - daftar stasiun MRT/KRL/LRT (dropdown pemilih)", detail: "Daftar terkurasi manual (output/isochrone_*.py) - live Overpass cuma dipanggil kalau file ini hilang. TJ dari GTFS lokal, selalu instan." },
-        { source: "TransJakarta GTFS", year: 2026, detail: "frequencies.txt (headway asli per trip), stops.txt - file lokal, bukan live" },
-        { source: "OpenAQ v3", detail: "PM2.5 real-time dari stasiun pemantau terdekat (butuh API key, kosong kalau belum dikonfigurasi)" },
-        { source: "LST MAPID (raster GeoTIFF)", detail: "Raster musim hujan & kemarau, disampel per grid 250m dan diklasifikasi 5 kelas sesuai panduan MAPID - musim dipilih otomatis dari bulan berjalan. AST (turunan LST) tidak dipakai." },
-        { source: "MAPID Data Catalogue - INDEKS EKOLOGI", year: 2024, detail: "indeks per grid" },
-        { source: "MAPID Data Catalogue - Curah Hujan (Presipitasi)", year: 2020, detail: "kelas & intensitas per provinsi" },
+        { source: "OSM (Jaringan Jalan & Isochrone)", detail: "Live Overpass, fallback ke cache statis (backend/data/static/) jika gagal. MAPID tidak menyediakan jaringan jalan." },
+        { source: "OSM (POI Hunian & Ruang Hijau)", detail: "Untuk residential_mix, canopy, dan ecology_poi. Menggunakan live API (osm.residential_pois(), osm.green_pois(), osm.trees()), fallback ke cache statis (poi_residential_*.py, poi_green_*.py) jika gagal." },
+        { source: "MAPID Data Catalogue (POI Komersial)", detail: "Data Perdagangan dan Retail Jabodetabek untuk residential_mix (tanpa fallback OSM)." },
+        { source: "OSM (Daftar Stasiun MRT/KRL/LRT)", detail: "Menggunakan daftar terkurasi manual (output/isochrone_*.py). Live Overpass hanya aktif jika file hilang. Data TransJakarta (TJ) bersumber dari GTFS lokal." },
+        { source: "TransJakarta GTFS", year: 2026, detail: "Menggunakan file lokal frequencies.txt dan stops.txt." },
+        { source: "OpenAQ v3", detail: "Data PM2.5 real-time dari stasiun terdekat (memerlukan API key)." },
+        { source: "LST MAPID (Raster GeoTIFF)", detail: "Data musim hujan dan kemarau disampel per grid 250 m dan diklasifikasikan ke dalam 5 kelas. Musim terpilih otomatis berdasarkan bulan berjalan (AST tidak digunakan)." },
+        { source: "MAPID Data Catalogue (Indeks Ekologi 2024 & Curah Hujan 2020)", detail: "Indeks ekologi berbasis grid; data curah hujan mencakup kelas dan intensitas per provinsi." },
       ],
       processing: [
         {
           step: "Access by Walking", detail:
-            "Weighted sum Tabel 1 Siburian et al. (2020): 40% Road Network + 30% Ped-Shed + 20% Intersection + 10% Residential Diversity, per grid 250m. Standardisasi min-max (formula 3) dilakukan antar-sel dalam buffer ini, bukan antar-stasiun seperti versi asli paper (K-UC1) - komuter cuma lihat 1 stasiun, gak ada pembanding stasiun lain.",
+            "Weighted sum (Siburian et al., 2020): 40% Road Network + 30% Ped-Shed + 20% Intersection + 10% Residential Diversity per grid 250 m. Standardisasi min-max diterapkan antar-sel dalam buffer lokal (bukan antar-stasiun).",
         },
-        { step: "Isochrone & rute", detail: "Dijkstra: \"tercepat\" (jarak murni) dan \"ramah kursi roda\" (jarak, ruas wheelchair=no dipenalti berat) - tidak ada formula kenyamanan racikan sendiri" },
-        { step: "Transfer efisien", detail: "TransJakarta pakai headway asli dari GTFS; KRL/MRT/LRT proxy jarak jalan kaki, mode-nya dari daftar stasiun statis (output/isochrone_*.py, sama kayak dropdown - bukan re-tebak dari tag OSM mentah lagi biar gak salah label kayak dulu) (ditandai is_proxy di peta)" },
-        { step: "Kualitas udara", detail: "Interpolasi IDW ke hex grid dari stasiun OpenAQ terdekat - layer konteks, tidak masuk skor manapun" },
-        { step: "LST (Suhu Permukaan)", detail: "Nilai LST asli disampel per grid 250m dari raster musim berjalan (BMKG: kemarau April-September, hujan Oktober-Maret) lalu diklasifikasi 5 kelas - tidak digabung jadi skor" },
-        { step: "Indeks ekologi / Curah hujan", detail: "Ditampilkan apa adanya dari MAPID Data Catalogue, tanpa dihitung ulang atau digabung jadi skor" },
+        { step: "Isochrone & Rute", detail: "Algoritma Dijkstra untuk opsi \"tercepat\" (jarak murni) dan \"ramah kursi roda\" (penalti berat pada ruas wheelchair=no)." },
+        { step: "Transfer Efisien", detail: "TransJakarta menggunakan headway asli GTFS. Moda KRL/MRT/LRT menggunakan proxy jarak jalan kaki berdasarkan daftar stasiun statis (output/isochrone_*.py) dan ditandai sebagai is_proxy pada peta." },
+        { step: "Kualitas Udara", detail: "Interpolasi Inverse Distance Weighting (IDW) ke hex grid dari stasiun OpenAQ terdekat (sebagai layer konteks, tidak memengaruhi skor)." },
+        { step: "LST (Suhu Permukaan)", detail: "Nilai LST disampel per grid 250 m dari raster musim berjalan (Kemarau: April-September; Hujan: Oktober-Maret) dan diklasifikasikan ke dalam 5 kelas." },
+        { step: "Indeks Ekologi & Curah Hujan", detail: "Visualisasi langsung dari MAPID Data Catalogue tanpa penghitungan ulang atau penggabungan skor." },
       ],
     },
     options: {
       radius: [400, 800],
     },
     run: (station, opts) => api.walkAccess(station.id, opts.radius || 800),
-    // Draw order (MapView adds each layer just below "stations", so LATER entries here
-    // end up ON TOP of earlier ones - this array is bottom-to-top). Requested stacking,
-    // topmost first: point pins (transfer/hijau markers are separate DOM Markers, always
-    // above the GL canvas regardless of array position) > kerangka jalan (accessibility_
-    // roads) > isochrone/route > heatmap (whichever topic is active, at the very bottom
-    // so it never hides the road skeleton or isochrone outline above it).
+    // Draw order (MapView adds each layer just below "stations-tj" - or, for the route
+    // line specifically, just below "stations-main" so it lands between TJ and MRT/LRT/
+    // KRL - so LATER entries here end up ON TOP of earlier ones - this array is bottom-to-
+    // top). Requested stacking, topmost first: point pins (transfer/hijau markers are
+    // separate DOM Markers, always above the GL canvas regardless of array position) >
+    // kerangka jalan (accessibility_roads) > isochrone/route > heatmap (whichever topic is
+    // active, at the very bottom so it never hides the road skeleton or isochrone outline
+    // above it).
     layers: [
       {
         // Access by Walking (Siburian et al. 2020, Table 1 weights) as one heatmap,
@@ -188,7 +199,7 @@ export const USE_CASES = [
         source: "ecology_poi", type: "circle", toggle: "poi_hijau",
         pin: {
           icon: () => "🌳",
-          color: () => "#22c55e",
+          color: () => "#ffffff",
           label: (p) => p.name || p.leisure || p.landuse || p.kind || "Hijau",
         },
       },
@@ -213,8 +224,13 @@ export const USE_CASES = [
         stops: SCORE_STOPS,
       },
       udara: {
-        title: "PM2.5 (µg/m³) - interpolasi dari stasiun OpenAQ terdekat",
-        stops: [["baik (≤12)", "#22c55e"], ["sedang (≤35)", "#f59e0b"], ["tidak sehat (≤150)", "#ef4444"], ["berbahaya (>150)", "#7f1d1d"]],
+        title: "Kualitas Udara - PM2.5 (µg/m³), interpolasi dari stasiun OpenAQ terdekat",
+        stops: [
+          ["Baik: 0 – 12 µg/m³", "#22c55e"],
+          ["Sedang: 12,1 – 35 µg/m³", "#f59e0b"],
+          ["Tidak Sehat: 35,1 – 150 µg/m³", "#ef4444"],
+          ["Berbahaya: > 150 µg/m³", "#7f1d1d"],
+        ],
       },
       vegetasi: {
         title: "Kepadatan hijau per grid 250m (pohon + taman/RTH)",
@@ -241,24 +257,24 @@ export const USE_CASES = [
   {
     id: "M-UC2",
     persona: "komuter",
-    title: "Basic Needs untuk Komuter",
-    description: "Ketersediaan pangan, pusat perbelanjaan/pasar, keuangan, retail, dan kesehatan dalam jangkauan jalan kaki dari stasiun (MAPID Data Catalogue).",
+    title: "Kebutuhan Pokok Komuter",
+    description: "Pemetaan fasilitas harian di sekitar stasiun yang dapat dijangkau dengan jalan kaki, seperti tempat makan, pasar, retail, layanan keuangan, dan kesehatan.",
     expectedWait: 15,
     extras: "equity",
     methodology: {
       data: [
         {
-          source: "MAPID Data Catalogue - APOTEK, KLINIK, PUSKESMAS, RUMAH SAKIT, MAKANAN DAN MINUMAN, PUSAT PERBELANJAAN, PASAR, PASAR MODERN, BANK, ATM, PERDAGANGAN DAN RETAIL",
-          year: 2025, detail: "Per kabupaten/kota Jabodetabek. Gak ada fallback OSM - kosong di suatu stasiun/radius berarti memang gak ada POI di sana.",
+          source: "MAPID Data Catalogue (POI Kebutuhan Pokok)",
+          year: 2025, detail: "Apotek, Klinik, Puskesmas, Rumah Sakit, Makanan dan Minuman, Pusat Perbelanjaan, Pasar, Pasar Modern, Bank, ATM, dan Perdagangan dan Retail per kabupaten/kota Jabodetabek (tanpa fallback OSM).",
         },
-        { source: "OSM - jaringan jalan (isochrone & rute)", detail: "MAPID gak punya jaringan jalan. Live Overpass dulu, fallback ke cache statis (backend/data/static/) cuma kalau live gagal." },
-        { source: "OSM - daftar stasiun MRT/KRL/LRT (dropdown)", detail: "Daftar terkurasi manual - live Overpass cuma dipanggil kalau file ini hilang. TJ dari GTFS lokal, instan." },
+        { source: "OSM (Jaringan Jalan untuk Isochrone & Rute)", detail: "Live Overpass, fallback ke cache statis (backend/data/static/) jika gagal. MAPID tidak menyediakan jaringan jalan." },
+        { source: "OSM (Daftar Stasiun MRT/KRL/LRT)", detail: "Menggunakan daftar terkurasi manual. Live Overpass hanya aktif jika file hilang. Data TransJakarta (TJ) bersumber dari GTFS lokal." },
       ],
       processing: [
-        { step: "Isochrone", detail: "Buffer jalan kaki dari stasiun, radius pilihan 400 atau 800m" },
-        { step: "Overlay POI", detail: "Tiap POI basic-need dicek reachable/tidak dalam isochrone, per kategori" },
-        { step: "Heatmap POI", detail: "Grid choropleth 250m: jumlah POI per sel" },
-        { step: "Skor", detail: "Tidak ada equity_score komposit - cuma raw count/rasio per kategori (sengaja dihindari, gak ada dasar buat bobot antar kategori)" },
+        { step: "Isochrone", detail: "Buffer jalan kaki dari stasiun dengan radius pilihan 400 atau 800 m." },
+        { step: "Overlay POI", detail: "Setiap POI kebutuhan pokok diperiksa keterjangkauannya dalam isochrone, per kategori." },
+        { step: "Heatmap POI", detail: "Grid choropleth 250 m menampilkan jumlah POI per sel." },
+        { step: "Skor", detail: "Tidak ada skor komposit; hanya jumlah/rasio mentah per kategori, karena belum ada dasar pembobotan antar-kategori yang tervalidasi." },
       ],
     },
     options: {
@@ -331,35 +347,23 @@ export const USE_CASES = [
     id: "U-UC1",
     persona: "usaha",
     title: "Site Selection & Market Gap",
-    description: "Pilih tipe bisnis, lihat kompetitor setipe (MAPID Data Catalogue) dan anchor demand di sekitar stasiun.",
+    description: "Pemetaan lokasi bisnis strategis di sekitar stasiun melalui analisis keberadaan kompetitor sejenis dan sebaran pusat keramaian (anchor demand).",
     expectedWait: 15,
     extras: "site",
     methodology: {
       data: [
-        {
-          source: "MAPID Data Catalogue - kompetitor (tipe bisnis dipilih user)",
-          year: 2025, detail: "Contoh: \"MAKANAN DAN MINUMAN\" -> 222 kompetitor di radius 1km Dukuh Atas. Gak ada fallback OSM.",
-        },
-        {
-          source: "MAPID Data Catalogue - KANTOR, APOTEK/KLINIK/PUSKESMAS/RUMAH SAKIT/BANK/ATM/PASAR/dst, HALTE/STASIUN",
-          year: 2025, detail: "Anchor: kantor & kebutuhan dasar dari MAPID (gak ada fallback OSM), transit dari OSM+GTFS (MAPID gak punya daftar stasiun/halte sendiri di jalur ini).",
-        },
-        {
-          source: "OSM - jaringan jalan & POI hunian (walk_score)", detail:
-            "Live Overpass dulu, fallback ke cache statis cuma kalau live gagal - radius default ikut mode stasiun (800m MRT/KRL/LRT, 400m TJ) supaya pas sama cakupan cache.",
-        },
-        {
-          source: "MAPID Data Catalogue - POI komersial (buat walk_score)", detail:
-            "Satu file Jabodetabek, gak ada gap radius. Gak ada fallback OSM.",
-        },
-        { source: "OSM - daftar stasiun MRT/KRL/LRT (dropdown)", detail: "Daftar terkurasi manual - live Overpass cuma dipanggil kalau file ini hilang. TJ dari GTFS lokal, instan." },
+        { source: "MAPID Data Catalogue (Kompetitor 2025)", detail: "Titik lokasi kompetitor berdasarkan tipe bisnis pilihan pengguna (tanpa fallback OSM)." },
+        { source: "MAPID Data Catalogue & OSM/GTFS (Anchor Demand 2025)", detail: "Data perkantoran dan fasilitas dasar bersumber dari MAPID (tanpa fallback OSM). Data titik transit (stasiun/halte) bersumber dari kombinasi OSM dan GTFS." },
+        { source: "OSM (Jaringan Jalan & POI Hunian untuk Walk Score)", detail: "Live Overpass dengan fallback ke cache statis jika gagal. Radius analisis disesuaikan dengan moda transportasi (800 m untuk MRT/KRL/LRT; 400 m untuk TJ)." },
+        { source: "MAPID Data Catalogue (POI Komersial untuk Walk Score)", detail: "Data komersial Jabodetabek tanpa gap radius dan tanpa fallback OSM." },
+        { source: "OSM (Daftar Stasiun MRT/KRL/LRT)", detail: "Menggunakan daftar terkurasi manual. Live Overpass hanya diakses jika file tidak ditemukan. Data TransJakarta bersumber dari GTFS lokal." },
       ],
       processing: [
-        { step: "Walk score", detail: "Siburian et al. 2020, per grid 250m - ditampilkan berdiri sendiri, bukan digabung ke metrik lain" },
-        { step: "Kompetitor", detail: "Titik MAPID Data Catalogue dengan kategori persis sama dengan tipe bisnis yang dipilih - bisa dipersempit sampai 3 tingkat (Tipe bisnis -> Sub-tipe TIPE_2 -> Sub-tipe detail TIPE_3, misal MAKANAN DAN MINUMAN -> MINUMAN -> COFFEESHOP). Hitungan mentah per grid, tidak dinormalisasi." },
-        { step: "Anchor", detail: "Hitungan mentah kantor/kebutuhan dasar/transit MAPID per grid" },
-        { step: "Tidak ada skor gabungan", detail: "Tidak ada formula tervalidasi buat nimbang aksesibilitas vs kompetitor vs anchor, jadi semua ditampilkan apa adanya - pilih sendiri layer mana yang mau dilihat" },
-        { step: "Catchment", detail: "Voronoi dari titik kompetitor dalam radius" },
+        { step: "Walk Score", detail: "Dihitung per grid 250 m mengacu pada Siburian et al. (2020) dan ditampilkan secara mandiri (tidak digabung dengan metrik lain)." },
+        { step: "Kompetitor", detail: "Titik lokasi dari MAPID Data Catalogue berdasarkan kategori yang dipilih, dengan opsi penyaringan hingga 3 tingkat hirarki (Tipe Bisnis → Sub-tipe 2 → Sub-tipe Detail 3). Hitungan berupa nilai mentah per grid (tanpa normalisasi)." },
+        { step: "Anchor Demand", detail: "Hitungan mentah per grid untuk jumlah perkantoran, fasilitas dasar, dan titik transit." },
+        { step: "Catchment Area", detail: "Pembentukan polygon Voronoi berdasarkan titik-titik kompetitor di dalam radius analisis." },
+        { step: "Penyajian Metrik (Tanpa Skor Gabungan)", detail: "Seluruh metrik (aksesibilitas, kompetitor, dan anchor) ditampilkan terpisah sesuai data asli tanpa pembobotan gabungan." },
       ],
     },
     // Real MAPID Data Catalogue categories only (see backend/app/mapid_data.py
@@ -392,11 +396,19 @@ export const USE_CASES = [
       },
       { source: "catchment", type: "line", toggle: "site_catchment", paint: { "line-color": "#7c3aed", "line-width": 1 } },
       {
+        // kebutuhan_dasar anchors carry the same 5-bucket `category` (pangan/kesehatan/dll)
+        // as M-UC2's basic-need POIs (mapid_data.basic_needs) - reusing CATEGORY_ICONS/
+        // CATEGORY_COLORS keeps "klinik/RS/apotek/puskesmas" (all bucketed under
+        // "kesehatan") visually distinct from kantor/transit instead of one flat 🛒 icon.
         source: "anchors", type: "circle", toggle: "site_anchor",
         pin: {
-          icon: (p) => ({ kantor: "🏢", kebutuhan_dasar: "🛒", transit: "🚌" }[p.anchor_type] || "📍"),
-          color: (p) => ({ kantor: "#4a90e2", kebutuhan_dasar: "#22c55e", transit: "#f59e0b" }[p.anchor_type] || "#9ca3af"),
-          label: (p) => p.name || p.anchor_type || "Anchor",
+          icon: (p) => p.anchor_type === "kebutuhan_dasar"
+            ? (CATEGORY_ICONS[p.category] || "🛒")
+            : ({ kantor: "🏢", transit: "🚌" }[p.anchor_type] || "📍"),
+          color: (p) => p.anchor_type === "kebutuhan_dasar"
+            ? (CATEGORY_COLORS[p.category] || "#22c55e")
+            : ({ kantor: "#4a90e2", transit: "#f59e0b" }[p.anchor_type] || "#9ca3af"),
+          label: (p) => p.name || (p.anchor_type === "kebutuhan_dasar" ? CATEGORY_LABELS[p.category] : p.anchor_type) || "Anchor",
           opacity: () => 0.85,
         },
       },
@@ -435,38 +447,28 @@ export const USE_CASES = [
     id: "K-UC1",
     persona: "kebijakan",
     title: "Indeks TOD & Prioritas Pengembangan",
-    description: "Station Composite Index, ranking stasiun, dan tipologi rekomendasi pengembangan.",
+    description: "Penilaian performa kawasan transit melalui Station Composite Index, peringkat antar-stasiun, serta arahan tipologi rekomendasi pengembangan TOD.",
     expectedWait: 30,
     // Scores every station at once, so App drives it through the dashboard instead of `run`.
     dashboard: true,
     methodology: {
       data: [
-        { source: "OSM - daftar stasiun/halte yang di-scan", detail: "Daftar terkurasi manual (output/isochrone_*.py) - live Overpass cuma dipanggil kalau file ini hilang. KRL/MRT/LRT saja - TJ tidak masuk cakupan K-UC1 (halte terlalu banyak buat scan sekaligus, lihat catatan pemrosesan)." },
-        { source: "OSM - jaringan jalan per stasiun", detail: "MAPID gak punya jaringan jalan. Live Overpass dulu, fallback ke cache statis (backend/data/static/) cuma kalau live gagal." },
-        {
-          source: "OSM - POI hunian, ruang hijau, parkir per stasiun", detail:
-            "MAPID gak punya kategori parkir, gak ada layer hijau berbasis titik. Dipakai buat population_density, land_use_diversity (residential/green), car_parking, motorcycle_parking, accessible_buildings. Query terpisah (osm.residential_pois()/osm.green_pois()/osm.facility_pois()) - live dulu, fallback ke cache statis (poi_residential_*.py, poi_green_*.py, poi_parking_*.py) cuma kalau live gagal.",
-        },
-        {
-          source: "Keamanan, papan informasi, transportasi alternatif", detail:
-            "CONSTANT - tag OSM buat ketiganya ternyata nyaris kosong/gak konsisten di hampir semua stasiun, gak bisa jadi sinyal pembeda. Diasumsikan sama (1.0) untuk semua stasiun semua moda, sama kayak train_trips - bukan diukur, sengaja gak dihitung sebagai pembeda ranking.",
-        },
-        {
-          source: "MAPID Data Catalogue - PERDAGANGAN DAN RETAIL, KANTOR, HALTE, STASIUN",
-          year: 2025, detail: "kepadatan komersial/bisnis - dibaca langsung dari kategori MAPID sendiri, tidak lewat OSM sama sekali untuk indikator ini",
-        },
-        {
-          source: "Cache statis per moda (backend/data/k-uc1/)", detail:
-            "Hasil precompute station_indicators() per stasiun (lihat generate_kuc1_static.py) - dipakai dulu kalau ada, live cuma buat stasiun yang belum kecover cache. Tanggal generate tiap moda ditampilkan di panel \"Sumber & metode data\" di hasil analisis.",
-        },
+        { source: "OSM (Daftar Stasiun Scanned)", detail: "Menggunakan daftar terkurasi manual (output/isochrone_*.py) khusus moda KRL, MRT, dan LRT (live Overpass hanya aktif jika file hilang). TransJakarta tidak dimasukkan dalam cakupan K-UC1." },
+        { source: "OSM (Jaringan Jalan & POI Kawasan Transit)", detail: "Jaringan jalan diakses via live Overpass (fallback ke cache statis jika gagal). POI hunian, ruang hijau, dan area parkir diakses via live query terpisah (fallback ke cache statis poi_*.py jika gagal) untuk perhitungan kepadatan penduduk, keberagaman tata guna lahan, parkir mobil/motor, dan aksesibilitas bangunan. MAPID tidak menyediakan jaringan jalan, layer hijau berbasis titik, dan kategori parkir." },
+        { source: "MAPID Data Catalogue (Komersial & Bisnis 2025)", detail: "Data perdagangan, retail, perkantoran, dan transit langsung dari kategori MAPID tanpa fallback OSM." },
+        { source: "Indikator Konstan (Keamanan, Informasi, Transpos Alt.)", detail: "Nilai diasumsikan seragam (1,0) untuk seluruh stasiun karena tag OSM yang nyaris kosong/tidak konsisten, sehingga tidak dijadikan faktor pembeda pemeringkatan." },
+        { source: "Cache Statis Per Moda (backend/data/k-uc1/)", detail: "Hasil precompute station_indicators() diprioritaskan untuk pemrosesan. Live query hanya dijalankan untuk stasiun di luar jangkauan cache. Tanggal generate ditampilkan pada panel metadata." },
       ],
       processing: [
-        { step: "Station Composite Index (SCI)", detail: "8 kriteria/18 indikator, Siburian et al. 2020 Table 1 - skor kriteria dijumlah berbobot lalu dibagi total bobot" },
-        { step: "Sumber tiap indikator", detail: "OSM/MAPID kalau bisa diukur langsung; PROXY (kepadatan aktivitas dari MAPID/OSM) buat data penumpang yang gak ada feed gratisnya; CONSTANT buat frekuensi perjalanan, keamanan, papan informasi, dan transportasi alternatif (semua stasiun dianggap sama, gak ada data terukur yang layak dipakai)" },
-        { step: "Transparansi sumber", detail: "Tiap indikator ditandai OSM/MAPID/PROXY/CONSTANT - lihat badge di detail stasiun" },
+        { step: "Station Composite Index (SCI)", detail: "Dihitung berdasarkan 8 kriteria dan 18 indikator mengacu pada Siburian et al. (2020) Tabel 1. Skor kriteria dijumlahkan secara terbobot dan dibagi total bobot." },
         {
-          step: "Kenapa TJ tidak masuk K-UC1", detail:
-            "Beda dari indikator lain - ini scan SEMUA stasiun satu moda sekaligus. TJ punya ribuan halte, jauh lebih banyak drpd KRL/MRT/LRT gabungan, jadi dikeluarkan dari cakupan dashboard ini (tetap bisa dipilih di use case lain). Satu stasiun diproses sekaligus (semaphore) biar gak kena rate-limit/blocklist Overpass buat sisa moda yang di-scan.",
+          step: "Kategori Sumber Indikator", detail:
+            "OSM / MAPID: indikator dengan pengukuran langsung. PROXY: kepadatan aktivitas (OSM/MAPID) digunakan sebagai proxy data penumpang yang tidak memiliki feed publik gratis. CONSTANT: frekuensi perjalanan, keamanan, papan informasi, dan transportasi alternatif diberikan nilai seragam.",
+        },
+        { step: "Transparansi Metadata", detail: "Setiap indikator dilengkapi badge penanda sumber (OSM, MAPID, PROXY, atau CONSTANT)." },
+        {
+          step: "Pembatasan Pemrosesan TransJakarta & Rate Limiting", detail:
+            "TransJakarta dieliminasi dari K-UC1 karena volume ribuan halte yang dapat mengganggu kestabilan scan masal kawasan. Pemrosesan berjalan secara sekuensial (mekanisme semaphore) untuk mencegah rate-limit atau blocklisting pada Overpass API.",
         },
       ],
     },
@@ -529,39 +531,24 @@ export const USE_CASES = [
     id: "K-UC2",
     persona: "kebijakan",
     title: "Climate & Environmental Resilience",
-    description: "Risiko banjir per koridor (MAPID Data Catalogue, otomatis fallback ke BNPB InaRISK kalau MAPID sama sekali tidak punya zona banjir di buffer stasiun ini) plus konteks UHI/ekologi/curah hujan (MAPID).",
+    description: "Pemetaan risiko banjir per koridor stasiun yang dipadukan dengan analisis mikroiklim kawasan, mencakup efek pulau panas (Urban Heat Island), kondisi ekologi, dan curah hujan.",
     expectedWait: 6,
     methodology: {
       data: [
-        {
-          source: "MAPID Data Catalogue - Wilayah Bahaya/Terancam Banjir", detail:
-            "Kelas 5-tingkat (Sangat Rendah..Tinggi) per zona, utama - dipakai kalau minimal satu koridor di buffer stasiun ini tercakup zona MAPID.",
-        },
-        {
-          source: "BNPB InaRISK (gis.bnpb.go.id)", detail:
-            "Indeks bahaya banjir & longsor (0-1, diklasifikasi rendah/sedang/tinggi), raster resmi pemerintah, live. Dipakai untuk SELURUH buffer stasiun ini kalau MAPID sama sekali gak punya zona banjir yang menyentuh buffer ini. MAPID gak punya data longsor sama sekali.",
-        },
-        { source: "MAPID Data Catalogue - URBAN HEAT ISLAND", year: 2022, detail: "Kelas zona panas per kabupaten/kota - tidak ada fallback" },
-        { source: "MAPID Data Catalogue - INDEKS EKOLOGI", year: 2024, detail: "Indeks per grid (turunan RSEI) - tidak ada fallback" },
-        { source: "MAPID Data Catalogue - Curah Hujan (Presipitasi)", year: 2020, detail: "Kelas & intensitas per provinsi - tidak ada fallback" },
-        { source: "OSM - jaringan jalan (koridor & rute detour)", detail: "MAPID gak punya jaringan jalan. Live Overpass dulu, fallback ke cache statis (backend/data/static/) cuma kalau live gagal." },
-        { source: "OSM - daftar stasiun MRT/KRL/LRT (dropdown)", detail: "Daftar terkurasi manual (output/isochrone_*.py) - live Overpass cuma dipanggil kalau file ini hilang. TJ dari GTFS lokal, selalu instan." },
+        { source: "MAPID Data Catalogue (Bahaya Banjir)", detail: "Data utama berupa klasifikasi 5 tingkat (Sangat Rendah hingga Tinggi) per zona. Digunakan jika minimal terdapat satu koridor dalam buffer stasiun yang tercakup zona MAPID." },
+        { source: "BNPB InaRISK (Bahaya Banjir & Longsor)", detail: "Live raster query resmi pemerintah dengan indeks 0–1 (klasifikasi Rendah/Sedang/Tinggi). Digunakan sebagai fallback untuk seluruh buffer stasiun jika MAPID tidak mencakup zona banjir di area tersebut. Data longsor bersumber sepenuhnya dari InaRISK." },
+        { source: "MAPID Data Catalogue (UHI 2022, Indeks Ekologi 2024, & Curah Hujan 2020)", detail: "Zona panas UHI per kabupaten/kota, Indeks Ekologi (turunan RSEI) berbasis grid, serta kelas dan intensitas curah hujan per provinsi (tanpa fallback)." },
+        { source: "LST Musim Hujan (1 Des 2025 – 31 Jan 2026)", detail: "Pengolahan mengombinasikan citra Landsat 8 dan Landsat 9 untuk reduksi tutupan awan, pembersihan nilai ekstrem (< 0°C), serta penambalan piksel kosong (gap-filling) menggunakan focal mean 100 m." },
+        { source: "LST Musim Kemarau (1 Jul – 30 Sep 2025)", detail: "Pemetaan diproses menggunakan citra Landsat 9." },
+        { source: "OSM (Jaringan Jalan & Daftar Stasiun)", detail: "Jaringan jalan diakses via live Overpass (fallback ke cache statis jika gagal). Daftar stasiun MRT/KRL/LRT menggunakan data terkurasi manual (live Overpass hanya aktif jika file hilang), sedangkan TransJakarta bersumber dari GTFS lokal." },
       ],
       processing: [
-        {
-          step: "Banjir - MAPID (utama)", detail:
-            "Point-in-polygon langsung ke zona MAPID yang sudah didownload, per koridor - instan, tidak ada panggilan live sama sekali. Kelas 5-tingkat MAPID sendiri. Dipakai selama ada minimal satu koridor di buffer ini yang tercakup zona MAPID.",
-        },
-        {
-          step: "Banjir & longsor - fallback InaRISK", detail:
-            "Kalau MAPID sama sekali tidak punya zona banjir yang menyentuh buffer stasiun ini, otomatis pindah ke BNPB InaRISK \"identify\" raster call per titik untuk SELURUH buffer itu - disampel di grid heksagon ~120m (bukan satu panggilan per koridor, biar gak >10 menit), tiap koridor pakai nilai sampel terdekatnya. Klasifikasi 3-tingkat resmi InaRISK (rendah/sedang/tinggi), beda skema dari kelas 5-tingkat MAPID. Longsor cuma pernah terisi lewat jalur fallback ini - Jabodetabek risikonya kecil di luar perbukitan Bogor, tapi datanya tetap ditampilkan apa adanya kalau fallback ini aktif.",
-        },
-        {
-          step: "Rute aman (detour)", detail:
-            "Hard avoidance seperti wheelchair=no di M-UC1: ruas yang diklasifikasikan \"Tinggi\"/\"Cukup Tinggi\" (MAPID) atau \"tinggi\" (InaRISK banjir/longsor) dipenalti berat di routing, bukan skor gabungan",
-        },
-        { step: "UHI/Ekologi/Curah hujan", detail: "Ditampilkan apa adanya dari MAPID Data Catalogue, tanpa dihitung ulang" },
-        { step: "Tidak ada skor gabungan", detail: "Versi lama nge-blend proxy tutupan hijau (panas) + jarak sungai (banjir) jadi \"vulnerability\" 0.5/0.5 - keduanya proxy buatan sendiri. Sudah dihapus." },
+        { step: "Analisis Banjir Utama (MAPID)", detail: "Pemrosesan point-in-polygon berbasis zona MAPID per koridor secara instan tanpa panggilan live, mempertahankan klasifikasi asli 5 tingkat." },
+        { step: "Analisis Banjir & Longsor Fallback (BNPB InaRISK)", detail: "Jika data MAPID tidak menyentuh buffer stasiun, sistem melakukan raster identify call dari InaRISK pada hexagon grid (~120 m). Nilai sampel terdekat dialokasikan ke setiap koridor menggunakan skema klasifikasi 3 tingkat resmi InaRISK." },
+        { step: "Estimasi Air Surface Temperature (AST)", detail: "Diaplikasikan pada kedua musim dari nilai LST menggunakan persamaan linier mengacu pada model Arridha et al. (2023): AST = 0,9756 × LST + 1,7311." },
+        { step: "Rute Detour Aman", detail: "Ruas jalan berstatus risiko \"Tinggi\"/\"Cukup Tinggi\" (MAPID) atau \"Tinggi\" (InaRISK banjir/longsor) diberikan penalti berat (hard avoidance) dalam penentuan rute, tanpa pembobotan skor gabungan." },
+        { step: "UHI, Ekologi, & Curah Hujan", detail: "Visualisasi data ditampilkan apa adanya sesuai data asli MAPID Data Catalogue tanpa penghitungan ulang." },
+        { step: "Penyajian Metrik (Tanpa Skor Gabungan)", detail: "Seluruh metrik lingkungan dan risiko bencana ditampilkan secara terpisah. Model komposit terdahulu (blending tutupan hijau dan jarak sungai) telah dihapus sepenuhnya." },
       ],
     },
     extras: "resilience",

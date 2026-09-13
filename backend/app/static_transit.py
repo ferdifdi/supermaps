@@ -128,6 +128,31 @@ def routes_near(lon: float, lat: float, radius: int) -> int | None:
     return count
 
 
+_RAIL_LINE_MODES = ("mrt", "krl", "lrt")  # TJ has no rail alignment - it's a bus, its
+# "route" is the road network itself, not a separate track line worth drawing.
+_rail_lines_fc: dict | None = None
+
+
+def rail_lines_geojson() -> dict:
+    """Full-line rail track geometry for MRT/KRL/LRT (one MultiLineString feature per
+    named line, e.g. "MRT Jakarta Utara-Selatan"), for drawing an always-on track layer -
+    distinct from routes_near() above, which only needs a count. Already fetched
+    whole-bbox (not clipped to any station's walking radius) by output/isochrone_*.py's
+    fetch_route_lines(), so this is just reading the same isochrone_{mode}_routes.geojson
+    files and concatenating them, cached in memory after the first call."""
+    global _rail_lines_fc
+    if _rail_lines_fc is not None:
+        return _rail_lines_fc
+    features = []
+    for mode in _RAIL_LINE_MODES:
+        path = STATIC_DIR / f"isochrone_{mode}_routes.geojson"
+        if path.exists():
+            data = json.loads(path.read_text(encoding="utf-8"))
+            features.extend(data["features"])
+    _rail_lines_fc = {"type": "FeatureCollection", "features": features}
+    return _rail_lines_fc
+
+
 _iso_by_mode: dict[str, dict[str, object]] = {}
 _iso_loaded: set[str] = set()
 

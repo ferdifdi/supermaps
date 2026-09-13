@@ -30,6 +30,7 @@ export const api = {
   styles: () => get("/api/basemap/styles"),
   stations: (mode) =>
     get(`/api/stations${mode ? `?mode=${mode}` : ""}`),
+  railLines: () => get("/api/rail-lines"),
   walkAccess: (id, radiusM) =>
     get(`/api/analysis/walk-access?station_id=${id}&radius_m=${radiusM}`),
   amenityEquity: (id, radius) =>
