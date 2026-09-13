@@ -4,17 +4,19 @@ WebGIS implementation of the proposal *SuperMaps: Spatial Decision Support Syste
 
 - Backend: FastAPI + Shapely/NetworkX/SciPy
 - Frontend: React + MapLibre GL, MAPID basemap
-- Data: MAPID (basemap, Missions, Activities, Data Catalogue) + OpenStreetMap
+- Data: MAPID (basemap, Missions, Activities, Data Catalogue) + OpenStreetMap + BNPB InaRISK (banjir/longsor fallback) + Landsat LST rasters + TransJakarta GTFS + field-survey trotoar photos
 
 ## Use cases
 
-| ID    | Persona      | Output                                                                     |
-| ----- | ------------ | -------------------------------------------------------------------------- |
-| M-UC1 | Masyarakat   | Skor akses jalan kaki per grid 250 m, isochrone tercepat vs ternyaman      |
-| M-UC2 | Masyarakat   | Kepadatan POI kebutuhan dasar per grid, flag food/amenity desert           |
-| U-UC1 | Pelaku usaha | Voronoi catchment kompetitor (Mapid Missions), skor kelayakan + market gap |
-| K-UC1 | Kebijakan    | Station Composite Index, ranking stasiun, tipologi pengembangan            |
-| K-UC2 | Kebijakan    | Kerentanan koridor (panas + banjir), peringkat koridor, detour             |
+| ID    | Persona           | Output                                                                                                                                          |
+| ----- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| M-UC1 | Masyarakat        | Skor akses jalan kaki per grid 250 m (Siburian et al. 2020), rute tercepat/ramah kursi roda, transfer antar-moda, ruang hijau, kualitas udara, LST |
+| M-UC2 | Masyarakat        | Fasilitas harian (pangan, pasar, keuangan, retail, kesehatan) yang terjangkau jalan kaki dari stasiun                                             |
+| U-UC1 | Pelaku usaha      | Kompetitor sejenis (MAPID Data Catalogue), anchor demand, walk score, Voronoi catchment                                                           |
+| K-UC1 | Pemangku kebijakan| Station Composite Index (Siburian et al. 2020), ranking stasiun, badge sumber data per indikator                                                  |
+| K-UC2 | Pemangku kebijakan| Bahaya banjir/longsor per koridor (MAPID, fallback otomatis BNPB InaRISK), LST & AST, UHI, indeks ekologi, curah hujan, rute detour aman           |
+
+MRT/KRL/LRT geometri jalur rel penuh (`/api/rail-lines`) dan checklist visibilitas per moda tampil di semua use case sebagai layer peta, terlepas dari use case yang dipilih.
 
 ## Setup
 
@@ -68,20 +70,25 @@ MAPID_LAYER_URLS=populasi=https://.../jakarta-selatan|https://.../depok|https://
 ## Endpoints
 
 ```
-GET  /api/stations
+GET  /api/stations?mode=                      MRT/KRL/LRT/TJ, flagged has_survey (field-survey match)
+GET  /api/rail-lines                          full-line MRT/KRL/LRT track geometry
+GET  /api/survey/station/{station_id}         field-survey photos + AI trotoar overlay for one station
 GET  /api/basemap/styles
 GET  /api/basemap/{path}                      proxy to v2.basemap.mapid.io
 POST /api/mapid/missions/{propertigo|menugo|struckgo}
 POST /api/mapid/activities
 GET  /api/mapid/catalogue, /api/mapid/catalogue/{name}
-GET  /api/analysis/walk-access?station_id=&minutes=
-GET  /api/analysis/route?station_id=&lon=&lat=&preference=comfort|fast
-GET  /api/analysis/amenity-equity?station_id=
-GET  /api/analysis/site-selection?station_id=&category=&radius=
-GET  /api/analysis/tod-index?station_ids=a,b,c
+GET  /api/analysis/walk-access?station_id=&radius_m=
+GET  /api/analysis/route?station_id=&lon=&lat=&preference=fast|wheelchair
+GET  /api/analysis/amenity-equity?station_id=&radius=
+GET  /api/analysis/site-selection?station_id=&business_type=&subtype=&subtype2=
+GET  /api/analysis/business-types, /business-subtypes, /business-subtypes2
+GET  /api/analysis/tod-dashboard?modes=
+POST /api/analysis/tod-whatif
+GET  /api/analysis/tod-metadata
 GET  /api/analysis/resilience?station_id=
 GET  /api/analysis/detour?station_id=&lon=&lat=
-POST /api/ai/insight
+POST /api/ai/insight, /api/ai/chat, /api/ai/ask
 ```
 
 ## Scoring
@@ -91,14 +98,18 @@ Weights follow the proposal:
 - Walk access = 0.40 jaringan jalan + 0.30 jangkauan pejalan kaki + 0.20 persimpangan + 0.10 keragaman residensial
 - SCI/TOD = kepadatan 15, keragaman lahan 3, akses pejalan kaki 6, ekonomi 22, kapasitas stasiun 19, fasilitas 11, aksesibilitas 15, parkir 8 (min-max standardised across the compared stations; ridership is dropped and weights renormalised when not supplied)
 
-## Proxies currently in use
+## Real data replacing earlier proxies
 
-These substitute for datasets not yet loaded, and are marked `PROXY` in `backend/app/analysis.py`:
+Landsat LST (`backend/app/lst.py`, musim hujan & kemarau rasters classified per "panduan klasifikasi LST dan AST.pdf") and BNPB InaRISK (`backend/app/inarisk.py`, live raster query, automatic fallback when MAPID has no flood-zone coverage) now back M-UC1's suhu permukaan and K-UC2's banjir/longsor respectively - these used to be a green-cover-ratio proxy and an OSM-waterway-distance proxy in earlier versions. K-UC2 also derives AST per grid cell from LST via a published linear estimate (Arridha et al. 2023), classified separately from LST rather than treated as the same number.
 
-- Population/commercial density -> OSM building counts (replace with BPS per-grid population)
-- Ped-shed -> 100 m buffer of the walkable road network (network service area exists in `network.isochrone`)
-- Urban heat -> green cover ratio (replace with Landsat LST zonal statistics)
-- Flood risk -> distance to OSM waterway (replace with InaRISK)
+## Proxies still in use
+
+Marked `PROXY` in `backend/app/analysis.py` (K-UC1's Station Composite Index) or `is_proxy` on individual features (M-UC1/M-UC2 transfer points):
+
+- Population/commercial density -> OSM building/POI counts (replace with BPS per-grid population)
+- Passenger volume (peak/off-peak) -> activity density from OSM/MAPID (no free public ridership feed)
+- KRL/MRT/LRT transfer walking time -> distance from the static station list, not a live schedule (TransJakarta uses real GTFS headway instead, flagged `is_proxy: false`)
 - Station capacity -> 0 unless ridership is supplied
+- Security/information boards/alt-transport (K-UC1) -> constant 1.0 for every station - OSM tagging for these is too sparse/inconsistent to be a real signal
 
-Street-level AI (IndoBERT, YOLOv8, DeepLabV3) from the proposal is not wired yet; the walking impedance is currently rule-based on OSM road class in `backend/app/network.py`.
+Street-level AI (IndoBERT, YOLOv8, DeepLabV3) from the proposal now runs on real field-survey photos for a handful of stations (`backend/analyze_sidewalk_quality.py`, matched one-to-one by station name - see `backend/app/survey.py`), not yet for every station; walking impedance elsewhere is still rule-based on OSM road class in `backend/app/network.py`.
