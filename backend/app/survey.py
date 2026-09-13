@@ -50,34 +50,74 @@ def _load_photos() -> dict[str, list[dict]]:
     return _photos_by_activity
 
 
+def _nearest_station_ids(stations: list[dict], radius_m: float) -> dict[str, str]:
+    """{activity_id: station_id} - each field-survey point assigned to its single, exact
+    station, not every station within radius_m. Every activity's title names its station
+    outright (surveyors wrote "Stasiun Bekasi", "Trotoar LRT Pancoran", etc), so that's
+    matched first - the surveyor's own words beat a distance guess, and distance alone
+    used to misfire whenever a dense TJ halte happened to sit geometrically closer than
+    the actually-surveyed MRT/KRL/LRT station. Longest station-name match wins when a
+    title contains more than one candidate name (e.g. "Bekasi" is a substring of "Bekasi
+    Barat" too). Distance is only the fallback/tie-breaker: for a title with no name match
+    at all, or several same-length name matches (e.g. a dozen "Pulo Gadung"-named TJ
+    halte), whichever candidate is physically nearest wins. `stations` must be the FULL
+    roster across every mode. Still capped at radius_m so a genuinely unrelated activity
+    doesn't get force-assigned to whatever's nearest regardless of distance."""
+    activities = _load()
+    assignment: dict[str, str] = {}
+    for a in activities:
+        title = a.get("title", "").lower()
+        name_matches = [s for s in stations if s["name"].lower() in title]
+        if name_matches:
+            best_len = max(len(s["name"]) for s in name_matches)
+            candidates = [s for s in name_matches if len(s["name"]) == best_len]
+        else:
+            candidates = stations
+        best_id, best_dist = None, None
+        for s in candidates:
+            d = to_m(Point(s["lon"], s["lat"])).distance(a["point_m"])
+            if best_dist is None or d < best_dist:
+                best_id, best_dist = s["id"], d
+        # radius_m only gates the no-name-match fallback - a positive name match (the
+        # surveyor's own words) is trusted regardless of distance; the photographed
+        # street can legitimately be well past 400m from that station's own coordinates.
+        if best_id is not None and (name_matches or best_dist <= radius_m):
+            assignment[a["activity_id"]] = best_id
+    return assignment
+
+
 def stations_with_survey(stations: list[dict], radius_m: float = NEARBY_RADIUS_M) -> dict[str, list[dict]]:
-    """{station_id: [matching activity summaries]} for stations within radius_m of at
-    least one field-survey activity point. Activity summaries drop the internal
-    point_m key (not JSON-serializable)."""
+    """{station_id: [matching activity summaries]}, one-to-one - each activity counted
+    for its single nearest station only (see _nearest_station_ids). `stations` should be
+    the full cross-mode roster, not a mode-filtered subset. Activity summaries drop the
+    internal point_m key (not JSON-serializable)."""
     activities = _load()
     if not activities:
         return {}
-    result = {}
-    for s in stations:
-        sp = to_m(Point(s["lon"], s["lat"]))
-        matches = [{k: v for k, v in a.items() if k != "point_m"} for a in activities if sp.distance(a["point_m"]) <= radius_m]
-        if matches:
-            result[s["id"]] = matches
+    assignment = _nearest_station_ids(stations, radius_m)
+    result: dict[str, list[dict]] = {}
+    for a in activities:
+        sid = assignment.get(a["activity_id"])
+        if sid is None:
+            continue
+        result.setdefault(sid, []).append({k: v for k, v in a.items() if k != "point_m"})
     return result
 
 
-def activities_for_station(station: dict, radius_m: float = NEARBY_RADIUS_M) -> list[dict]:
+def activities_for_station(station: dict, stations: list[dict], radius_m: float = NEARBY_RADIUS_M) -> list[dict]:
     """Full detail (title/score/label + each analyzed photo+AI overlay) for every
-    field-survey activity within radius_m of this station - for the station's result
-    panel, not the picker's lightweight has_survey flag."""
+    field-survey activity whose single nearest station (across the full `stations`
+    roster) is this one - for the station's result panel, not the picker's lightweight
+    has_survey flag. Same one-to-one assignment as stations_with_survey, so this panel
+    never shows a survey point that actually belongs to a neighboring interchange station."""
     activities = _load()
     if not activities:
         return []
     photos_by_activity = _load_photos()
-    sp = to_m(Point(station["lon"], station["lat"]))
+    assignment = _nearest_station_ids(stations, radius_m)
     out = []
     for a in activities:
-        if sp.distance(a["point_m"]) > radius_m:
+        if assignment.get(a["activity_id"]) != station["id"]:
             continue
         out.append({
             **{k: v for k, v in a.items() if k != "point_m"},

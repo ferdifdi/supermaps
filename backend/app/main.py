@@ -115,11 +115,7 @@ async def _rail_stations() -> list[dict]:
 
 
 async def get_station(station_id: str) -> dict:
-    if not _stations:
-        for s in await _rail_stations():
-            _stations[s["id"]] = s
-        for s in _tj_stations():
-            _stations[s["id"]] = s
+    await _full_roster()
     if station_id not in _stations:
         raise HTTPException(404, "station not found")
     return _stations[station_id]
@@ -147,10 +143,25 @@ async def basemap_proxy(path: str):
 
 # --- stations ----------------------------------------------------------------
 
-def _with_survey_flags(stations: list[dict]) -> list[dict]:
-    """Flags stations/halte within survey.NEARBY_RADIUS_M of a field-survey activity -
-    lets the picker surface "has real trotoar survey data" up front."""
-    matches = survey.stations_with_survey(stations)
+async def _full_roster() -> list[dict]:
+    """Every station/halte across all 4 modes - one-to-one survey matching (survey.py)
+    needs the full roster even when the caller only wants one mode back, otherwise it
+    can't tell whether some OTHER mode's station is actually the nearest one to a given
+    field-survey point. Reuses/populates the same _stations cache get_station() does."""
+    if not _stations:
+        for s in await _rail_stations():
+            _stations[s["id"]] = s
+        for s in _tj_stations():
+            _stations[s["id"]] = s
+    return list(_stations.values())
+
+
+async def _with_survey_flags(stations: list[dict]) -> list[dict]:
+    """Flags stations/halte with a one-to-one nearest field-survey activity match (see
+    survey.stations_with_survey) - lets the picker surface "has real trotoar survey data"
+    up front. Matches computed against the full cross-mode roster even when `stations`
+    here is just one mode's subset, so the nearest-station assignment stays correct."""
+    matches = survey.stations_with_survey(await _full_roster())
     return [
         {**s, "has_survey": s["id"] in matches, "survey_count": len(matches.get(s["id"], []))}
         for s in stations
@@ -160,11 +171,11 @@ def _with_survey_flags(stations: list[dict]) -> list[dict]:
 @app.get("/api/stations")
 async def list_stations(mode: str | None = None):
     if mode and mode.upper() == "TJ":
-        return _with_survey_flags(_tj_stations())
+        return await _with_survey_flags(_tj_stations())
     stations = await _rail_stations()
     if mode:
         stations = [s for s in stations if s["mode_label"] == mode.upper()]
-    return _with_survey_flags(stations)
+    return await _with_survey_flags(stations)
 
 
 @app.get("/api/survey/station/{station_id}")
@@ -172,7 +183,7 @@ async def survey_for_station(station_id: str):
     """Full field-survey detail (title/score/label + every analyzed photo and its AI
     overlay image, as static URLs under /static/survey/) for a station's result panel."""
     station = await get_station(station_id)
-    activities = survey.activities_for_station(station)
+    activities = survey.activities_for_station(station, await _full_roster())
     for a in activities:
         for p in a["photos"]:
             p["photo_url"] = f"{PUBLIC_BASE_URL}/static/survey/{p['photo']}"
