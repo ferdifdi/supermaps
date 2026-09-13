@@ -25,8 +25,10 @@ function countByCorridorClass(features, key, colors) {
 }
 
 const HAZARD_COLORS = { rendah: "#22c55e", sedang: "#f59e0b", tinggi: "#ef4444" }
-// MAPID's own 5-level Kelas (mode Statis) - different scheme from InaRISK's 3-level
-// rendah/sedang/tinggi (mode Live), same palette direction (green->red) as banjir_mapid.
+// MAPID's own 5-level Kelas (the MAPID path) - different scheme from InaRISK's 3-level
+// rendah/sedang/tinggi (the InaRISK fallback path), same palette direction (green->red)
+// as banjir_mapid. Which path a station uses is decided automatically server-side by
+// data coverage (analysis.py's resilience()) - there's no user-facing switch for it.
 const MAPID_HAZARD_COLORS = {
   "Sangat Rendah": "#22c55e", "Cukup Rendah": "#84cc16", "Sedang": "#f59e0b",
   "Cukup Tinggi": "#f97316", "Tinggi": "#ef4444",
@@ -37,8 +39,9 @@ const MAPID_HAZARD_COLORS = {
 const TOPICS = [
   {
     id: "banjir", label: "Banjir",
-    // Mode Statis populates banjir_kelas (MAPID, 5-level), mode Live populates
-    // banjir_class (InaRISK, 3-level) instead - see analysis.py's resilience().
+    // The MAPID path populates banjir_kelas (5-level), the InaRISK fallback path
+    // populates banjir_class (3-level) instead - see analysis.py's resilience(). Which
+    // one ran for this station is decided automatically by data coverage, not by the user.
     rows: (result) => {
       const f = result.corridors?.features || []
       if (!f.length) return false
@@ -49,7 +52,7 @@ const TOPICS = [
     format: "count",
     note: (s) => s.use_inarisk
       ? `${s.banjir_known}/${s.corridors} koridor punya data InaRISK, ${s.banjir_tinggi} diklasifikasikan "tinggi".`
-      : `${s.banjir_known}/${s.corridors} koridor punya data MAPID (Kelas 5-tingkat), ${s.banjir_tinggi} diklasifikasikan "Tinggi"/"Cukup Tinggi". Pindah ke mode Live buat klasifikasi InaRISK.`,
+      : `${s.banjir_known}/${s.corridors} koridor punya data MAPID (Kelas 5-tingkat), ${s.banjir_tinggi} diklasifikasikan "Tinggi"/"Cukup Tinggi".`,
   },
   {
     id: "longsor", label: "Longsor",
@@ -60,7 +63,7 @@ const TOPICS = [
     format: "count",
     note: (s) => s.use_inarisk
       ? `${s.longsor_known}/${s.corridors} koridor punya data InaRISK, ${s.longsor_tinggi} diklasifikasikan "tinggi".`
-      : "Mode Statis aktif - longsor cuma dihitung di mode Live (BNPB InaRISK), MAPID gak punya data ini.",
+      : "MAPID tidak menyediakan data longsor untuk area ini - hanya tersedia otomatis dari BNPB InaRISK saat MAPID tidak mencakup wilayah stasiun.",
   },
   {
     id: "uhi", label: "UHI",
@@ -158,7 +161,7 @@ function Ringkasan({ result, mapMode, onMapMode, ...toggles }) {
         <div className="section">
           <p className="note" style={{ color: "#ef4444", fontWeight: 600 }}>
             ⚠ Server InaRISK (BNPB) sedang tidak bisa diakses - ini beda dengan "tidak ada risiko".
-            Coba lagi nanti, atau pindah ke sumber data "Statis" (banjir dari MAPID, tanpa longsor).
+            MAPID tidak mencakup wilayah stasiun ini (makanya InaRISK dipakai), jadi coba lagi nanti saja.
           </p>
         </div>
       )}
@@ -191,7 +194,7 @@ function Ringkasan({ result, mapMode, onMapMode, ...toggles }) {
 
 const MAPID_TINGGI_KELAS = new Set(["Tinggi", "Cukup Tinggi"])
 
-function KoridorList({ result, onFocus, ...toggles }) {
+function KoridorList({ result, onFocus, onMapMode, ...toggles }) {
   const corridors = result.corridors?.features || []
   const usesInarisk = result.summary.use_inarisk
   const risky = corridors.filter((f) => usesInarisk
@@ -210,7 +213,15 @@ function KoridorList({ result, onFocus, ...toggles }) {
         {risky.length === 0 && <p className="note">Tidak ada koridor berisiko "tinggi" terdeteksi.</p>}
         {risky.map((f, i) => (
           <button key={i} className="board-row" style={{ width: "100%", textAlign: "left", border: "none", background: "none", cursor: "pointer" }}
-            onClick={() => onFocus(f)}>
+            onClick={() => {
+              // The corridor fill layer is mode-gated (mode: "banjir"/"longsor" in
+              // usecases.js) - flying to a corridor without also switching to whichever
+              // hazard actually made it "tinggi" here just pans to an empty map, the fill
+              // for the currently-active topic (if any other) doesn't show this corridor.
+              const isBanjirTinggi = usesInarisk ? f.properties.banjir_class === "tinggi" : MAPID_TINGGI_KELAS.has(f.properties.banjir_kelas)
+              onMapMode?.(isBanjirTinggi ? "banjir" : "longsor")
+              onFocus(f)
+            }}>
             <span className="board-name">
               <span className="dot" style={{ background: "#ef4444" }} />
               Koridor #{f.properties.corridor_id} ({HIGHWAY_LABELS[f.properties.highway] || f.properties.highway})
@@ -250,7 +261,7 @@ export default function ResilienceDock({
 
         <div className="dock-body">
           {tab === "ringkasan" && <Ringkasan result={result} mapMode={mapMode} onMapMode={onMapMode} {...toggles} />}
-          {tab === "koridor" && <KoridorList result={result} onFocus={onFocus} {...toggles} />}
+          {tab === "koridor" && <KoridorList result={result} onFocus={onFocus} onMapMode={onMapMode} {...toggles} />}
         </div>
       </aside>
     </>
